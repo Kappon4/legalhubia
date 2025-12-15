@@ -10,29 +10,32 @@ from datetime import datetime
 import time
 import tempfile
 import os
+import pandas as pd
+import plotly.express as px
 
 # 1. CONFIGURAÇÃO VISUAL
 st.set_page_config(page_title="LegalHub IA", page_icon="⚖️", layout="wide")
 
 # --- 🔐 SISTEMA DE LOGIN ---
 def check_password():
-    if "logado" not in st.session_state:
-        st.session_state.logado = False
+    if "logado" not in st.session_state: st.session_state.logado = False
     if st.session_state.logado: return True
     
-    st.markdown("## 🔒 Acesso Restrito - LegalHub")
-    senha = st.text_input("Digite a senha de acesso:", type="password")
-    if st.button("Entrar"):
-        if senha == st.secrets["SENHA_ACESSO"]:
-            st.session_state.logado = True
-            st.rerun()
-        else: st.error("Senha incorreta.")
+    col1, col2, col3 = st.columns([1,2,1])
+    with col2:
+        st.markdown("## 🔒 Acesso Restrito - LegalHub")
+        senha = st.text_input("Digite a senha de acesso:", type="password")
+        if st.button("Entrar"):
+            if senha == st.secrets["SENHA_ACESSO"]:
+                st.session_state.logado = True
+                st.rerun()
+            else: st.error("Senha incorreta.")
     return False
 
 if not check_password(): st.stop()
 # ---------------------------
 
-st.title("⚖️ LegalHub IA (Sistema Seguro)")
+st.title("⚖️ LegalHub IA (Gestão & Inteligência)")
 
 # 2. CONEXÕES
 st.sidebar.header("Painel de Controle")
@@ -53,14 +56,14 @@ def conectar_planilha():
         return gspread.authorize(creds).open("Casos Juridicos - LegalHub").sheet1 
     except Exception as e: return None
 
-# 3. FUNÇÕES
+# 3. FUNÇÕES UTILITÁRIAS
 def descobrir_modelos():
     try: return [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
     except: return []
 
 def buscar_jurisprudencia_real(tema):
     try:
-        res = DDGS().text(f"{tema} (site:stf.jus.br OR site:stj.jus.br OR site:jusbrasil.com.br)", region="br-pt", max_results=5)
+        res = DDGS().text(f"{tema} (site:stf.jus.br OR site:stj.jus.br OR site:jusbrasil.com.br)", region="br-pt", max_results=4)
         return "\n".join([f"FONTE: {r['title']}\nLINK: {r['href']}\nRESUMO: {r['body']}\n" for r in res]) if res else "Nada encontrado."
     except: return "Erro na busca."
 
@@ -85,42 +88,54 @@ if api_key:
     if modelos:
         modelo_escolhido = st.sidebar.selectbox("Modelo:", modelos, index=0)
         
-        # AGORA SÃO 6 ABAS (Adicionei o "Comparador")
-        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["✍️ Redator", "📂 Ler PDF", "🎙️ Transcritor", "⚖️ Comparador (Novo)", "💬 Chat", "🗄️ Casos"])
+        # DEFINIÇÃO DAS ABAS
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+            "✍️ Redator", 
+            "📂 Ler PDF", 
+            "🎙️ Transcritor", 
+            "⚖️ Comparador", 
+            "💬 Chat", 
+            "📊 Dashboard (Novo)"
+        ])
         
         # --- ABA 1: REDATOR ---
         with tab1:
             st.header("Gerador de Peças")
             c1, c2 = st.columns(2)
             with c1:
-                tipo = st.selectbox("Peça", ["Inicial", "Contestação", "Recurso", "Contrato"])
-                area = st.selectbox("Área", ["Cível", "Trabalhista", "Criminal", "Família"])
+                tipo = st.selectbox("Peça", ["Inicial", "Contestação", "Recurso", "Contrato", "Parecer"])
+                area = st.selectbox("Área", ["Cível", "Trabalhista", "Criminal", "Família", "Tributário"])
                 web = st.checkbox("Buscar Jurisprudência?", value=True)
             with c2:
                 cliente = st.text_input("Cliente:")
                 fatos = st.text_area("Fatos:", height=150)
             
-            if st.button("✨ Gerar"):
+            if st.button("✨ Gerar Minuta"):
                 if fatos:
-                    with st.spinner("Gerando..."):
+                    with st.spinner("Pesquisando e Redigindo..."):
                         jurisp = buscar_jurisprudencia_real(f"{area} {tipo} {fatos}") if web else ""
-                        res = genai.GenerativeModel(modelo_escolhido).generate_content(f"Advogado {area}. Peça: {tipo}. Fatos: {fatos}. Jurisprudência: {jurisp}.").text
+                        prompt = f"Advogado {area}. Peça: {tipo}. Fatos: {fatos}. Jurisprudência: {jurisp}. Estruture formalmente."
+                        res = genai.GenerativeModel(modelo_escolhido).generate_content(prompt).text
                         st.markdown(res)
                         st.download_button("Baixar Word", gerar_word(res), "minuta.docx")
+                        
+                        # Salvar no Banco
                         if cliente:
-                            sheet = conectar_planilha()
-                            if sheet: sheet.append_row([datetime.now().strftime("%d/%m/%Y"), cliente, tipo, fatos[:50]])
+                            s = conectar_planilha()
+                            if s: 
+                                s.append_row([datetime.now().strftime("%d/%m/%Y"), cliente, area, tipo, fatos[:50]]) # Ordem ajustada: Data, Cliente, Area, Tipo
+                                st.success("✅ Caso salvo no Dashboard!")
 
         # --- ABA 2: PDF ---
         with tab2:
-            st.header("Análise de PDF")
+            st.header("Análise de Processos")
             up = st.file_uploader("Subir PDF", type="pdf")
             if up:
                 if st.button("Resumir"): st.write(genai.GenerativeModel(modelo_escolhido).generate_content(f"Resuma: {extrair_texto_pdf(up)}").text)
 
         # --- ABA 3: TRANSCRITOR ---
         with tab3:
-            st.header("🎙️ Transcrição de Áudio")
+            st.header("🎙️ Transcrição")
             aud = st.file_uploader("Áudio", type=["mp3", "wav", "m4a"])
             if aud and st.button("Transcrever"):
                 with st.spinner("Ouvindo..."):
@@ -128,47 +143,22 @@ if api_key:
                         tmp.write(aud.getvalue())
                         tmp_path = tmp.name
                     f = genai.upload_file(tmp_path)
-                    res = genai.GenerativeModel(modelo_escolhido).generate_content(["Transcreva e resuma este áudio jurídico.", f]).text
+                    res = genai.GenerativeModel(modelo_escolhido).generate_content(["Transcreva e resuma.", f]).text
                     os.remove(tmp_path)
                     st.markdown(res)
                     st.download_button("Baixar", gerar_word(res), "transcricao.docx")
 
-        # --- ABA 4: COMPARADOR (NOVO!) ---
+        # --- ABA 4: COMPARADOR ---
         with tab4:
-            st.header("⚖️ Comparador de Contratos/Documentos")
-            st.info("Suba dois arquivos para ver o que mudou entre eles.")
-            
-            col_a, col_b = st.columns(2)
-            pdf1 = col_a.file_uploader("Versão Original (Antiga)", type="pdf", key="v1")
-            pdf2 = col_b.file_uploader("Versão Alterada (Nova)", type="pdf", key="v2")
-            
-            if pdf1 and pdf2:
-                if st.button("🔍 Comparar Documentos"):
-                    with st.spinner("A IA está lendo e comparando cláusula por cláusula..."):
-                        txt1 = extrair_texto_pdf(pdf1)
-                        txt2 = extrair_texto_pdf(pdf2)
-                        
-                        prompt_comparacao = f"""
-                        Atue como um perito em análise contratual. Compare os dois textos abaixo.
-                        
-                        TEXTO ORIGINAL:
-                        {txt1}
-                        
-                        TEXTO ALTERADO:
-                        {txt2}
-                        
-                        TAREFA:
-                        1. Liste O QUE mudou (cláusulas removidas, adicionadas ou valores alterados).
-                        2. Analise se essas mudanças trazem RISCO para a parte contratante.
-                        3. Seja direto e aponte as pegadinhas.
-                        """
-                        
-                        modelo = genai.GenerativeModel(modelo_escolhido)
-                        resultado = modelo.generate_content(prompt_comparacao).text
-                        
-                        st.subheader("Relatório de Divergências")
-                        st.markdown(resultado)
-                        st.download_button("📥 Baixar Relatório (.docx)", gerar_word(resultado), "comparacao.docx")
+            st.header("⚖️ Comparador")
+            c_a, c_b = st.columns(2)
+            p1 = c_a.file_uploader("Original", type="pdf", key="v1")
+            p2 = c_b.file_uploader("Alterado", type="pdf", key="v2")
+            if p1 and p2 and st.button("Comparar"):
+                with st.spinner("Comparando..."):
+                    t1, t2 = extrair_texto_pdf(p1), extrair_texto_pdf(p2)
+                    res = genai.GenerativeModel(modelo_escolhido).generate_content(f"Compare os textos. Diferenças e Riscos:\nTexto 1: {t1}\nTexto 2: {t2}").text
+                    st.markdown(res)
 
         # --- ABA 5: CHAT ---
         with tab5:
@@ -182,11 +172,50 @@ if api_key:
                 st.chat_message("assistant").write(res)
                 st.session_state.hist.append({"role":"assistant", "content":res})
 
-        # --- ABA 6: CASOS ---
+        # --- ABA 6: DASHBOARD (NOVO!) ---
         with tab6:
-            st.header("🗄️ Casos")
-            if st.button("Atualizar"):
-                s = conectar_planilha()
-                if s: st.dataframe(s.get_all_records())
+            st.header("📊 Dashboard do Escritório")
+            
+            if st.button("🔄 Atualizar Dados"):
+                sheet = conectar_planilha()
+                if sheet:
+                    try:
+                        # Pega todos os dados da planilha
+                        dados = sheet.get_all_records()
+                        df = pd.DataFrame(dados)
+                        
+                        if not df.empty:
+                            # Métricas no Topo
+                            m1, m2, m3 = st.columns(3)
+                            m1.metric("Total de Casos", len(df))
+                            m2.metric("Último Cliente", df.iloc[-1]["Cliente"] if "Cliente" in df.columns else "N/A")
+                            m3.metric("Área Mais Ativa", df["Tipo de Ação"].mode()[0] if "Tipo de Ação" in df.columns else "N/A")
+                            
+                            st.divider()
+                            
+                            # Gráficos Lado a Lado
+                            g1, g2 = st.columns(2)
+                            
+                            # Gráfico de Pizza (Áreas ou Tipos)
+                            if "Tipo de Ação" in df.columns:
+                                fig_pizza = px.pie(df, names="Tipo de Ação", title="Distribuição por Tipo de Peça")
+                                g1.plotly_chart(fig_pizza, use_container_width=True)
+                            
+                            # Gráfico de Barras (Clientes)
+                            if "Cliente" in df.columns:
+                                contagem_clientes = df["Cliente"].value_counts().reset_index()
+                                contagem_clientes.columns = ["Cliente", "Qtd"]
+                                fig_barras = px.bar(contagem_clientes, x="Cliente", y="Qtd", title="Processos por Cliente")
+                                g2.plotly_chart(fig_barras, use_container_width=True)
+                            
+                            st.divider()
+                            st.subheader("Base de Dados Completa")
+                            st.dataframe(df, use_container_width=True)
+                        else:
+                            st.info("A planilha está vazia. Gere algumas peças na aba 'Redator' para alimentar o gráfico!")
+                            
+                    except Exception as e:
+                        st.error(f"Erro ao ler dados: {e}")
+                        st.info("Dica: Verifique se o cabeçalho da sua planilha no Google Sheets está exatamente assim: Data | Cliente | Tipo de Ação | Resumo")
 
 else: st.warning("Configure as Chaves de API.")
