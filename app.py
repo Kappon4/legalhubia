@@ -6,19 +6,23 @@ from io import BytesIO
 from duckduckgo_search import DDGS
 
 # 1. CONFIGURAÇÃO VISUAL
-st.set_page_config(page_title="LegalMind Cloud", page_icon="⚖️", layout="wide")
-st.title("⚖️ LegalMind Cloud (Jurisprudência & IA)")
+st.set_page_config(page_title="LegalHub IA", page_icon="⚖️", layout="wide")
+st.title("⚖️ LegalHub IA (Web & Jurisprudência)")
 
-# 2. BARRA LATERAL (Segurança: Chave não é mais salva no código)
+# 2. CONFIGURAÇÃO DE SEGURANÇA (API KEY)
 st.sidebar.header("Configuração")
-api_key = st.sidebar.text_input(
-    "Cole sua Chave API Google:", 
-    type="password",
-    help="Sua chave não será salva. Cole aqui toda vez que usar."
-)
+
+# Tenta pegar a chave do cofre de segredos do Streamlit
+if "GOOGLE_API_KEY" in st.secrets:
+    api_key = st.secrets["GOOGLE_API_KEY"]
+    st.sidebar.success("✅ Chave de API carregada do sistema.")
+else:
+    # Se não houver segredo configurado (ex: rodando localmente), pede manual
+    api_key = st.sidebar.text_input("Cole sua Chave API Google:", type="password")
 
 # 3. FUNÇÕES INTELIGENTES
 def descobrir_modelos():
+    """Lista modelos disponíveis na conta"""
     try:
         modelos = []
         for m in genai.list_models():
@@ -35,6 +39,7 @@ def buscar_jurisprudencia_real(tema, qtd=5):
         query = f"{tema} (ementa OR acordao OR jurisprudencia) (site:stf.jus.br OR site:stj.jus.br OR site:jusbrasil.com.br)"
         
         resultados_formatados = ""
+        # Realiza a busca
         results = DDGS().text(query, region="br-pt", max_results=qtd)
         
         if not results:
@@ -50,6 +55,7 @@ def buscar_jurisprudencia_real(tema, qtd=5):
         return f"Erro na busca online: {e}"
 
 def gerar_word(texto_ia, titulo="Documento Jurídico"):
+    """Gera o arquivo .docx para download"""
     doc = Document()
     doc.add_heading(titulo, 0)
     for paragrafo in texto_ia.split('\n'):
@@ -61,6 +67,7 @@ def gerar_word(texto_ia, titulo="Documento Jurídico"):
     return buffer
 
 def extrair_texto_pdf(arquivo):
+    """Lê o conteúdo de arquivos PDF"""
     try:
         leitor = PdfReader(arquivo)
         texto = ""
@@ -72,12 +79,15 @@ def extrair_texto_pdf(arquivo):
 
 # 4. LÓGICA PRINCIPAL
 if api_key:
+    # Configura o Gemini com a chave (seja dos segredos ou manual)
     genai.configure(api_key=api_key)
     modelos = descobrir_modelos()
     
     if modelos:
+        # Seleciona automaticamente o primeiro modelo disponível
         modelo_atual = st.sidebar.selectbox("Modelo Inteligente:", modelos, index=0)
         
+        # Cria as abas da aplicação
         tab1, tab2, tab3 = st.tabs(["✍️ Redator (STF/STJ)", "📂 Analisar PDF", "💬 Chat Estratégico"])
         
         # --- ABA 1: GERADOR COM BUSCA ESPECÍFICA ---
@@ -99,6 +109,7 @@ if api_key:
                     status_busca = st.empty()
                     contexto_juridico = ""
 
+                    # Se a busca web estiver ativa
                     if usar_web:
                         status_busca.info(f"🕵️‍♂️ Vasculhando STF, STJ e Jusbrasil sobre '{fatos[:30]}...'")
                         termo_busca = f"{area} {tipo} {fatos}" 
@@ -132,6 +143,7 @@ INSTRUÇÕES DE ESCRITA:
                             
                             st.markdown(texto_gerado)
                             
+                            # Botão de Download
                             st.download_button(
                                 label="📥 Baixar Documento (.docx)",
                                 data=gerar_word(texto_gerado, f"{tipo} - {area}"),
@@ -141,36 +153,39 @@ INSTRUÇÕES DE ESCRITA:
                         except Exception as e:
                             st.error(f"Erro: {e}")
 
-        # --- ABAS 2 e 3 ---
+        # --- ABA 2: LEITOR DE PDF ---
         with tab2:
             st.header("Leitura de Processos")
             upload = st.file_uploader("Subir PDF", type="pdf")
             if upload:
                 texto = extrair_texto_pdf(upload)
-                if texto and st.button("Resumir Processo"):
-                     model = genai.GenerativeModel(modelo_atual)
-                     st.write(model.generate_content(f"Resuma este processo: {texto}").text)
+                if texto:
+                    st.success(f"PDF carregado ({len(texto)} caracteres).")
+                    pergunta = st.text_input("O que deseja saber sobre o arquivo?")
+                    if st.button("🔍 Analisar Arquivo"):
+                         model = genai.GenerativeModel(modelo_atual)
+                         res = model.generate_content(f"Responda com base no texto: {texto}\nPergunta: {pergunta}")
+                         st.write(res.text)
 
+        # --- ABA 3: CHAT ESTRATÉGICO ---
         with tab3:
             st.header("Chat Estratégico")
             if "hist" not in st.session_state: st.session_state.hist = []
-            for m in st.session_state.hist: st.chat_message(m["role"]).write(m["content"])
+            
+            for m in st.session_state.hist: 
+                st.chat_message(m["role"]).write(m["content"])
+            
             if p := st.chat_input("Mensagem..."):
                 st.chat_message("user").write(p)
                 st.session_state.hist.append({"role":"user", "content":p})
                 try:
-                    res = genai.GenerativeModel(modelo_atual).generate_content(p).text
+                    model = genai.GenerativeModel(modelo_atual)
+                    res = model.generate_content(p).text
                     st.chat_message("assistant").write(res)
                     st.session_state.hist.append({"role":"assistant", "content":res})
                 except: pass
 
     else:
-        st.warning("⚠️ Aguardando conexão. Cole sua chave API na barra lateral esquerda.")
+        st.warning("⚠️ Aguardando conexão. Verifique se a chave API está nos 'Secrets' ou cole na barra lateral.")
 else:
-    st.info("👈 Para começar, cole sua API Key do Google na barra lateral.")
-    st.markdown("""
-    **Não tem uma chave?**
-    1. Acesse [Google AI Studio](https://aistudio.google.com/app/apikey)
-    2. Crie uma chave gratuita.
-    3. Cole aqui e pressione Enter.
-    """)
+    st.info("👈 Configure sua API Key para começar.")
