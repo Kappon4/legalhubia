@@ -4,25 +4,72 @@ from pypdf import PdfReader
 from docx import Document
 from io import BytesIO
 from duckduckgo_search import DDGS
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+from datetime import datetime
+import time
 
 # 1. CONFIGURAÇÃO VISUAL
 st.set_page_config(page_title="LegalHub IA", page_icon="⚖️", layout="wide")
-st.title("⚖️ LegalHub IA (Web & Jurisprudência)")
 
-# 2. CONFIGURAÇÃO DE SEGURANÇA (API KEY)
-st.sidebar.header("Configuração")
+# --- 🔐 SISTEMA DE LOGIN (NOVO) ---
+def check_password():
+    """Retorna True se o usuário logou corretamente."""
+    if "logado" not in st.session_state:
+        st.session_state.logado = False
 
-# Tenta pegar a chave do cofre de segredos do Streamlit
+    if st.session_state.logado:
+        return True
+
+    # Tela de Login
+    st.markdown("## 🔒 Acesso Restrito - LegalHub")
+    senha = st.text_input("Digite a senha de acesso:", type="password")
+    
+    if st.button("Entrar"):
+        # Verifica se a senha bate com a que está nos Secrets
+        if senha == st.secrets["SENHA_ACESSO"]:
+            st.session_state.logado = True
+            st.rerun() # Recarrega a página para entrar
+        else:
+            st.error("Senha incorreta.")
+    return False
+
+# Se não estiver logado, para o código aqui.
+if not check_password():
+    st.stop()
+# ----------------------------------
+
+st.title("⚖️ LegalHub IA (Sistema Seguro)")
+
+# 2. SEGURANÇA E CONEXÕES
+st.sidebar.header("Painel de Controle")
+if st.sidebar.button("Sair (Logout)"):
+    st.session_state.logado = False
+    st.rerun()
+
+# A) Conexão Google Gemini
 if "GOOGLE_API_KEY" in st.secrets:
     api_key = st.secrets["GOOGLE_API_KEY"]
-    st.sidebar.success("✅ Chave de API carregada do sistema.")
+    st.sidebar.success("✅ IA: Conectada")
 else:
-    # Se não houver segredo configurado (ex: rodando localmente), pede manual
-    api_key = st.sidebar.text_input("Cole sua Chave API Google:", type="password")
+    api_key = st.sidebar.text_input("Chave API Google:", type="password")
+
+# B) Conexão Planilha Google
+def conectar_planilha():
+    try:
+        creds_dict = st.secrets["gcp_service_account"]
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+        client = gspread.authorize(creds)
+        # Substitua pelo nome EXATO da sua planilha
+        sheet = client.open("Casos Juridicos - LegalHub").sheet1 
+        return sheet
+    except Exception as e:
+        st.sidebar.error(f"Erro Planilha: {e}")
+        return None
 
 # 3. FUNÇÕES INTELIGENTES
 def descobrir_modelos():
-    """Lista modelos disponíveis na conta"""
     try:
         modelos = []
         for m in genai.list_models():
@@ -33,159 +80,111 @@ def descobrir_modelos():
         return []
 
 def buscar_jurisprudencia_real(tema, qtd=5):
-    """Busca focada em STF, STJ e Jusbrasil"""
     try:
-        # Busca unificada com filtros de site
         query = f"{tema} (ementa OR acordao OR jurisprudencia) (site:stf.jus.br OR site:stj.jus.br OR site:jusbrasil.com.br)"
-        
-        resultados_formatados = ""
-        # Realiza a busca
         results = DDGS().text(query, region="br-pt", max_results=qtd)
+        if not results: return "Nenhuma jurisprudência encontrada."
         
-        if not results:
-            return "Nenhuma jurisprudência encontrada nesses tribunais."
-
+        texto = ""
         for i, r in enumerate(results):
-            resultados_formatados += f"\n--- FONTE {i+1} ({r['title']}) ---\n"
-            resultados_formatados += f"Resumo: {r['body']}\n"
-            resultados_formatados += f"Link: {r['href']}\n"
-        
-        return resultados_formatados
-    except Exception as e:
-        return f"Erro na busca online: {e}"
+            texto += f"\n--- FONTE {i+1} ({r['title']}) ---\nLink: {r['href']}\nResumo: {r['body']}\n"
+        return texto
+    except: return "Erro na busca."
 
-def gerar_word(texto_ia, titulo="Documento Jurídico"):
-    """Gera o arquivo .docx para download"""
+def gerar_word(texto):
     doc = Document()
-    doc.add_heading(titulo, 0)
-    for paragrafo in texto_ia.split('\n'):
-        if paragrafo.strip():
-            doc.add_paragraph(paragrafo)
+    for p in texto.split('\n'):
+        if p.strip(): doc.add_paragraph(p)
     buffer = BytesIO()
     doc.save(buffer)
     buffer.seek(0)
     return buffer
 
 def extrair_texto_pdf(arquivo):
-    """Lê o conteúdo de arquivos PDF"""
     try:
-        leitor = PdfReader(arquivo)
-        texto = ""
-        for pag in leitor.pages:
-            texto += pag.extract_text()
-        return texto
-    except:
-        return None
+        return "".join([p.extract_text() for p in PdfReader(arquivo).pages])
+    except: return None
 
 # 4. LÓGICA PRINCIPAL
 if api_key:
-    # Configura o Gemini com a chave (seja dos segredos ou manual)
     genai.configure(api_key=api_key)
     modelos = descobrir_modelos()
     
     if modelos:
-        # Seleciona automaticamente o primeiro modelo disponível
-        modelo_atual = st.sidebar.selectbox("Modelo Inteligente:", modelos, index=0)
+        modelo_atual = st.sidebar.selectbox("Modelo:", modelos, index=0)
         
-        # Cria as abas da aplicação
-        tab1, tab2, tab3 = st.tabs(["✍️ Redator (STF/STJ)", "📂 Analisar PDF", "💬 Chat Estratégico"])
+        tab1, tab2, tab3, tab4 = st.tabs(["✍️ Redator", "📂 Ler PDF", "💬 Chat", "🗄️ Meus Casos"])
         
-        # --- ABA 1: GERADOR COM BUSCA ESPECÍFICA ---
+        # --- ABA 1: REDATOR ---
         with tab1:
-            st.header("Gerador de Peças (STF, STJ, Jusbrasil)")
-            col1, col2 = st.columns(2)
-            with col1:
-                tipo = st.selectbox("Tipo da Peça", ["Petição Inicial", "Contestação", "Réplica", "Recurso Especial", "Recurso Extraordinário", "Habeas Corpus"])
-                area = st.selectbox("Área", ["Cível", "Trabalhista", "Família", "Criminal", "Previdenciário", "Constitucional"])
-                usar_web = st.checkbox("🔎 Buscar Jurisprudência (STF/STJ/Jusbrasil)", value=True)
-                
-            with col2:
-                fatos = st.text_area("Fatos e Fundamentos:", height=200, placeholder="Ex: Recurso sobre ICMS na base de cálculo do PIS/COFINS...")
+            st.header("Gerador de Peças")
+            c1, c2 = st.columns(2)
+            with c1:
+                tipo = st.selectbox("Peça", ["Inicial", "Contestação", "Recurso", "Habeas Corpus", "Contrato"])
+                area = st.selectbox("Área", ["Cível", "Trabalhista", "Criminal", "Família", "Tributário"])
+                web = st.checkbox("Buscar Jurisprudência?", value=True)
+            with c2:
+                cliente = st.text_input("Nome do Cliente:")
+                fatos = st.text_area("Fatos:", height=150)
             
-            if st.button("✨ Gerar Minuta"):
+            if st.button("✨ Gerar e Salvar"):
                 if not fatos:
                     st.warning("Preencha os fatos.")
                 else:
-                    status_busca = st.empty()
-                    contexto_juridico = ""
+                    with st.spinner("Gerando..."):
+                        jurisp = ""
+                        if web:
+                            jurisp = buscar_jurisprudencia_real(f"{area} {tipo} {fatos}")
+                        
+                        model = genai.GenerativeModel(modelo_atual)
+                        prompt = f"Advogado {area}. Peça: {tipo}. Fatos: {fatos}. Jurisprudência: {jurisp}."
+                        res = model.generate_content(prompt)
+                        st.markdown(res.text)
+                        
+                        st.download_button("Baixar Word", gerar_word(res.text), "minuta.docx")
+                        
+                        if cliente:
+                            sheet = conectar_planilha()
+                            if sheet:
+                                data_hoje = datetime.now().strftime("%d/%m/%Y")
+                                try:
+                                    sheet.append_row([data_hoje, cliente, tipo, fatos[:100]+"..."])
+                                    st.success(f"✅ Salvo na planilha!")
+                                except:
+                                    st.warning("Erro ao salvar (verifique permissões).")
 
-                    # Se a busca web estiver ativa
-                    if usar_web:
-                        status_busca.info(f"🕵️‍♂️ Vasculhando STF, STJ e Jusbrasil sobre '{fatos[:30]}...'")
-                        termo_busca = f"{area} {tipo} {fatos}" 
-                        contexto_juridico = buscar_jurisprudencia_real(termo_busca)
-                        status_busca.success("✅ Jurisprudência de Alta Corte encontrada!")
-                        with st.expander("Ver Fontes Encontradas"):
-                            st.text(contexto_juridico)
-
-                    with st.spinner("A IA está redigindo baseada nas fontes..."):
-                        try:
-                            model = genai.GenerativeModel(modelo_atual)
-                            
-                            prompt = f"""Atue como advogado sênior especialista em Tribunais Superiores.
-Redija uma {tipo} na área {area}.
-
-FATOS DO CASO:
-{fatos}
-
-JURISPRUDÊNCIA COLETADA (STF/STJ/Jusbrasil):
-{contexto_juridico}
-
-INSTRUÇÕES DE ESCRITA:
-1. Priorize citar as decisões do STF e STJ encontradas acima.
-2. Se houver divergência, argumente a favor do cliente.
-3. Cite os links das fontes como notas de rodapé ou no corpo do texto se relevante.
-4. Estrutura formal completa.
-"""
-                            
-                            response = model.generate_content(prompt)
-                            texto_gerado = response.text
-                            
-                            st.markdown(texto_gerado)
-                            
-                            # Botão de Download
-                            st.download_button(
-                                label="📥 Baixar Documento (.docx)",
-                                data=gerar_word(texto_gerado, f"{tipo} - {area}"),
-                                file_name=f"Minuta_{tipo}.docx",
-                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                            )
-                        except Exception as e:
-                            st.error(f"Erro: {e}")
-
-        # --- ABA 2: LEITOR DE PDF ---
+        # --- ABA 2: PDF ---
         with tab2:
-            st.header("Leitura de Processos")
-            upload = st.file_uploader("Subir PDF", type="pdf")
-            if upload:
-                texto = extrair_texto_pdf(upload)
-                if texto:
-                    st.success(f"PDF carregado ({len(texto)} caracteres).")
-                    pergunta = st.text_input("O que deseja saber sobre o arquivo?")
-                    if st.button("🔍 Analisar Arquivo"):
-                         model = genai.GenerativeModel(modelo_atual)
-                         res = model.generate_content(f"Responda com base no texto: {texto}\nPergunta: {pergunta}")
-                         st.write(res.text)
+            st.header("PDF")
+            up = st.file_uploader("PDF", type="pdf")
+            if up:
+                txt = extrair_texto_pdf(up)
+                if st.button("Resumir"): 
+                    st.write(genai.GenerativeModel(modelo_atual).generate_content(f"Resuma: {txt}").text)
 
-        # --- ABA 3: CHAT ESTRATÉGICO ---
+        # --- ABA 3: CHAT ---
         with tab3:
-            st.header("Chat Estratégico")
+            st.header("Chat")
             if "hist" not in st.session_state: st.session_state.hist = []
-            
-            for m in st.session_state.hist: 
-                st.chat_message(m["role"]).write(m["content"])
-            
-            if p := st.chat_input("Mensagem..."):
+            for m in st.session_state.hist: st.chat_message(m["role"]).write(m["content"])
+            if p := st.chat_input("Msg"):
                 st.chat_message("user").write(p)
                 st.session_state.hist.append({"role":"user", "content":p})
-                try:
-                    model = genai.GenerativeModel(modelo_atual)
-                    res = model.generate_content(p).text
-                    st.chat_message("assistant").write(res)
-                    st.session_state.hist.append({"role":"assistant", "content":res})
-                except: pass
+                res = genai.GenerativeModel(modelo_atual).generate_content(p).text
+                st.chat_message("assistant").write(res)
+                st.session_state.hist.append({"role":"assistant", "content":res})
 
-    else:
-        st.warning("⚠️ Aguardando conexão. Verifique se a chave API está nos 'Secrets' ou cole na barra lateral.")
+        # --- ABA 4: BANCO DE DADOS ---
+        with tab4:
+            st.header("🗄️ Banco de Casos")
+            if st.button("🔄 Atualizar Lista"):
+                sheet = conectar_planilha()
+                if sheet:
+                    try:
+                        dados = sheet.get_all_records()
+                        st.dataframe(dados)
+                    except:
+                        st.info("Planilha vazia ou erro de leitura.")
+
 else:
-    st.info("👈 Configure sua API Key para começar.")
+    st.warning("Configure as Chaves de API.")
