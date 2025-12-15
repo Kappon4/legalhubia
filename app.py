@@ -8,11 +8,13 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 import time
+import tempfile # Biblioteca para criar arquivos temporários
+import os
 
 # 1. CONFIGURAÇÃO VISUAL
 st.set_page_config(page_title="LegalHub IA", page_icon="⚖️", layout="wide")
 
-# --- 🔐 SISTEMA DE LOGIN (NOVO) ---
+# --- 🔐 SISTEMA DE LOGIN ---
 def check_password():
     """Retorna True se o usuário logou corretamente."""
     if "logado" not in st.session_state:
@@ -21,23 +23,20 @@ def check_password():
     if st.session_state.logado:
         return True
 
-    # Tela de Login
     st.markdown("## 🔒 Acesso Restrito - LegalHub")
     senha = st.text_input("Digite a senha de acesso:", type="password")
     
     if st.button("Entrar"):
-        # Verifica se a senha bate com a que está nos Secrets
         if senha == st.secrets["SENHA_ACESSO"]:
             st.session_state.logado = True
-            st.rerun() # Recarrega a página para entrar
+            st.rerun()
         else:
             st.error("Senha incorreta.")
     return False
 
-# Se não estiver logado, para o código aqui.
 if not check_password():
     st.stop()
-# ----------------------------------
+# ---------------------------
 
 st.title("⚖️ LegalHub IA (Sistema Seguro)")
 
@@ -61,7 +60,6 @@ def conectar_planilha():
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
-        # Substitua pelo nome EXATO da sua planilha
         sheet = client.open("Casos Juridicos - LegalHub").sheet1 
         return sheet
     except Exception as e:
@@ -111,9 +109,11 @@ if api_key:
     modelos = descobrir_modelos()
     
     if modelos:
-        modelo_atual = st.sidebar.selectbox("Modelo:", modelos, index=0)
+        # Garante que usamos um modelo que suporta áudio (Flash é ótimo para isso)
+        modelo_escolhido = st.sidebar.selectbox("Modelo:", modelos, index=0)
         
-        tab1, tab2, tab3, tab4 = st.tabs(["✍️ Redator", "📂 Ler PDF", "💬 Chat", "🗄️ Meus Casos"])
+        # Abas atualizadas com o Transcritor
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["✍️ Redator", "📂 Ler PDF", "🎙️ Transcritor", "💬 Chat", "🗄️ Meus Casos"])
         
         # --- ABA 1: REDATOR ---
         with tab1:
@@ -136,55 +136,87 @@ if api_key:
                         if web:
                             jurisp = buscar_jurisprudencia_real(f"{area} {tipo} {fatos}")
                         
-                        model = genai.GenerativeModel(modelo_atual)
+                        model = genai.GenerativeModel(modelo_escolhido)
                         prompt = f"Advogado {area}. Peça: {tipo}. Fatos: {fatos}. Jurisprudência: {jurisp}."
                         res = model.generate_content(prompt)
                         st.markdown(res.text)
-                        
                         st.download_button("Baixar Word", gerar_word(res.text), "minuta.docx")
                         
                         if cliente:
                             sheet = conectar_planilha()
                             if sheet:
-                                data_hoje = datetime.now().strftime("%d/%m/%Y")
                                 try:
-                                    sheet.append_row([data_hoje, cliente, tipo, fatos[:100]+"..."])
-                                    st.success(f"✅ Salvo na planilha!")
-                                except:
-                                    st.warning("Erro ao salvar (verifique permissões).")
+                                    sheet.append_row([datetime.now().strftime("%d/%m/%Y"), cliente, tipo, fatos[:100]+"..."])
+                                    st.success(f"✅ Salvo!")
+                                except: st.warning("Erro ao salvar.")
 
         # --- ABA 2: PDF ---
         with tab2:
-            st.header("PDF")
+            st.header("Análise de PDF")
             up = st.file_uploader("PDF", type="pdf")
             if up:
                 txt = extrair_texto_pdf(up)
-                if st.button("Resumir"): 
-                    st.write(genai.GenerativeModel(modelo_atual).generate_content(f"Resuma: {txt}").text)
+                st.info(f"PDF Lido. {len(txt)} caracteres.")
+                if st.button("Resumir Processo"): 
+                    st.write(genai.GenerativeModel(modelo_escolhido).generate_content(f"Resuma este processo jurídico: {txt}").text)
 
-        # --- ABA 3: CHAT ---
+        # --- ABA 3: TRANSCRITOR DE ÁUDIO (NOVO!) ---
         with tab3:
+            st.header("🎙️ Transcrição e Atas")
+            st.markdown("Suba um áudio (mp3, wav, m4a) de uma reunião ou audiência.")
+            
+            audio_file = st.file_uploader("Upload de Áudio", type=["mp3", "wav", "m4a", "ogg"])
+            
+            if audio_file:
+                st.audio(audio_file) # Mostra o player para ouvir
+                
+                if st.button("📝 Transcrever e Gerar Ata"):
+                    with st.spinner("Ouvindo e transcrevendo... (Isso pode levar alguns segundos)"):
+                        try:
+                            # 1. Salva o arquivo temporariamente para enviar ao Google
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
+                                tmp.write(audio_file.getvalue())
+                                tmp_path = tmp.name
+
+                            # 2. Envia para o Google Gemini (File API)
+                            arquivo_na_nuvem = genai.upload_file(tmp_path)
+                            
+                            # 3. Pede para a IA processar
+                            model = genai.GenerativeModel(modelo_escolhido)
+                            prompt_audio = "Ouça este áudio com atenção. 1. Faça uma transcrição completa. 2. Gere uma Ata de Reunião ou Resumo Jurídico com os principais pontos discutidos e decisões tomadas."
+                            
+                            response = model.generate_content([prompt_audio, arquivo_na_nuvem])
+                            
+                            # 4. Limpeza (apaga arquivo temporário)
+                            os.remove(tmp_path)
+                            
+                            st.subheader("Resultado:")
+                            st.markdown(response.text)
+                            st.download_button("📥 Baixar Transcrição (.docx)", gerar_word(response.text), "transcricao.docx")
+
+                        except Exception as e:
+                            st.error(f"Erro ao processar áudio: {e}")
+
+        # --- ABA 4: CHAT ---
+        with tab4:
             st.header("Chat")
             if "hist" not in st.session_state: st.session_state.hist = []
             for m in st.session_state.hist: st.chat_message(m["role"]).write(m["content"])
             if p := st.chat_input("Msg"):
                 st.chat_message("user").write(p)
                 st.session_state.hist.append({"role":"user", "content":p})
-                res = genai.GenerativeModel(modelo_atual).generate_content(p).text
+                res = genai.GenerativeModel(modelo_escolhido).generate_content(p).text
                 st.chat_message("assistant").write(res)
                 st.session_state.hist.append({"role":"assistant", "content":res})
 
-        # --- ABA 4: BANCO DE DADOS ---
-        with tab4:
-            st.header("🗄️ Banco de Casos")
-            if st.button("🔄 Atualizar Lista"):
+        # --- ABA 5: BANCO DE DADOS ---
+        with tab5:
+            st.header("🗄️ Meus Casos")
+            if st.button("🔄 Atualizar"):
                 sheet = conectar_planilha()
                 if sheet:
                     try:
-                        dados = sheet.get_all_records()
-                        st.dataframe(dados)
-                    except:
-                        st.info("Planilha vazia ou erro de leitura.")
-
+                        st.dataframe(sheet.get_all_records())
+                    except: st.info("Planilha vazia.")
 else:
     st.warning("Configure as Chaves de API.")
