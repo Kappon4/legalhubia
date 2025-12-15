@@ -5,3 +5,5 @@ python-docx
 duckduckgo-search
 gspread
 oauth2client
+pandas
+plotly
