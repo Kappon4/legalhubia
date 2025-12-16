@@ -49,7 +49,7 @@ if st.sidebar.button("Sair (Logout)"):
 # API Gemini
 if "GOOGLE_API_KEY" in st.secrets:
     api_key = st.secrets["GOOGLE_API_KEY"]
-    conection_status = st.sidebar.success("✅ IA: Chave Detectada")
+    st.sidebar.success("✅ IA: Chave Detectada")
 else: 
     api_key = st.sidebar.text_input("Chave API Google:", type="password")
 
@@ -84,37 +84,20 @@ def extrair_texto_pdf(arquivo):
 if api_key:
     genai.configure(api_key=api_key)
     
-    # --- AUTO-DETECÇÃO DE MODELOS ---
+    # --- SELEÇÃO MANUAL (FORÇADA) ---
     st.sidebar.divider()
     st.sidebar.write("🤖 Seleção de Modelo")
     
-    try:
-        # Pede para o Google listar o que está disponível para ESSA chave
-        lista_modelos = []
-        for m in genai.list_models():
-            if 'generateContent' in m.supported_generation_methods:
-                lista_modelos.append(m.name)
-        
-        # Se achou modelos, cria o selectbox com os nomes REAIS
-        if lista_modelos:
-            # Tenta achar um modelo Flash padrão
-            index_padrao = 0
-            for i, nome in enumerate(lista_modelos):
-                if "flash" in nome and "1.5" in nome:
-                    index_padrao = i
-                    break
-            
-            modelo_escolhido = st.sidebar.selectbox("Modelos Disponíveis:", lista_modelos, index=index_padrao)
-            st.sidebar.caption(f"ID Técnico: {modelo_escolhido}")
-        else:
-            st.sidebar.error("Nenhum modelo encontrado. Verifique permissões da API.")
-            modelo_escolhido = "gemini-1.5-flash" # Fallback
-            
-    except Exception as e:
-        st.sidebar.error(f"Erro ao listar modelos: {e}")
-        modelo_escolhido = "gemini-1.5-flash"
+    # Aqui forçamos os nomes que sabemos que existem, ignorando a lista automática
+    # O 'gemini-1.5-flash' é o primeiro da lista para ser o padrão
+    modelo_escolhido = st.sidebar.selectbox(
+        "Modelos Disponíveis:", 
+        ["gemini-1.5-flash", "gemini-2.0-flash-exp", "gemini-1.5-pro"],
+        index=0
+    )
+    st.sidebar.info(f"Usando: {modelo_escolhido}")
 
-    # --- FIM DA AUTO-DETECÇÃO ---
+    # --- FIM DA SELEÇÃO ---
     
     # DEFINIÇÃO DAS ABAS
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
@@ -159,7 +142,7 @@ if api_key:
                     except NotFound:
                         st.error(f"❌ Modelo não encontrado: {modelo_escolhido}")
                     except ResourceExhausted:
-                        st.error("⚠️ Limite de tráfego atingido. Aguarde 30s.")
+                        st.error("⚠️ Limite de tráfego atingido. Tente outro modelo.")
                     except Exception as e:
                         st.error(f"Erro: {e}")
 
@@ -214,17 +197,16 @@ if api_key:
             st.chat_message("user").write(p)
             st.session_state.hist.append({"role":"user", "content":p})
             
-            # --- PROTEÇÃO COMPLETA (Corrigida) ---
             try:
                 response = genai.GenerativeModel(modelo_escolhido).generate_content(p)
                 res = response.text
                 
             except NotFound:
-                res = "Erro: Modelo não encontrado. Selecione outro."
+                res = "Erro: Modelo não encontrado. Tente selecionar outro na lista."
                 st.error(res)
                 
             except ResourceExhausted:
-                res = "Erro: Limite atingido. Aguarde."
+                res = "Erro: Limite de cota atingido para este modelo. Troque para o 1.5-Flash."
                 st.error(res)
                 
             except Exception as e:
