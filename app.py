@@ -84,7 +84,7 @@ def extrair_texto_pdf(arquivo):
 if api_key:
     genai.configure(api_key=api_key)
     
-    # --- AUTO-DETECÇÃO DE MODELOS (A CORREÇÃO) ---
+    # --- AUTO-DETECÇÃO DE MODELOS ---
     st.sidebar.divider()
     st.sidebar.write("🤖 Seleção de Modelo")
     
@@ -97,7 +97,7 @@ if api_key:
         
         # Se achou modelos, cria o selectbox com os nomes REAIS
         if lista_modelos:
-            # Tenta deixar o Flash como padrão se ele existir na lista
+            # Tenta achar um modelo Flash padrão
             index_padrao = 0
             for i, nome in enumerate(lista_modelos):
                 if "flash" in nome and "1.5" in nome:
@@ -107,7 +107,7 @@ if api_key:
             modelo_escolhido = st.sidebar.selectbox("Modelos Disponíveis:", lista_modelos, index=index_padrao)
             st.sidebar.caption(f"ID Técnico: {modelo_escolhido}")
         else:
-            st.sidebar.error("Nenhum modelo encontrado. Verifique se a API Key tem permissões.")
+            st.sidebar.error("Nenhum modelo encontrado. Verifique permissões da API.")
             modelo_escolhido = "gemini-1.5-flash" # Fallback
             
     except Exception as e:
@@ -214,14 +214,52 @@ if api_key:
             st.chat_message("user").write(p)
             st.session_state.hist.append({"role":"user", "content":p})
             
+            # --- PROTEÇÃO COMPLETA (Corrigida) ---
             try:
                 response = genai.GenerativeModel(modelo_escolhido).generate_content(p)
                 res = response.text
+                
             except NotFound:
-                res = "Erro: Modelo não encontrado. Tente outro na barra lateral."
+                res = "Erro: Modelo não encontrado. Selecione outro."
                 st.error(res)
+                
             except ResourceExhausted:
                 res = "Erro: Limite atingido. Aguarde."
                 st.error(res)
+                
             except Exception as e:
-                res =
+                res = f"Erro desconhecido: {e}"
+                st.error(res)
+
+            st.chat_message("assistant").write(res)
+            st.session_state.hist.append({"role":"assistant", "content":res})
+
+    # --- ABA 6: DASHBOARD ---
+    with tab6:
+        st.header("📊 Dashboard do Escritório")
+        if st.button("🔄 Atualizar Dados"):
+            sheet = conectar_planilha()
+            if sheet:
+                try:
+                    dados = sheet.get_all_records()
+                    df = pd.DataFrame(dados)
+                    if not df.empty:
+                        m1, m2, m3 = st.columns(3)
+                        m1.metric("Total de Casos", len(df))
+                        m2.metric("Último Cliente", df.iloc[-1]["Cliente"] if "Cliente" in df.columns else "N/A")
+                        
+                        st.divider()
+                        g1, g2 = st.columns(2)
+                        if "Tipo de Ação" in df.columns:
+                            fig_pizza = px.pie(df, names="Tipo de Ação", title="Distribuição")
+                            g1.plotly_chart(fig_pizza, use_container_width=True)
+                        if "Cliente" in df.columns:
+                            contagem = df["Cliente"].value_counts().reset_index()
+                            contagem.columns = ["Cliente", "Qtd"]
+                            fig_barras = px.bar(contagem, x="Cliente", y="Qtd", title="Clientes")
+                            g2.plotly_chart(fig_barras, use_container_width=True)
+                        st.dataframe(df, use_container_width=True)
+                    else: st.info("Planilha vazia.")
+                except Exception as e: st.error(f"Erro: {e}")
+
+else: st.warning("Configure as Chaves de API.")
