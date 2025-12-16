@@ -13,8 +13,7 @@ import os
 import pandas as pd
 import plotly.express as px
 
-# --- IMPORTAÇÃO DE ERROS (ATUALIZADA) ---
-# Adicionei 'NotFound' e 'InvalidArgument' para cobrir o erro novo
+# --- IMPORTAÇÃO DE ERROS ---
 from google.api_core.exceptions import ResourceExhausted, NotFound, InvalidArgument
 
 # 1. CONFIGURAÇÃO VISUAL
@@ -89,7 +88,6 @@ if api_key:
     genai.configure(api_key=api_key)
     
     # Seletor de Modelo
-    # ATENÇÃO: Se o gemini-2.5 der erro de novo, MUDAR A SELEÇÃO PARA O 1.5 NO SITE
     modelo_escolhido = st.sidebar.selectbox(
         "Escolha o Modelo", 
         ["gemini-1.5-flash", "gemini-2.5-flash", "gemini-1.5-pro"],
@@ -129,8 +127,147 @@ if api_key:
                         st.markdown(res)
                         st.download_button("Baixar Word", gerar_word(res), "minuta.docx")
                         
-                        # Salvar no Banco
+                        # Salvar no Banco (CORRIGIDO AQUI PARA EVITAR ERRO DE LINHA CORTADA)
                         if cliente:
                             s = conectar_planilha()
                             if s: 
-                                s.append_row([datetime.now().strftime("%d/%m/%Y"), cliente
+                                # Criamos a lista antes para evitar linhas muito longas
+                                dados_para_salvar = [
+                                    datetime.now().strftime("%d/%m/%Y"), 
+                                    cliente, 
+                                    area, 
+                                    tipo, 
+                                    fatos[:50]
+                                ]
+                                s.append_row(dados_para_salvar) 
+                                st.success("✅ Caso salvo no Dashboard!")
+                                
+                    except NotFound:
+                        st.error(f"❌ O modelo '{modelo_escolhido}' não foi encontrado.")
+                        st.info("💡 Solução: Troque o modelo para 'gemini-1.5-flash' na barra lateral.")
+                    except ResourceExhausted:
+                        st.error("⚠️ Limite de tráfego atingido. Aguarde 30s e tente novamente.")
+
+    # --- ABA 2: PDF ---
+    with tab2:
+        st.header("Análise de Processos")
+        up = st.file_uploader("Subir PDF", type="pdf")
+        if up:
+            if st.button("Resumir"): 
+                try:
+                    st.write(genai.GenerativeModel(modelo_escolhido).generate_content(f"Resuma: {extrair_texto_pdf(up)}").text)
+                except NotFound:
+                    st.error("❌ Modelo não encontrado. Selecione o 'gemini-1.5-flash'.")
+                except ResourceExhausted:
+                    st.error("⚠️ Limite de tráfego atingido.")
+
+    # --- ABA 3: TRANSCRITOR ---
+    with tab3:
+        st.header("🎙️ Transcrição")
+        aud = st.file_uploader("Áudio", type=["mp3", "wav", "m4a"])
+        if aud and st.button("Transcrever"):
+            with st.spinner("Ouvindo..."):
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
+                    tmp.write(aud.getvalue())
+                    tmp_path = tmp.name
+                f = genai.upload_file(tmp_path)
+                try:
+                    res = genai.GenerativeModel(modelo_escolhido).generate_content(["Transcreva e resuma.", f]).text
+                    st.markdown(res)
+                    st.download_button("Baixar", gerar_word(res), "transcricao.docx")
+                except NotFound:
+                    st.error("❌ Modelo inválido. Troque para o 1.5 Flash.")
+                except ResourceExhausted:
+                    st.error("⚠️ Limite de tráfego atingido.")
+                finally:
+                    os.remove(tmp_path)
+
+    # --- ABA 4: COMPARADOR ---
+    with tab4:
+        st.header("⚖️ Comparador")
+        c_a, c_b = st.columns(2)
+        p1 = c_a.file_uploader("Original", type="pdf", key="v1")
+        p2 = c_b.file_uploader("Alterado", type="pdf", key="v2")
+        if p1 and p2 and st.button("Comparar"):
+            with st.spinner("Comparando..."):
+                t1, t2 = extrair_texto_pdf(p1), extrair_texto_pdf(p2)
+                try:
+                    res = genai.GenerativeModel(modelo_escolhido).generate_content(f"Compare os textos. Diferenças e Riscos:\nTexto 1: {t1}\nTexto 2: {t2}").text
+                    st.markdown(res)
+                except NotFound:
+                    st.error("❌ Modelo não encontrado. Use o 1.5 Flash.")
+                except ResourceExhausted:
+                    st.error("⚠️ Limite de tráfego atingido.")
+
+    # --- ABA 5: CHAT ---
+    with tab5:
+        st.header("Chat")
+        if "hist" not in st.session_state: st.session_state.hist = []
+        for m in st.session_state.hist: st.chat_message(m["role"]).write(m["content"])
+        
+        if p := st.chat_input("Msg"):
+            st.chat_message("user").write(p)
+            st.session_state.hist.append({"role":"user", "content":p})
+            
+            # --- PROTEÇÃO COMPLETA CONTRA ERROS ---
+            try:
+                response = genai.GenerativeModel(modelo_escolhido).generate_content(p)
+                res = response.text
+                
+            except NotFound:
+                st.error(f"⚠️ O modelo '{modelo_escolhido}' não está disponível.")
+                st.info("👉 Selecione 'gemini-1.5-flash' na barra lateral.")
+                res = "Erro: Modelo não encontrado."
+                
+            except ResourceExhausted:
+                st.error("⚠️ Limite de uso atingido. O sistema está sobrecarregado.")
+                st.info("Aguarde alguns segundos e tente novamente.")
+                res = "Erro: Limite excedido."
+                
+            except Exception as e:
+                st.error(f"Erro inesperado: {e}")
+                res = "Erro desconhecido."
+
+            st.chat_message("assistant").write(res)
+            st.session_state.hist.append({"role":"assistant", "content":res})
+
+    # --- ABA 6: DASHBOARD ---
+    with tab6:
+        st.header("📊 Dashboard do Escritório")
+        
+        if st.button("🔄 Atualizar Dados"):
+            sheet = conectar_planilha()
+            if sheet:
+                try:
+                    dados = sheet.get_all_records()
+                    df = pd.DataFrame(dados)
+                    
+                    if not df.empty:
+                        m1, m2, m3 = st.columns(3)
+                        m1.metric("Total de Casos", len(df))
+                        m2.metric("Último Cliente", df.iloc[-1]["Cliente"] if "Cliente" in df.columns else "N/A")
+                        m3.metric("Área Mais Ativa", df["Tipo de Ação"].mode()[0] if "Tipo de Ação" in df.columns else "N/A")
+                        
+                        st.divider()
+                        g1, g2 = st.columns(2)
+                        
+                        if "Tipo de Ação" in df.columns:
+                            fig_pizza = px.pie(df, names="Tipo de Ação", title="Distribuição por Tipo de Peça")
+                            g1.plotly_chart(fig_pizza, use_container_width=True)
+                        
+                        if "Cliente" in df.columns:
+                            contagem_clientes = df["Cliente"].value_counts().reset_index()
+                            contagem_clientes.columns = ["Cliente", "Qtd"]
+                            fig_barras = px.bar(contagem_clientes, x="Cliente", y="Qtd", title="Processos por Cliente")
+                            g2.plotly_chart(fig_barras, use_container_width=True)
+                        
+                        st.divider()
+                        st.subheader("Base de Dados Completa")
+                        st.dataframe(df, use_container_width=True)
+                    else:
+                        st.info("A planilha está vazia.")
+                        
+                except Exception as e:
+                    st.error(f"Erro ao ler dados: {e}")
+
+else: st.warning("Configure as Chaves de API.")
