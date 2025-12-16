@@ -86,10 +86,11 @@ def extrair_texto_pdf(arquivo):
 # 4. LÓGICA PRINCIPAL
 if api_key:
     genai.configure(api_key=api_key)
-    modelos = descobrir_modelos()
-    
-    if modelos:
-        modelo_escolhido = st.sidebar.selectbox("Modelo:", modelos, index=0)
+    modelo_escolhido = st.sidebar.selectbox(
+        "Escolha o Modelo", 
+        ["gemini-1.5-flash", "gemini-2.5-flash", "gemini-1.5-pro"],
+        index=0 # O padrão agora é o 1.5 Flash (mais seguro contra erros)
+    )
         
         # DEFINIÇÃO DAS ABAS
         tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
@@ -248,3 +249,4 @@ if api_key:
                         st.info("Dica: Verifique se o cabeçalho da sua planilha no Google Sheets está exatamente assim: Data | Cliente | Tipo de Ação | Resumo")
 
 else: st.warning("Configure as Chaves de API.")
+
