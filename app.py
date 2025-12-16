@@ -13,7 +13,7 @@ import os
 import pandas as pd
 import plotly.express as px
 
-# --- IMPORTAÇÃO ADICIONADA PARA TRATAR O ERRO ---
+# --- IMPORTAÇÃO PARA TRATAR O ERRO DE COTA ---
 from google.api_core.exceptions import ResourceExhausted
 
 # 1. CONFIGURAÇÃO VISUAL
@@ -86,167 +86,164 @@ def extrair_texto_pdf(arquivo):
 # 4. LÓGICA PRINCIPAL
 if api_key:
     genai.configure(api_key=api_key)
+    
+    # Seletor de Modelo (Corrigido e Alinhado)
     modelo_escolhido = st.sidebar.selectbox(
         "Escolha o Modelo", 
         ["gemini-1.5-flash", "gemini-2.5-flash", "gemini-1.5-pro"],
-        index=0 # O padrão agora é o 1.5 Flash (mais seguro contra erros)
+        index=0 
     )
+    
+    # DEFINIÇÃO DAS ABAS (Esta linha estava dando erro antes)
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        "✍️ Redator", 
+        "📂 Ler PDF", 
+        "🎙️ Transcritor", 
+        "⚖️ Comparador", 
+        "💬 Chat", 
+        "📊 Dashboard (Novo)"
+    ])
+    
+    # --- ABA 1: REDATOR ---
+    with tab1:
+        st.header("Gerador de Peças")
+        c1, c2 = st.columns(2)
+        with c1:
+            tipo = st.selectbox("Peça", ["Inicial", "Contestação", "Recurso", "Contrato", "Parecer"])
+            area = st.selectbox("Área", ["Cível", "Trabalhista", "Criminal", "Família", "Tributário"])
+            web = st.checkbox("Buscar Jurisprudência?", value=True)
+        with c2:
+            cliente = st.text_input("Cliente:")
+            fatos = st.text_area("Fatos:", height=150)
         
-        # DEFINIÇÃO DAS ABAS
-        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-            "✍️ Redator", 
-            "📂 Ler PDF", 
-            "🎙️ Transcritor", 
-            "⚖️ Comparador", 
-            "💬 Chat", 
-            "📊 Dashboard (Novo)"
-        ])
-        
-        # --- ABA 1: REDATOR ---
-        with tab1:
-            st.header("Gerador de Peças")
-            c1, c2 = st.columns(2)
-            with c1:
-                tipo = st.selectbox("Peça", ["Inicial", "Contestação", "Recurso", "Contrato", "Parecer"])
-                area = st.selectbox("Área", ["Cível", "Trabalhista", "Criminal", "Família", "Tributário"])
-                web = st.checkbox("Buscar Jurisprudência?", value=True)
-            with c2:
-                cliente = st.text_input("Cliente:")
-                fatos = st.text_area("Fatos:", height=150)
-            
-            if st.button("✨ Gerar Minuta"):
-                if fatos:
-                    with st.spinner("Pesquisando e Redigindo..."):
-                        jurisp = buscar_jurisprudencia_real(f"{area} {tipo} {fatos}") if web else ""
-                        prompt = f"Advogado {area}. Peça: {tipo}. Fatos: {fatos}. Jurisprudência: {jurisp}. Estruture formalmente."
+        if st.button("✨ Gerar Minuta"):
+            if fatos:
+                with st.spinner("Pesquisando e Redigindo..."):
+                    jurisp = buscar_jurisprudencia_real(f"{area} {tipo} {fatos}") if web else ""
+                    prompt = f"Advogado {area}. Peça: {tipo}. Fatos: {fatos}. Jurisprudência: {jurisp}. Estruture formalmente."
+                    
+                    try:
+                        res = genai.GenerativeModel(modelo_escolhido).generate_content(prompt).text
+                        st.markdown(res)
+                        st.download_button("Baixar Word", gerar_word(res), "minuta.docx")
                         
-                        # Aplicando proteção simples aqui também para evitar quebra
-                        try:
-                            res = genai.GenerativeModel(modelo_escolhido).generate_content(prompt).text
-                            st.markdown(res)
-                            st.download_button("Baixar Word", gerar_word(res), "minuta.docx")
-                            
-                            # Salvar no Banco
-                            if cliente:
-                                s = conectar_planilha()
-                                if s: 
-                                    s.append_row([datetime.now().strftime("%d/%m/%Y"), cliente, area, tipo, fatos[:50]]) 
-                                    st.success("✅ Caso salvo no Dashboard!")
-                        except ResourceExhausted:
-                            st.error("⚠️ Limite de tráfego atingido. Aguarde 30s e tente novamente.")
+                        # Salvar no Banco
+                        if cliente:
+                            s = conectar_planilha()
+                            if s: 
+                                s.append_row([datetime.now().strftime("%d/%m/%Y"), cliente, area, tipo, fatos[:50]]) 
+                                st.success("✅ Caso salvo no Dashboard!")
+                    except ResourceExhausted:
+                        st.error("⚠️ Limite de tráfego atingido. Aguarde 30s e tente novamente.")
 
-        # --- ABA 2: PDF ---
-        with tab2:
-            st.header("Análise de Processos")
-            up = st.file_uploader("Subir PDF", type="pdf")
-            if up:
-                if st.button("Resumir"): 
+    # --- ABA 2: PDF ---
+    with tab2:
+        st.header("Análise de Processos")
+        up = st.file_uploader("Subir PDF", type="pdf")
+        if up:
+            if st.button("Resumir"): 
+                try:
                     st.write(genai.GenerativeModel(modelo_escolhido).generate_content(f"Resuma: {extrair_texto_pdf(up)}").text)
+                except ResourceExhausted:
+                    st.error("⚠️ Limite de tráfego atingido.")
 
-        # --- ABA 3: TRANSCRITOR ---
-        with tab3:
-            st.header("🎙️ Transcrição")
-            aud = st.file_uploader("Áudio", type=["mp3", "wav", "m4a"])
-            if aud and st.button("Transcrever"):
-                with st.spinner("Ouvindo..."):
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
-                        tmp.write(aud.getvalue())
-                        tmp_path = tmp.name
-                    f = genai.upload_file(tmp_path)
+    # --- ABA 3: TRANSCRITOR ---
+    with tab3:
+        st.header("🎙️ Transcrição")
+        aud = st.file_uploader("Áudio", type=["mp3", "wav", "m4a"])
+        if aud and st.button("Transcrever"):
+            with st.spinner("Ouvindo..."):
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
+                    tmp.write(aud.getvalue())
+                    tmp_path = tmp.name
+                f = genai.upload_file(tmp_path)
+                try:
                     res = genai.GenerativeModel(modelo_escolhido).generate_content(["Transcreva e resuma.", f]).text
-                    os.remove(tmp_path)
                     st.markdown(res)
                     st.download_button("Baixar", gerar_word(res), "transcricao.docx")
+                except ResourceExhausted:
+                    st.error("⚠️ Limite de tráfego atingido.")
+                finally:
+                    os.remove(tmp_path)
 
-        # --- ABA 4: COMPARADOR ---
-        with tab4:
-            st.header("⚖️ Comparador")
-            c_a, c_b = st.columns(2)
-            p1 = c_a.file_uploader("Original", type="pdf", key="v1")
-            p2 = c_b.file_uploader("Alterado", type="pdf", key="v2")
-            if p1 and p2 and st.button("Comparar"):
-                with st.spinner("Comparando..."):
-                    t1, t2 = extrair_texto_pdf(p1), extrair_texto_pdf(p2)
+    # --- ABA 4: COMPARADOR ---
+    with tab4:
+        st.header("⚖️ Comparador")
+        c_a, c_b = st.columns(2)
+        p1 = c_a.file_uploader("Original", type="pdf", key="v1")
+        p2 = c_b.file_uploader("Alterado", type="pdf", key="v2")
+        if p1 and p2 and st.button("Comparar"):
+            with st.spinner("Comparando..."):
+                t1, t2 = extrair_texto_pdf(p1), extrair_texto_pdf(p2)
+                try:
                     res = genai.GenerativeModel(modelo_escolhido).generate_content(f"Compare os textos. Diferenças e Riscos:\nTexto 1: {t1}\nTexto 2: {t2}").text
                     st.markdown(res)
-
-        # --- ABA 5: CHAT (ONDE O SEU CÓDIGO FOI INSERIDO) ---
-        with tab5:
-            st.header("Chat")
-            if "hist" not in st.session_state: st.session_state.hist = []
-            for m in st.session_state.hist: st.chat_message(m["role"]).write(m["content"])
-            
-            # A variável 'p' é definida aqui
-            if p := st.chat_input("Msg"):
-                st.chat_message("user").write(p)
-                st.session_state.hist.append({"role":"user", "content":p})
-                
-                # --- BLOCO DE PROTEÇÃO CONTRA ERRO INSERIDO AQUI ---
-                try:
-                    # Tenta gerar a resposta
-                    response = genai.GenerativeModel(modelo_escolhido).generate_content(p)
-                    res = response.text
-
                 except ResourceExhausted:
-                    # Se der o erro de limite, avisa o usuário sem quebrar o app
-                    st.error("⚠️ Limite de tráfego da IA atingido. O sistema está sobrecarregado.")
-                    st.info("Aguarde 30 segundos e tente novamente. (O plano gratuito possui limites de requisições por minuto).")
-                    res = "Erro: Limite excedido." # Valor padrão para não quebrar o resto
+                    st.error("⚠️ Limite de tráfego atingido.")
 
-                except Exception as e:
-                    # Qualquer outro erro
-                    st.error(f"Ocorreu um erro inesperado: {e}")
-                    res = "Erro desconhecido."
-                # ---------------------------------------------------
-
-                st.chat_message("assistant").write(res)
-                st.session_state.hist.append({"role":"assistant", "content":res})
-
-        # --- ABA 6: DASHBOARD (NOVO!) ---
-        with tab6:
-            st.header("📊 Dashboard do Escritório")
+    # --- ABA 5: CHAT ---
+    with tab5:
+        st.header("Chat")
+        if "hist" not in st.session_state: st.session_state.hist = []
+        for m in st.session_state.hist: st.chat_message(m["role"]).write(m["content"])
+        
+        if p := st.chat_input("Msg"):
+            st.chat_message("user").write(p)
+            st.session_state.hist.append({"role":"user", "content":p})
             
-            if st.button("🔄 Atualizar Dados"):
-                sheet = conectar_planilha()
-                if sheet:
-                    try:
-                        # Pega todos os dados da planilha
-                        dados = sheet.get_all_records()
-                        df = pd.DataFrame(dados)
+            # PROTEÇÃO CONTRA ERRO NO CHAT
+            try:
+                response = genai.GenerativeModel(modelo_escolhido).generate_content(p)
+                res = response.text
+            except ResourceExhausted:
+                st.error("⚠️ Limite de tráfego da IA atingido. O sistema está sobrecarregado.")
+                st.info("Aguarde 30 segundos e tente novamente. (O plano gratuito possui limites de requisições por minuto).")
+                res = "Erro: Limite excedido."
+            except Exception as e:
+                st.error(f"Ocorreu um erro inesperado: {e}")
+                res = "Erro desconhecido."
+
+            st.chat_message("assistant").write(res)
+            st.session_state.hist.append({"role":"assistant", "content":res})
+
+    # --- ABA 6: DASHBOARD ---
+    with tab6:
+        st.header("📊 Dashboard do Escritório")
+        
+        if st.button("🔄 Atualizar Dados"):
+            sheet = conectar_planilha()
+            if sheet:
+                try:
+                    dados = sheet.get_all_records()
+                    df = pd.DataFrame(dados)
+                    
+                    if not df.empty:
+                        m1, m2, m3 = st.columns(3)
+                        m1.metric("Total de Casos", len(df))
+                        m2.metric("Último Cliente", df.iloc[-1]["Cliente"] if "Cliente" in df.columns else "N/A")
+                        m3.metric("Área Mais Ativa", df["Tipo de Ação"].mode()[0] if "Tipo de Ação" in df.columns else "N/A")
                         
-                        if not df.empty:
-                            # Métricas no Topo
-                            m1, m2, m3 = st.columns(3)
-                            m1.metric("Total de Casos", len(df))
-                            m2.metric("Último Cliente", df.iloc[-1]["Cliente"] if "Cliente" in df.columns else "N/A")
-                            m3.metric("Área Mais Ativa", df["Tipo de Ação"].mode()[0] if "Tipo de Ação" in df.columns else "N/A")
-                            
-                            st.divider()
-                            
-                            # Gráficos Lado a Lado
-                            g1, g2 = st.columns(2)
-                            
-                            # Gráfico de Pizza (Áreas ou Tipos)
-                            if "Tipo de Ação" in df.columns:
-                                fig_pizza = px.pie(df, names="Tipo de Ação", title="Distribuição por Tipo de Peça")
-                                g1.plotly_chart(fig_pizza, use_container_width=True)
-                            
-                            # Gráfico de Barras (Clientes)
-                            if "Cliente" in df.columns:
-                                contagem_clientes = df["Cliente"].value_counts().reset_index()
-                                contagem_clientes.columns = ["Cliente", "Qtd"]
-                                fig_barras = px.bar(contagem_clientes, x="Cliente", y="Qtd", title="Processos por Cliente")
-                                g2.plotly_chart(fig_barras, use_container_width=True)
-                            
-                            st.divider()
-                            st.subheader("Base de Dados Completa")
-                            st.dataframe(df, use_container_width=True)
-                        else:
-                            st.info("A planilha está vazia. Gere algumas peças na aba 'Redator' para alimentar o gráfico!")
-                            
-                    except Exception as e:
-                        st.error(f"Erro ao ler dados: {e}")
-                        st.info("Dica: Verifique se o cabeçalho da sua planilha no Google Sheets está exatamente assim: Data | Cliente | Tipo de Ação | Resumo")
+                        st.divider()
+                        g1, g2 = st.columns(2)
+                        
+                        if "Tipo de Ação" in df.columns:
+                            fig_pizza = px.pie(df, names="Tipo de Ação", title="Distribuição por Tipo de Peça")
+                            g1.plotly_chart(fig_pizza, use_container_width=True)
+                        
+                        if "Cliente" in df.columns:
+                            contagem_clientes = df["Cliente"].value_counts().reset_index()
+                            contagem_clientes.columns = ["Cliente", "Qtd"]
+                            fig_barras = px.bar(contagem_clientes, x="Cliente", y="Qtd", title="Processos por Cliente")
+                            g2.plotly_chart(fig_barras, use_container_width=True)
+                        
+                        st.divider()
+                        st.subheader("Base de Dados Completa")
+                        st.dataframe(df, use_container_width=True)
+                    else:
+                        st.info("A planilha está vazia. Gere algumas peças na aba 'Redator' para alimentar o gráfico!")
+                        
+                except Exception as e:
+                    st.error(f"Erro ao ler dados: {e}")
+                    st.info("Dica: Verifique se o cabeçalho da sua planilha no Google Sheets está exatamente assim: Data | Cliente | Tipo de Ação | Resumo")
 
 else: st.warning("Configure as Chaves de API.")
-
