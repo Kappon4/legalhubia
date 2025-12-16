@@ -13,6 +13,9 @@ import os
 import pandas as pd
 import plotly.express as px
 
+# --- IMPORTAÇÃO ADICIONADA PARA TRATAR O ERRO ---
+from google.api_core.exceptions import ResourceExhausted
+
 # 1. CONFIGURAÇÃO VISUAL
 st.set_page_config(page_title="LegalHub IA", page_icon="⚖️", layout="wide")
 
@@ -115,23 +118,29 @@ if api_key:
                     with st.spinner("Pesquisando e Redigindo..."):
                         jurisp = buscar_jurisprudencia_real(f"{area} {tipo} {fatos}") if web else ""
                         prompt = f"Advogado {area}. Peça: {tipo}. Fatos: {fatos}. Jurisprudência: {jurisp}. Estruture formalmente."
-                        res = genai.GenerativeModel(modelo_escolhido).generate_content(prompt).text
-                        st.markdown(res)
-                        st.download_button("Baixar Word", gerar_word(res), "minuta.docx")
                         
-                        # Salvar no Banco
-                        if cliente:
-                            s = conectar_planilha()
-                            if s: 
-                                s.append_row([datetime.now().strftime("%d/%m/%Y"), cliente, area, tipo, fatos[:50]]) # Ordem ajustada: Data, Cliente, Area, Tipo
-                                st.success("✅ Caso salvo no Dashboard!")
+                        # Aplicando proteção simples aqui também para evitar quebra
+                        try:
+                            res = genai.GenerativeModel(modelo_escolhido).generate_content(prompt).text
+                            st.markdown(res)
+                            st.download_button("Baixar Word", gerar_word(res), "minuta.docx")
+                            
+                            # Salvar no Banco
+                            if cliente:
+                                s = conectar_planilha()
+                                if s: 
+                                    s.append_row([datetime.now().strftime("%d/%m/%Y"), cliente, area, tipo, fatos[:50]]) 
+                                    st.success("✅ Caso salvo no Dashboard!")
+                        except ResourceExhausted:
+                            st.error("⚠️ Limite de tráfego atingido. Aguarde 30s e tente novamente.")
 
         # --- ABA 2: PDF ---
         with tab2:
             st.header("Análise de Processos")
             up = st.file_uploader("Subir PDF", type="pdf")
             if up:
-                if st.button("Resumir"): st.write(genai.GenerativeModel(modelo_escolhido).generate_content(f"Resuma: {extrair_texto_pdf(up)}").text)
+                if st.button("Resumir"): 
+                    st.write(genai.GenerativeModel(modelo_escolhido).generate_content(f"Resuma: {extrair_texto_pdf(up)}").text)
 
         # --- ABA 3: TRANSCRITOR ---
         with tab3:
@@ -160,15 +169,35 @@ if api_key:
                     res = genai.GenerativeModel(modelo_escolhido).generate_content(f"Compare os textos. Diferenças e Riscos:\nTexto 1: {t1}\nTexto 2: {t2}").text
                     st.markdown(res)
 
-        # --- ABA 5: CHAT ---
+        # --- ABA 5: CHAT (ONDE O SEU CÓDIGO FOI INSERIDO) ---
         with tab5:
             st.header("Chat")
             if "hist" not in st.session_state: st.session_state.hist = []
             for m in st.session_state.hist: st.chat_message(m["role"]).write(m["content"])
+            
+            # A variável 'p' é definida aqui
             if p := st.chat_input("Msg"):
                 st.chat_message("user").write(p)
                 st.session_state.hist.append({"role":"user", "content":p})
-                res = genai.GenerativeModel(modelo_escolhido).generate_content(p).text
+                
+                # --- BLOCO DE PROTEÇÃO CONTRA ERRO INSERIDO AQUI ---
+                try:
+                    # Tenta gerar a resposta
+                    response = genai.GenerativeModel(modelo_escolhido).generate_content(p)
+                    res = response.text
+
+                except ResourceExhausted:
+                    # Se der o erro de limite, avisa o usuário sem quebrar o app
+                    st.error("⚠️ Limite de tráfego da IA atingido. O sistema está sobrecarregado.")
+                    st.info("Aguarde 30 segundos e tente novamente. (O plano gratuito possui limites de requisições por minuto).")
+                    res = "Erro: Limite excedido." # Valor padrão para não quebrar o resto
+
+                except Exception as e:
+                    # Qualquer outro erro
+                    st.error(f"Ocorreu um erro inesperado: {e}")
+                    res = "Erro desconhecido."
+                # ---------------------------------------------------
+
                 st.chat_message("assistant").write(res)
                 st.session_state.hist.append({"role":"assistant", "content":res})
 
