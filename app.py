@@ -84,18 +84,23 @@ def extrair_texto_pdf(arquivo):
 if api_key:
     genai.configure(api_key=api_key)
     
-    # --- SELEÇÃO MANUAL (FORÇADA) ---
+    # --- SELEÇÃO DE MODELO (MODO TÉCNICO) ---
     st.sidebar.divider()
     st.sidebar.write("🤖 Seleção de Modelo")
+    st.sidebar.info("Se der erro, troque a opção abaixo:")
     
-    # Aqui forçamos os nomes que sabemos que existem, ignorando a lista automática
-    # O 'gemini-1.5-flash' é o primeiro da lista para ser o padrão
+    # Lista com TODAS as variações de nome possíveis para garantir que um funcione
     modelo_escolhido = st.sidebar.selectbox(
-        "Modelos Disponíveis:", 
-        ["gemini-1.5-flash", "gemini-2.0-flash-exp", "gemini-1.5-pro"],
+        "ID do Modelo:", 
+        [
+            "models/gemini-1.5-flash",          # Tentativa 1 (Nome técnico padrão)
+            "gemini-1.5-flash",                 # Tentativa 2 (Apelido curto)
+            "models/gemini-1.5-flash-001",      # Tentativa 3 (Versão específica)
+            "models/gemini-1.5-flash-latest",   # Tentativa 4 (Última versão)
+            "models/gemini-1.5-pro",            # Pro (Cota baixa)
+        ],
         index=0
     )
-    st.sidebar.info(f"Usando: {modelo_escolhido}")
 
     # --- FIM DA SELEÇÃO ---
     
@@ -140,9 +145,10 @@ if api_key:
                                 st.success("✅ Caso salvo no Dashboard!")
                                 
                     except NotFound:
-                        st.error(f"❌ Modelo não encontrado: {modelo_escolhido}")
+                        st.error(f"❌ Erro de nome: '{modelo_escolhido}' não funcionou.")
+                        st.info("👉 Tente selecionar a PRÓXIMA opção na lista lá na esquerda.")
                     except ResourceExhausted:
-                        st.error("⚠️ Limite de tráfego atingido. Tente outro modelo.")
+                        st.error("⚠️ Cota estourada para este modelo. Troque para uma versão 'Flash'.")
                     except Exception as e:
                         st.error(f"Erro: {e}")
 
@@ -202,11 +208,11 @@ if api_key:
                 res = response.text
                 
             except NotFound:
-                res = "Erro: Modelo não encontrado. Tente selecionar outro na lista."
+                res = f"Erro: O nome '{modelo_escolhido}' falhou. Tente outra opção na barra lateral."
                 st.error(res)
                 
             except ResourceExhausted:
-                res = "Erro: Limite de cota atingido para este modelo. Troque para o 1.5-Flash."
+                res = "Erro: Limite de cota atingido. Tente uma versão Flash diferente."
                 st.error(res)
                 
             except Exception as e:
