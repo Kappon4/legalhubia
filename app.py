@@ -32,13 +32,51 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+# --- FUNÇÃO PARA CODIFICAR IMAGEM (MANTIDA NO TOPO) ---
+def get_base64_of_bin_file(bin_file):
+    try:
+        with open(bin_file, 'rb') as f:
+            data = f.read()
+        return base64.b64encode(data).decode()
+    except FileNotFoundError: return None
+
 # --- CSS AVANÇADO ---
 def local_css():
-    st.markdown("""
+    # Carrega a imagem de fundo se existir
+    bg_image_b64 = get_base64_of_bin_file("image_12.png")
+    bg_css = ""
+    if bg_image_b64:
+        bg_css = f"""
+        /* BACKGROUND FLUTUANTE */
+        .stApp::before {{
+            content: "";
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 70%; /* Tamanho da imagem de fundo */
+            height: 70%;
+            background-image: url("data:image/png;base64,{bg_image_b64}");
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            opacity: 0.12; /* Opacidade bem baixa para ser sutil */
+            z-index: -1; /* Fica atrás de tudo */
+            pointer-events: none; /* Não interfere em cliques */
+            animation: float-bg 18s ease-in-out infinite; /* Animação suave */
+        }}
+
+        @keyframes float-bg {{
+            0%, 100% {{ transform: translate(-50%, -50%) translateY(0px); }}
+            50% {{ transform: translate(-50%, -50%) translateY(-25px); }}
+        }}
+        """
+
+    st.markdown(f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;500;700&family=Inter:wght@300;400;600&display=swap');
 
-        :root {
+        :root {{
             --bg-dark: #020617;
             --bg-card: rgba(15, 23, 42, 0.6);
             --text-main: #FFFFFF;
@@ -47,24 +85,28 @@ def local_css():
             --neon-gold: #FFD700;
             --neon-green: #10B981;
             --neon-purple: #BC13FE;
-        }
+        }}
 
-        .stApp {
+        .stApp {{
             background-color: var(--bg-dark);
+            /* Gradiente sutil sobre o fundo preto */
             background-image: 
                 radial-gradient(circle at 15% 50%, rgba(14, 165, 233, 0.08), transparent 25%),
                 radial-gradient(circle at 85% 30%, rgba(99, 102, 241, 0.08), transparent 25%);
             font-family: 'Inter', sans-serif;
             color: var(--text-main);
-        }
+        }}
 
-        h1, h2, h3, h4, h5, h6 { color: #FFFFFF !important; font-family: 'Rajdhani', sans-serif; text-transform: uppercase; letter-spacing: 1.5px; }
-        p, .stCaption, label, .stMarkdown { color: #E2E8F0 !important; font-family: 'Inter', sans-serif; }
-        div[data-testid="stMetricValue"] { color: var(--neon-blue) !important; text-shadow: 0 0 10px rgba(0, 243, 255, 0.5); }
-        .tech-header { background: linear-gradient(90deg, #FFFFFF 0%, var(--neon-blue) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 700; }
+        /* INJEÇÃO DO CSS DO BACKGROUND FLUTUANTE */
+        {bg_css}
+
+        h1, h2, h3, h4, h5, h6 {{ color: #FFFFFF !important; font-family: 'Rajdhani', sans-serif; text-transform: uppercase; letter-spacing: 1.5px; }}
+        p, .stCaption, label, .stMarkdown {{ color: #E2E8F0 !important; font-family: 'Inter', sans-serif; }}
+        div[data-testid="stMetricValue"] {{ color: var(--neon-blue) !important; text-shadow: 0 0 10px rgba(0, 243, 255, 0.5); }}
+        .tech-header {{ background: linear-gradient(90deg, #FFFFFF 0%, var(--neon-blue) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 700; }}
 
         /* PLAN CARDS */
-        .plan-card {
+        .plan-card {{
             background: rgba(15, 23, 42, 0.8);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 12px;
@@ -76,37 +118,37 @@ def local_css():
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-        }
-        .plan-card:hover { transform: translateY(-5px); border-color: var(--neon-blue); box-shadow: 0 0 20px rgba(0, 243, 255, 0.2); }
+        }}
+        .plan-card:hover {{ transform: translateY(-5px); border-color: var(--neon-blue); box-shadow: 0 0 20px rgba(0, 243, 255, 0.2); }}
         
-        .plan-header { font-family: 'Rajdhani'; font-size: 1.4rem; font-weight: bold; color: #FFF; margin-bottom: 5px; text-transform: uppercase; }
-        .plan-price { font-size: 2rem; font-weight: 800; color: var(--neon-blue); margin: 10px 0; }
-        .plan-features { text-align: left; font-size: 0.85rem; color: #CBD5E1; margin-bottom: 20px; line-height: 1.6; }
+        .plan-header {{ font-family: 'Rajdhani'; font-size: 1.4rem; font-weight: bold; color: #FFF; margin-bottom: 5px; text-transform: uppercase; }}
+        .plan-price {{ font-size: 2rem; font-weight: 800; color: var(--neon-blue); margin: 10px 0; }}
+        .plan-features {{ text-align: left; font-size: 0.85rem; color: #CBD5E1; margin-bottom: 20px; line-height: 1.6; }}
         
-        .plan-crim { border-top: 4px solid var(--neon-red); }
-        .plan-trab { border-top: 4px solid var(--neon-blue); }
-        .plan-civ { border-top: 4px solid var(--neon-purple); }
-        .plan-full { border: 1px solid var(--neon-gold); background: rgba(255, 215, 0, 0.05); }
+        .plan-crim {{ border-top: 4px solid var(--neon-red); }}
+        .plan-trab {{ border-top: 4px solid var(--neon-blue); }}
+        .plan-civ {{ border-top: 4px solid var(--neon-purple); }}
+        .plan-full {{ border: 1px solid var(--neon-gold); background: rgba(255, 215, 0, 0.05); }}
 
         /* LOCK SCREEN */
-        .lock-screen { border: 1px solid var(--neon-red); background: rgba(255, 0, 85, 0.05); border-radius: 10px; padding: 40px; text-align: center; margin-top: 20px; }
-        .lock-icon { font-size: 3rem; margin-bottom: 10px; }
-        .lock-title { color: var(--neon-red) !important; font-family: 'Rajdhani'; font-size: 2rem; font-weight: bold; }
+        .lock-screen {{ border: 1px solid var(--neon-red); background: rgba(255, 0, 85, 0.05); border-radius: 10px; padding: 40px; text-align: center; margin-top: 20px; }}
+        .lock-icon {{ font-size: 3rem; margin-bottom: 10px; }}
+        .lock-title {{ color: var(--neon-red) !important; font-family: 'Rajdhani'; font-size: 2rem; font-weight: bold; }}
 
         /* HEADER & ANIMATION */
-        .header-logo { display: flex; align-items: center; margin-right: 2rem; }
-        .header-logo h1 { font-size: 1.8rem; margin: 0; letter-spacing: 2px; }
-        .floating-logo { animation: float 6s ease-in-out infinite; display: block; margin: 0 auto 30px auto; width: 250px; }
-        @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-20px); } }
+        .header-logo {{ display: flex; align-items: center; margin-right: 2rem; }}
+        .header-logo h1 {{ font-size: 1.8rem; margin: 0; letter-spacing: 2px; }}
+        .floating-logo {{ animation: float 6s ease-in-out infinite; display: block; margin: 0 auto 30px auto; width: 250px; }}
+        @keyframes float {{ 0%, 100% {{ transform: translateY(0px); }} 50% {{ transform: translateY(-20px); }} }}
         
-        section[data-testid="stSidebar"] { background-color: #020408; border-right: 1px solid rgba(0, 243, 255, 0.1); }
-        .stButton>button { background: transparent; color: var(--neon-blue); border: 1px solid var(--neon-blue); border-radius: 0px; padding: 0.6rem 1.2rem; font-family: 'Rajdhani'; font-weight: 700; }
-        .stButton>button:hover { background: var(--neon-blue); color: #000; box-shadow: 0 0 20px rgba(0, 243, 255, 0.6); }
+        section[data-testid="stSidebar"] {{ background-color: #020408; border-right: 1px solid rgba(0, 243, 255, 0.1); }}
+        .stButton>button {{ background: transparent; color: var(--neon-blue); border: 1px solid var(--neon-blue); border-radius: 0px; padding: 0.6rem 1.2rem; font-family: 'Rajdhani'; font-weight: 700; }}
+        .stButton>button:hover {{ background: var(--neon-blue); color: #000; box-shadow: 0 0 20px rgba(0, 243, 255, 0.6); }}
         
-        div[data-testid="metric-container"], div[data-testid="stExpander"], .folder-card { background: var(--bg-card); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 0px; backdrop-filter: blur(12px); }
-        .stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div>div, .stNumberInput>div>div>input { background-color: rgba(0, 0, 0, 0.3) !important; border: 1px solid #334155 !important; color: #FFF !important; border-radius: 0px; }
+        div[data-testid="metric-container"], div[data-testid="stExpander"], .folder-card {{ background: var(--bg-card); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 0px; backdrop-filter: blur(12px); }}
+        .stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div>div, .stNumberInput>div>div>input {{ background-color: rgba(0, 0, 0, 0.3) !important; border: 1px solid #334155 !important; color: #FFF !important; border-radius: 0px; }}
         
-        #MainMenu {visibility: hidden;} footer {visibility: hidden;}
+        #MainMenu {{visibility: hidden;}} footer {{visibility: hidden;}}
     </style>
     """, unsafe_allow_html=True)
 
@@ -115,12 +157,7 @@ local_css()
 # ==========================================================
 # 2. FUNÇÕES GERAIS E BANCO DE DADOS (IMPORTANTE: NO TOPO)
 # ==========================================================
-def get_base64_of_bin_file(bin_file):
-    try:
-        with open(bin_file, 'rb') as f:
-            data = f.read()
-        return base64.b64encode(data).decode()
-    except FileNotFoundError: return None
+# (Função get_base64_of_bin_file já foi movida para antes do CSS para ser usada lá)
 
 # --- FUNÇÕES AUXILIARES MOVIDAS PARA O TOPO ---
 def gerar_word(texto):
@@ -165,6 +202,10 @@ def verificar_permissao(area_necessaria):
     plano_atual = st.session_state.get('plano_atual', 'starter')
     if plano_atual == 'full': return True
     if plano_atual == area_necessaria: return True
+    
+    # Bancário está dentro do pacote Civil
+    if area_necessaria == 'bancario' and plano_atual == 'civil': return True
+    
     return False
 
 def tela_bloqueio(area_necessaria, preco):
