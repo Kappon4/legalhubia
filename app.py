@@ -4,14 +4,12 @@ from pypdf import PdfReader
 from docx import Document
 from io import BytesIO
 from duckduckgo_search import DDGS
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime, timedelta, date
 import time
 import tempfile
 import os
 import pandas as pd
-import plotly.express as px
+import sqlite3 # O NOVO MOTOR DO SISTEMA
 import imaplib
 import email
 from email.header import decode_header
@@ -20,139 +18,109 @@ import ssl
 from email.message import EmailMessage
 
 # --- IMPORTAÇÃO DE ERROS ---
-from google.api_core.exceptions import ResourceExhausted, NotFound, InvalidArgument, PermissionDenied
+from google.api_core.exceptions import ResourceExhausted, NotFound, InvalidArgument
 
 # 1. CONFIGURAÇÃO VISUAL
-st.set_page_config(page_title="LegalHub IA", page_icon="⚖️", layout="wide")
+st.set_page_config(page_title="LegalHub SaaS", page_icon="⚖️", layout="wide")
 
-# --- FUNÇÃO DE LEITURA DE E-MAIL (IMAP GENÉRICO/OAB) ---
-def buscar_intimacoes_email(email_user, senha_app, servidor_imap):
-    """
-    Conecta em qualquer servidor de e-mail (OAB, Gmail, Outlook) via IMAP.
-    """
-    try:
-        mail = imaplib.IMAP4_SSL(servidor_imap)
-        mail.login(email_user, senha_app)
-        mail.select("inbox")
-
-        # Busca e-mails NÃO LIDOS
-        status, messages = mail.search(None, '(UNSEEN)')
-        
-        # Se não tiver e-mail, retorna vazio
-        if not messages[0]:
-            return [], "Nenhum e-mail não lido encontrado."
-
-        email_ids = messages[0].split()
-        intimacoes_encontradas = []
-
-        # Pega apenas os últimos 5
-        for e_id in email_ids[-5:]:
-            res, msg_data = mail.fetch(e_id, "(RFC822)")
-            for response_part in msg_data:
-                if isinstance(response_part, tuple):
-                    msg = email.message_from_bytes(response_part[1])
-                    
-                    # Decodifica Assunto
-                    subject, encoding = decode_header(msg["Subject"])[0]
-                    if isinstance(subject, bytes):
-                        subject = subject.decode(encoding if encoding else "utf-8")
-                    
-                    # FILTRO: Termos Jurídicos
-                    termos_chave = ["intimação", "processo", "movimentação", "push", "tribunal", "pje", "esaj", "projudi", "nota de expediente"]
-                    if any(termo in subject.lower() for termo in termos_chave):
-                        
-                        # Extrai Corpo
-                        body = ""
-                        if msg.is_multipart():
-                            for part in msg.walk():
-                                if part.get_content_type() == "text/plain":
-                                    payload = part.get_payload(decode=True)
-                                    if payload: body = payload.decode(errors="ignore")
-                                    break
-                        else:
-                            payload = msg.get_payload(decode=True)
-                            if payload: body = payload.decode(errors="ignore")
-                        
-                        if body:
-                            intimacoes_encontradas.append({
-                                "assunto": subject,
-                                "corpo": body[:2000]
-                            })
-        
-        mail.close()
-        mail.logout()
-        return intimacoes_encontradas, None
-
-    except Exception as e:
-        return [], str(e)
-
-# --- 2. PAINEL LATERAL ---
-st.sidebar.header("Painel de Controle")
-
-# Diagnóstico
-versao_lib = genai.__version__
-st.sidebar.caption(f"Versão Lib: {versao_lib}")
-
-# Chave API
-uso_manual = st.sidebar.checkbox("Usar chave manual", value=False)
-if uso_manual:
-    api_key = st.sidebar.text_input("Nova API Key:", type="password")
-elif "GOOGLE_API_KEY" in st.secrets:
-    api_key = st.secrets["GOOGLE_API_KEY"]
-    st.sidebar.success("✅ Chave IA Conectada")
-else:
-    api_key = st.sidebar.text_input("API Key:", type="password")
-
-st.sidebar.divider()
-
-# --- CONFIGURAÇÃO DE E-MAIL (AGORA COM SUPORTE OAB) ---
-st.sidebar.markdown("📧 **Ler E-mail OAB/Tribunal**")
-email_leitura = st.sidebar.text_input("Seu E-mail (ex: nome@adv.oabsp.org.br):")
-senha_leitura = st.sidebar.text_input("Senha (ou App Password):", type="password")
-
-# Seletor inteligente de provedor
-tipo_provedor = st.sidebar.selectbox("Provedor do E-mail:", ["Gmail / G-Suite", "Outlook / Office 365", "Outro / OAB (Personalizado)"])
-
-servidor_imap = ""
-if tipo_provedor == "Gmail / G-Suite":
-    servidor_imap = "imap.gmail.com"
-elif tipo_provedor == "Outlook / Office 365":
-    servidor_imap = "outlook.office365.com"
-else:
-    # Opção para OABs que usam servidores específicos (Locaweb, UOL, etc)
-    servidor_imap = st.sidebar.text_input("Servidor IMAP (Consulte sua TI):", value="imap.gmail.com", help="Ex: imap.uol.com.br, mail.oabsp.org.br")
-
-if st.sidebar.button("Sair (Logout)"):
-    st.session_state.logado = False
-    st.rerun()
-
-# --- 🔐 LOGIN ---
-def check_password():
-    if "logado" not in st.session_state: st.session_state.logado = False
-    if st.session_state.logado: return True
+# --- 2. BANCO DE DADOS (SQLITE) ---
+def init_db():
+    """Cria o banco de dados e as tabelas se não existirem."""
+    conn = sqlite3.connect('legalhub.db')
+    c = conn.cursor()
     
-    col1, col2, col3 = st.columns([1,2,1])
-    with col2:
-        st.markdown("## 🔒 LegalHub - Acesso")
-        senha = st.text_input("Senha:", type="password")
-        if st.button("Entrar"):
-            if "SENHA_ACESSO" not in st.secrets or senha == st.secrets["SENHA_ACESSO"]:
-                st.session_state.logado = True
-                st.rerun()
-            else: st.error("Senha incorreta.")
-    return False
+    # Tabela de Usuários (Simulando escritórios diferentes)
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS usuarios (
+            username TEXT PRIMARY KEY,
+            senha TEXT,
+            escritorio TEXT,
+            email_oab TEXT
+        )
+    ''')
+    
+    # Tabela de Processos/Documentos (Onde salvamos tudo)
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS documentos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            escritorio TEXT,
+            data_criacao TEXT,
+            cliente TEXT,
+            area TEXT,
+            tipo TEXT,
+            conteudo TEXT
+        )
+    ''')
+    
+    # --- DADOS DE TESTE (Para você ver funcionando) ---
+    # Verifica se já tem usuários, se não, cria os de teste
+    c.execute('SELECT count(*) FROM usuarios')
+    if c.fetchone()[0] == 0:
+        c.execute("INSERT INTO usuarios VALUES ('advogado1', '123', 'Escritório Alpha', 'lucas@alpha.adv.br')")
+        c.execute("INSERT INTO usuarios VALUES ('advogado2', '123', 'Escritório Beta', 'joao@beta.adv.br')")
+        conn.commit()
+    
+    conn.close()
 
-if not check_password(): st.stop()
-
-st.title("⚖️ LegalHub IA (Gestão & Inteligência)")
-
-# 3. FUNÇÕES AUXILIARES
-def conectar_planilha():
+def run_query(query, params=(), return_data=False):
+    """Função auxiliar para rodar comandos no banco de dados com segurança."""
+    conn = sqlite3.connect('legalhub.db')
+    c = conn.cursor()
     try:
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"])
-        return gspread.authorize(creds).open("Casos Juridicos - LegalHub").sheet1 
-    except: return None
+        c.execute(query, params)
+        if return_data:
+            data = c.fetchall()
+            # Pega nomes das colunas para criar DataFrame bonito
+            col_names = [description[0] for description in c.description]
+            conn.close()
+            return pd.DataFrame(data, columns=col_names)
+        else:
+            conn.commit()
+            conn.close()
+            return True
+    except Exception as e:
+        conn.close()
+        st.error(f"Erro no Banco de Dados: {e}")
+        return None
 
+# Inicializa o banco ao abrir o app
+init_db()
+
+# --- 3. SISTEMA DE LOGIN (AGORA MULTI-USUÁRIO) ---
+if "logado" not in st.session_state: st.session_state.logado = False
+if "usuario_atual" not in st.session_state: st.session_state.usuario_atual = ""
+if "escritorio_atual" not in st.session_state: st.session_state.escritorio_atual = ""
+
+def login_screen():
+    c1, c2, c3 = st.columns([1,1,1])
+    with c2:
+        st.title("⚖️ LegalHub Login")
+        st.info("Teste SaaS: Use 'advogado1' e '123'")
+        
+        username = st.text_input("Usuário")
+        password = st.text_input("Senha", type="password")
+        
+        if st.button("Entrar no Sistema"):
+            # Verifica no banco de dados
+            users = run_query("SELECT * FROM usuarios WHERE username = ? AND senha = ?", (username, password), return_data=True)
+            
+            if not users.empty:
+                st.session_state.logado = True
+                st.session_state.usuario_atual = username
+                st.session_state.escritorio_atual = users.iloc[0]['escritorio']
+                st.rerun()
+            else:
+                st.error("Usuário ou senha incorretos.")
+
+if not st.session_state.logado:
+    login_screen()
+    st.stop() # Para o código aqui se não estiver logado
+
+# ==========================================================
+# DAQUI PRA BAIXO, SÓ CARREGA SE ESTIVER LOGADO
+# ==========================================================
+
+# 4. FUNÇÕES AUXILIARES (E-mail, PDF, etc)
 def buscar_jurisprudencia_real(tema):
     try:
         res = DDGS().text(f"{tema} (site:stf.jus.br OR site:stj.jus.br OR site:jusbrasil.com.br)", region="br-pt", max_results=4)
@@ -191,39 +159,92 @@ END:VALARM
 END:VEVENT
 END:VCALENDAR"""
 
-# 4. LÓGICA
+# --- BARRA LATERAL ---
+st.sidebar.header(f"🏢 {st.session_state.escritorio_atual}")
+st.sidebar.caption(f"Usuário: {st.session_state.usuario_atual}")
+
+if st.sidebar.button("Sair (Logout)"):
+    st.session_state.logado = False
+    st.session_state.usuario_atual = ""
+    st.session_state.escritorio_atual = ""
+    st.rerun()
+
+st.sidebar.divider()
+
+# Seleção de Chave API
+uso_manual = st.sidebar.checkbox("Usar chave manual", value=False)
+if uso_manual:
+    api_key = st.sidebar.text_input("Sua API Key:", type="password")
+elif "GOOGLE_API_KEY" in st.secrets:
+    api_key = st.secrets["GOOGLE_API_KEY"]
+    st.sidebar.success("✅ IA Conectada")
+else:
+    api_key = st.sidebar.text_input("API Key:", type="password")
+
+# Configuração E-mail (Leitura)
+st.sidebar.markdown("📧 **E-mail OAB (Leitura)**")
+email_leitura = st.sidebar.text_input("E-mail:")
+senha_leitura = st.sidebar.text_input("Senha App:", type="password")
+servidor_imap = st.sidebar.text_input("Servidor IMAP:", value="imap.gmail.com")
+
+def buscar_intimacoes_email(user, pwd, server):
+    try:
+        mail = imaplib.IMAP4_SSL(server)
+        mail.login(user, pwd)
+        mail.select("inbox")
+        status, msgs = mail.search(None, '(UNSEEN)')
+        if not msgs[0]: return [], "Nada novo."
+        
+        found = []
+        for e_id in msgs[0].split()[-5:]:
+            res, data = mail.fetch(e_id, "(RFC822)")
+            for response in data:
+                if isinstance(response, tuple):
+                    msg = email.message_from_bytes(response[1])
+                    subj = decode_header(msg["Subject"])[0][0]
+                    if isinstance(subj, bytes): subj = subj.decode()
+                    
+                    termos = ["intimação", "processo", "movimentação"]
+                    if any(t in str(subj).lower() for t in termos):
+                        found.append({"assunto": subj, "corpo": str(msg)[:2000]})
+        return found, None
+    except Exception as e: return [], str(e)
+
+# 5. LÓGICA PRINCIPAL
 if api_key:
     genai.configure(api_key=api_key)
     
-    # Memória
+    # Memória de Sessão
     if "fatos_recuperados" not in st.session_state: st.session_state.fatos_recuperados = ""
     if "cliente_recuperado" not in st.session_state: st.session_state.cliente_recuperado = ""
 
     # Modelo
-    st.sidebar.divider()
     try:
-        modelos = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        mod_escolhido = st.sidebar.selectbox("Modelo IA:", modelos) if modelos else "models/gemini-1.5-flash"
+        mods = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+        mod_escolhido = st.sidebar.selectbox("Modelo:", mods) if mods else "models/gemini-1.5-flash"
     except: mod_escolhido = "models/gemini-1.5-flash"
 
-    # Abas
-    tabs = st.tabs(["✍️ Redator", "📂 PDF", "🎙️ Áudio", "⚖️ Comparar", "💬 Chat", "📂 Pastas", "📅 Calc", "🏛️ Audiência", "🚦 Monitor"])
-    
-    # --- REDATOR ---
+    # ABAS
+    st.title("⚖️ LegalHub IA")
+    tabs = st.tabs(["✍️ Redator", "📂 PDF", "🎙️ Áudio", "⚖️ Comparar", "💬 Chat", "📂 Pastas (SaaS)", "📅 Calc", "🏛️ Audiência", "🚦 Monitor"])
+
+    # --- ABA 1: REDATOR (SALVA NO SQLITE) ---
     with tabs[0]:
         st.header("Gerador de Peças")
-        if st.button("🔄 Novo"):
+        if st.button("🔄 Limpar"):
             st.session_state.fatos_recuperados = ""
             st.session_state.cliente_recuperado = ""
             st.rerun()
+        
         c1, c2 = st.columns(2)
         with c1:
             tipo = st.selectbox("Peça", ["Inicial", "Contestação", "Recurso", "Contrato"])
-            area = st.selectbox("Área", ["Cível", "Trabalhista", "Criminal", "Família"])
-            web = st.checkbox("Buscar Jurisprudência?", value=True)
+            area = st.selectbox("Área", ["Cível", "Trabalhista", "Penal", "Família"])
+            web = st.checkbox("Web Search?", value=True)
         with c2:
             cli = st.text_input("Cliente:", value=st.session_state.cliente_recuperado)
             fatos = st.text_area("Fatos:", height=150, value=st.session_state.fatos_recuperados)
+            
         if st.button("✨ Gerar"):
             if fatos:
                 with st.spinner("Gerando..."):
@@ -232,124 +253,115 @@ if api_key:
                     try:
                         res = genai.GenerativeModel(mod_escolhido).generate_content(prompt).text
                         st.markdown(res)
-                        st.download_button("Baixar Word", gerar_word(res), "minuta.docx")
+                        st.download_button("Word", gerar_word(res), "minuta.docx")
+                        
                         if cli:
-                            s = conectar_planilha()
-                            if s: s.append_row([datetime.now().strftime("%d/%m"), cli, area, tipo, fatos + "||" + res[:500]])
-                            st.success("Salvo!")
-                    except Exception as e: st.error(f"Erro: {e}")
+                            # --- AQUI É O PULO DO GATO DO SAAS ---
+                            # Salvamos com o ID do escritório atual
+                            conteudo_salvar = fatos + "||" + res[:500]
+                            sql = "INSERT INTO documentos (escritorio, data_criacao, cliente, area, tipo, conteudo) VALUES (?, ?, ?, ?, ?, ?)"
+                            run_query(sql, (st.session_state.escritorio_atual, datetime.now().strftime("%d/%m/%Y"), cli, area, tipo, conteudo_salvar))
+                            st.success(f"Salvo no banco de dados do {st.session_state.escritorio_atual}!")
+                            
+                    except Exception as e: st.error(str(e))
 
-    # --- PDF ---
+    # --- ABA 2 a 5 (Ferramentas Padrão) ---
     with tabs[1]:
         st.header("Ler PDF")
         up = st.file_uploader("PDF", type="pdf")
         if up and st.button("Resumir"):
-            with st.spinner("Lendo..."):
-                st.write(genai.GenerativeModel(mod_escolhido).generate_content(f"Resuma: {extrair_texto_pdf(up)[:30000]}").text)
-
-    # --- AUDIO ---
+            st.write(genai.GenerativeModel(mod_escolhido).generate_content(f"Resuma: {extrair_texto_pdf(up)[:30000]}").text)
+    
     with tabs[2]:
         st.header("Transcrição")
-        aud = st.file_uploader("Áudio", type=["mp3", "wav", "m4a", "ogg"])
+        aud = st.file_uploader("Audio", type=["mp3","wav","ogg"])
         if aud and st.button("Transcrever"):
-            with st.spinner("Processando..."):
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
-                    tmp.write(aud.getvalue())
-                    p = tmp.name
-                try:
-                    f = genai.upload_file(p)
-                    time.sleep(2)
-                    st.write(genai.GenerativeModel(mod_escolhido).generate_content(["Transcreva.", f]).text)
-                finally: os.remove(p)
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
+                tmp.write(aud.getvalue())
+                path = tmp.name
+            try:
+                f = genai.upload_file(path)
+                time.sleep(2)
+                st.write(genai.GenerativeModel(mod_escolhido).generate_content(["Transcreva", f]).text)
+            finally: os.remove(path)
 
-    # --- COMPARADOR ---
     with tabs[3]:
         st.header("Comparar")
-        p1 = st.file_uploader("V1", type="pdf", key="v1")
-        p2 = st.file_uploader("V2", type="pdf", key="v2")
-        if p1 and p2 and st.button("Comparar"):
-            st.write(genai.GenerativeModel(mod_escolhido).generate_content(f"Diferenças: {extrair_texto_pdf(p1)[:10000]} vs {extrair_texto_pdf(p2)[:10000]}").text)
+        p1 = st.file_uploader("V1", key="v1")
+        p2 = st.file_uploader("V2", key="v2")
+        if p1 and p2 and st.button("Comp"):
+             st.write(genai.GenerativeModel(mod_escolhido).generate_content(f"Diferenças: {extrair_texto_pdf(p1)[:10000]} vs {extrair_texto_pdf(p2)[:10000]}").text)
 
-    # --- CHAT ---
     with tabs[4]:
         st.header("Chat")
         if "hist" not in st.session_state: st.session_state.hist = []
         for m in st.session_state.hist: st.chat_message(m["role"]).write(m["content"])
-        if p := st.chat_input("Dúvida?"):
+        if p := st.chat_input("Msg"):
             st.chat_message("user").write(p)
             st.session_state.hist.append({"role":"user", "content":p})
             res = genai.GenerativeModel(mod_escolhido).generate_content(p).text
             st.chat_message("assistant").write(res)
             st.session_state.hist.append({"role":"assistant", "content":res})
 
-    # --- PASTAS ---
+    # --- ABA 6: PASTAS (LÊ DO SQLITE ISOLADO) ---
     with tabs[5]:
-        st.header("Pastas (GED)")
-        if st.button("Atualizar"): st.session_state.d = None
-        s = conectar_planilha()
-        if s:
-            df = pd.DataFrame(s.get_all_records())
-            if not df.empty and "Cliente" in df.columns:
-                cli_sel = st.selectbox("Cliente:", ["Todos"] + list(df["Cliente"].unique()))
-                df_show = df[df["Cliente"] == cli_sel] if cli_sel != "Todos" else df
-                st.dataframe(df_show)
-                if not df_show.empty:
-                    idx = st.selectbox("ID Doc:", df_show.index)
-                    if st.button("Abrir"):
-                        row = df.loc[idx]
-                        st.session_state.cliente_recuperado = row["Cliente"]
-                        st.session_state.fatos_recuperados = str(row.iloc[-1]).split("||")[0]
-                        st.success("Carregado no Redator!")
+        st.header(f"📂 Arquivos: {st.session_state.escritorio_atual}")
+        
+        if st.button("Atualizar Lista"): st.rerun()
+        
+        # --- FILTRO SAAS: Só busca dados do escritório logado ---
+        df = run_query("SELECT * FROM documentos WHERE escritorio = ?", (st.session_state.escritorio_atual,), return_data=True)
+        
+        if not df.empty:
+            st.dataframe(df.drop(columns=['conteudo']), use_container_width=True) # Esconde o texto longo da tabela
+            
+            # Recuperar
+            doc_id = st.selectbox("ID para abrir:", df['id'].tolist())
+            if st.button("Abrir Documento"):
+                row = df[df['id'] == doc_id].iloc[0]
+                st.session_state.cliente_recuperado = row['cliente']
+                st.session_state.fatos_recuperados = row['conteudo'].split("||")[0]
+                st.success("Carregado no Redator!")
+        else:
+            st.info("Nenhum arquivo salvo neste escritório ainda.")
 
-    # --- CALC ---
+    # --- ABA 7 E 8 ---
     with tabs[6]:
         st.header("Calc Prazo")
-        dt = st.date_input("Data Pub")
-        esf = st.selectbox("Esfera", ["Cível", "Penal", "Trabalhista"])
+        dt = st.date_input("Data")
+        esf = st.selectbox("Esfera", ["Cível", "Penal", "Trab"])
         txt = st.text_area("Texto")
-        if st.button("Calcular"):
-            st.write(genai.GenerativeModel(mod_escolhido).generate_content(f"Calc prazo {esf}, data {dt}: {txt}").text)
+        if st.button("Calc"):
+             st.write(genai.GenerativeModel(mod_escolhido).generate_content(f"Calc prazo {esf} {dt}: {txt}").text)
 
-    # --- AUDIENCIA ---
     with tabs[7]:
         st.header("Audiência")
         pap = st.selectbox("Papel", ["Autor", "Réu"])
-        fat = st.text_area("Fatos Caso")
+        fat = st.text_area("Fatos")
         if st.button("Gerar"):
             st.write(genai.GenerativeModel(mod_escolhido).generate_content(f"Roteiro {pap}: {fat}").text)
 
-    # --- MONITOR (COM SUPORTE OAB) ---
+    # --- ABA 9: MONITOR (SALVA NO SQLITE) ---
     with tabs[8]:
-        st.header("🚦 Monitor de Prazos (Leitura de E-mail)")
-        st.info(f"Conectando via servidor: {servidor_imap}")
-
-        if st.button("🔄 Ler E-mail do Tribunal"):
+        st.header("🚦 Monitor")
+        
+        if st.button("🔄 Ler E-mail OAB"):
             if not email_leitura or not senha_leitura:
-                st.error("Preencha E-mail e Senha na barra lateral!")
+                st.error("Configure E-mail na barra lateral")
             else:
-                with st.spinner("Buscando intimações..."):
-                    msgs, erro = buscar_intimacoes_email(email_leitura, senha_leitura, servidor_imap)
-                    
-                    if erro:
-                        st.error(f"Erro de conexão: {erro}")
-                        st.info("Verifique se o Servidor IMAP está correto na barra lateral.")
-                    elif not msgs:
-                        st.warning("Nenhum e-mail jurídico novo encontrado (não lido).")
-                    else:
-                        st.success(f"{len(msgs)} intimações encontradas!")
-                        for i, m in enumerate(msgs):
-                            st.divider()
-                            st.subheader(f"📧 {m['assunto']}")
-                            with st.expander("Ver texto"): st.write(m['corpo'])
-                            
-                            if st.button(f"Analisar {i+1}", key=f"a_{i}"):
-                                prompt = f"Analise: Assunto: {m['assunto']}. Corpo: {m['corpo'][:3000]}. Saída: RESUMO | PRAZO | DATA FATAL (Base: {date.today()})"
-                                res = genai.GenerativeModel(mod_escolhido).generate_content(prompt).text
-                                st.write(res)
-                                if st.button("Salvar", key=f"s_{i}"):
-                                    s = conectar_planilha()
-                                    if s: 
-                                        s.append_row([datetime.now().strftime("%d/%m"), "Email", "Monitor", "Prazo", res[:500]])
-                                        st.toast("Salvo!")
+                msgs, err = buscar_intimacoes_email(email_leitura, senha_leitura, servidor_imap)
+                if err: st.error(err)
+                elif not msgs: st.warning("Nada novo.")
+                else:
+                    for i, m in enumerate(msgs):
+                        st.subheader(m['assunto'])
+                        st.write(m['corpo'][:500])
+                        if st.button(f"Analisar {i}", key=f"an_{i}"):
+                            res = genai.GenerativeModel(mod_escolhido).generate_content(f"Analise prazo: {m['corpo'][:3000]}").text
+                            st.write(res)
+                            if st.button(f"Salvar {i}", key=f"sv_{i}"):
+                                sql = "INSERT INTO documentos (escritorio, data_criacao, cliente, area, tipo, conteudo) VALUES (?, ?, ?, ?, ?, ?)"
+                                run_query(sql, (st.session_state.escritorio_atual, datetime.now().strftime("%d/%m"), "Auto-Email", "Monitor", "Prazo", res[:500]))
+                                st.toast("Salvo!")
 
-else: st.warning("Configure a Chave API.")
+else: st.warning("Configure a API Key.")
