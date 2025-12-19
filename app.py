@@ -42,7 +42,7 @@ def local_css():
         :root {
             --bg-dark: #0F172A;        /* Fundo Principal (Deep Navy) */
             --bg-card: rgba(30, 41, 59, 0.7); /* Fundo Vidro (Slate 800) */
-            --text-main: #E2E8F0;      /* Texto Claro (Slate 200) */
+            --text-main: #FFFFFF;      /* TEXTO AGORA BRANCO PURO */
             --accent-primary: #38BDF8; /* Azul Neon (Sky 400) */
             --accent-glow: rgba(56, 189, 248, 0.4);
             --gradient-btn: linear-gradient(135deg, #0284c7 0%, #38bdf8 100%);
@@ -58,10 +58,23 @@ def local_css():
             color: var(--text-main);
         }
 
-        h1, h2, h3, h4, h5 {
+        h1, h2, h3, h4, h5, h6 {
             color: #FFFFFF !important;
             font-family: 'Inter', sans-serif;
             letter-spacing: -0.5px;
+        }
+        
+        /* CORREÇÃO PARA LETRAS BRANCAS (MÉTRICAS E TEXTOS) */
+        div[data-testid="stMetricLabel"] {
+            color: #FFFFFF !important; /* Título da métrica branco */
+            font-weight: 600;
+        }
+        div[data-testid="stMetricValue"] {
+            color: #38BDF8 !important; /* Valor da métrica em Azul Neon para destaque (ou mude para #FFF) */
+        }
+        
+        p, .stCaption, div[data-testid="caption"] {
+            color: #F1F5F9 !important; /* Texto comum e legendas quase branco (Slate 100) */
         }
 
         /* TÍTULOS COM GRADIENTE (EFEITO TECH) */
@@ -77,6 +90,11 @@ def local_css():
             background-color: #020617; /* Quase preto */
             border-right: 1px solid #1E293B;
             box-shadow: 5px 0 15px rgba(0,0,0,0.3);
+        }
+        
+        /* Texto da Sidebar Branco */
+        section[data-testid="stSidebar"] p, section[data-testid="stSidebar"] span {
+            color: #FFFFFF !important;
         }
 
         /* --- BOTÕES MODERNOS --- */
@@ -217,7 +235,7 @@ def login_screen():
             <div style='text-align: center;'>
                 <h1 style='font-size: 3rem; margin-bottom: 0;'>🛡️</h1>
                 <h1 class='tech-header' style='font-size: 2.5rem;'>LEGALHUB <span style='font-weight: 300; color: #94a3b8;'>ELITE</span></h1>
-                <p style='color: #64748b; font-size: 0.9rem; letter-spacing: 1px;'>SECURE LEGAL INTELLIGENCE SYSTEM</p>
+                <p style='color: #E2E8F0; font-size: 0.9rem; letter-spacing: 1px;'>SECURE LEGAL INTELLIGENCE SYSTEM</p>
             </div>
         """, unsafe_allow_html=True)
         
@@ -239,7 +257,7 @@ def login_screen():
                     st.rerun()
                 else: st.error("Acesso Negado. Credenciais Inválidas.")
             
-            st.markdown("<div style='text-align:center; margin-top:10px; color: #475569; font-size: 0.8rem;'>v5.5 Secure Build</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; margin-top:10px; color: #94a3b8; font-size: 0.8rem;'>v5.5 Secure Build</div>", unsafe_allow_html=True)
 
 if not st.session_state.logado:
     login_screen()
@@ -311,8 +329,14 @@ if "navegacao_override" not in st.session_state:
     st.session_state.navegacao_override = None
 
 with st.sidebar:
+    # ------------------------------------------------------------
+    # 1. LOGO AQUI (ÁREA VERMELHA DO SEU PRINT)
+    # SUBSTITUA O LINK ABAIXO PELO CAMINHO DA SUA IMAGEM (ex: "logo.png")
+    # ------------------------------------------------------------
+    st.sidebar.image("https://placehold.co/200x80/0F172A/FFF?text=LOGO", use_container_width=True)
+    
     st.markdown("<h2 class='tech-header'>🛡️ LEGALHUB</h2>", unsafe_allow_html=True)
-    st.markdown(f"<div style='font-size:0.8rem; color:#94a3b8; margin-bottom: 20px;'>{st.session_state.escritorio_atual}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size:0.8rem; color:#E2E8F0; margin-bottom: 20px;'>{st.session_state.escritorio_atual}</div>", unsafe_allow_html=True)
     
     # Lista de Opções
     opcoes_menu = ["📊 Dashboard", "✍️ Redator Jurídico", "🧮 Calculadoras & Perícia", "🏛️ Estratégia de Audiência", "📂 Gestão de Casos", "🚦 Monitor de Prazos", "🔧 Ferramentas Extras"]
@@ -370,7 +394,7 @@ with st.sidebar:
 
 # 1. DASHBOARD
 if menu_opcao == "📊 Dashboard":
-    st.markdown(f"<h2 class='tech-header'>Painel de Controle <span style='font-weight:300; font-size: 1.5rem; color:#64748b;'>| {st.session_state.usuario_atual}</span></h2>", unsafe_allow_html=True)
+    st.markdown(f"<h2 class='tech-header'>Painel de Controle <span style='font-weight:300; font-size: 1.5rem; color:#E2E8F0;'>| {st.session_state.usuario_atual}</span></h2>", unsafe_allow_html=True)
     
     # Métricas Superiores
     c1, c2, c3 = st.columns(3)
@@ -392,7 +416,7 @@ if menu_opcao == "📊 Dashboard":
                 # Cores Tech para o gráfico
                 colors_tech = ['#38BDF8', '#0EA5E9', '#0284C7', '#6366F1', '#8B5CF6']
                 fig = px.pie(df_areas, values='qtd', names='area', hole=0.6, color_discrete_sequence=colors_tech)
-                fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#cbd5e1", showlegend=True, margin=dict(t=20, b=20, l=20, r=20))
+                fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#E2E8F0", showlegend=True, margin=dict(t=20, b=20, l=20, r=20))
                 st.plotly_chart(fig, use_container_width=True)
             else: st.info("Sem dados para análise visual.")
     
@@ -408,8 +432,6 @@ if menu_opcao == "📊 Dashboard":
     # CARDS DE FUNCIONALIDADES
     st.write("")
     st.subheader("🛠️ Acesso Rápido")
-    
-    # CSS específico para botões invisíveis cobrindo cards (hack visual)
     
     r1c1, r1c2, r1c3 = st.columns(3)
     with r1c1:
