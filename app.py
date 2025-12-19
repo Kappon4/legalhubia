@@ -121,8 +121,16 @@ if api_key:
         st.sidebar.error(f"Erro Google: {e}")
         modelo_escolhido = "models/gemini-1.5-flash"
 
-    # --- ABAS (CÓDIGO COMPLETO RESTAURADO) ---
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["✍️ Redator", "📂 Ler PDF", "🎙️ Transcritor", "⚖️ Comparador", "💬 Chat", "📊 Dashboard"])
+    # --- DEFINIÇÃO DAS ABAS (AGORA SÃO 7) ---
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+        "✍️ Redator", 
+        "📂 Ler PDF", 
+        "🎙️ Transcritor", 
+        "⚖️ Comparador", 
+        "💬 Chat", 
+        "📊 Dashboard",
+        "📅 Prazos" # Nova aba
+    ])
     
     # --- ABA 1: REDATOR ---
     with tab1:
@@ -165,7 +173,7 @@ if api_key:
                 with st.spinner("Lendo documento..."):
                     try:
                         texto_pdf = extrair_texto_pdf(up)
-                        prompt_pdf = f"Resuma os pontos principais e prazos deste documento jurídico: {texto_pdf[:30000]}" # Limite de caracteres para segurança
+                        prompt_pdf = f"Resuma os pontos principais e prazos deste documento jurídico: {texto_pdf[:30000]}"
                         res = genai.GenerativeModel(modelo_escolhido).generate_content(prompt_pdf).text
                         st.markdown(res)
                     except Exception as e: st.error(f"Erro: {e}")
@@ -182,8 +190,6 @@ if api_key:
                         tmp_path = tmp.name
                     
                     f = genai.upload_file(tmp_path)
-                    
-                    # Espera processar (o Google precisa de um tempo para o arquivo ficar 'ACTIVE')
                     time.sleep(2) 
                     
                     res = genai.GenerativeModel(modelo_escolhido).generate_content(["Transcreva o áudio e faça um resumo jurídico.", f]).text
@@ -196,7 +202,7 @@ if api_key:
     # --- ABA 4: COMPARADOR ---
     with tab4:
         st.header("⚖️ Comparador de Versões")
-        st.info("Compare dois PDFs para achar diferenças (ex: contrato original vs alterado).")
+        st.info("Compare dois PDFs para achar diferenças.")
         c_a, c_b = st.columns(2)
         p1 = c_a.file_uploader("Original", type="pdf", key="v1")
         p2 = c_b.file_uploader("Alterado", type="pdf", key="v2")
@@ -258,5 +264,42 @@ if api_key:
                 except Exception as e: st.error(f"Erro ao ler planilha: {e}")
             else:
                 st.warning("Planilha não conectada. Verifique as credenciais.")
+
+    # --- ABA 7: CALCULADORA DE PRAZOS (NOVA!) ---
+    with tab7:
+        st.header("📅 Calculadora de Prazos Processuais")
+        st.info("⚠️ A IA analisa o texto e sugere o prazo com base na legislação (CPC/CPP/CLT). Sempre confira feriados locais.")
+
+        col_p1, col_p2 = st.columns(2)
+        with col_p1:
+            data_pub = st.date_input("Data da Publicação/Intimação", datetime.now())
+        with col_p2:
+            esfera = st.selectbox("Esfera / Rito", ["Cível (CPC - Dias Úteis)", "Trabalhista (CLT)", "Penal (CPP - Dias Corridos)", "Juizado Especial (Lei 9.099)"])
+
+        texto_prazo = st.text_area("Cole o texto da Intimação aqui:", height=150, placeholder="Ex: Fica a parte intimada para apresentar contrarrazões...")
+
+        if st.button("📆 Calcular Prazo"):
+            if texto_prazo:
+                with st.spinner("Analisando calendário e legislação..."):
+                    prompt_prazo = f"""
+                    Atue como um assistente jurídico sênior especializado em Prazos.
+                    Contexto: {esfera}.
+                    Data de Referência (Publicação): {data_pub.strftime('%d/%m/%Y')}.
+                    Texto da Intimação: "{texto_prazo}"
+
+                    TAREFA:
+                    1. Identifique o Ato Processual (ex: Apelação, Embargos).
+                    2. Diga qual é o Prazo Legal em dias.
+                    3. Confirme se a contagem é em Dias Úteis ou Corridos.
+                    4. Calcule a DATA FINAL (FATAL) sugerida.
+                    5. Liste feriados nacionais próximos que podem suspender o prazo.
+                    
+                    Responda em formato de tabela ou tópicos claros.
+                    """
+                    try:
+                        res = genai.GenerativeModel(modelo_escolhido).generate_content(prompt_prazo).text
+                        st.markdown(res)
+                    except Exception as e:
+                        st.error(f"Erro ao calcular: {e}")
 
 else: st.warning("Insira uma chave de API para começar.")
