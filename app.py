@@ -154,7 +154,9 @@ def buscar_intimacoes_email(user, pwd, server):
                     msg = email.message_from_bytes(response[1])
                     subj = decode_header(msg["Subject"])[0][0]
                     if isinstance(subj, bytes): subj = subj.decode()
-                    found.append({"assunto": subj, "corpo": str(msg)[:2000]})
+                    termos = ["intimação", "processo", "movimentação"]
+                    if any(t in str(subj).lower() for t in termos):
+                        found.append({"assunto": subj, "corpo": str(msg)[:2000]})
         return found, None
     except Exception as e: return [], str(e)
 
@@ -163,6 +165,10 @@ def verificar_permissao(area_necessaria):
     plano_atual = st.session_state.get('plano_atual', 'starter')
     if plano_atual == 'full': return True
     if plano_atual == area_necessaria: return True
+    
+    # Bancário está dentro do pacote Civil
+    if area_necessaria == 'bancario' and plano_atual == 'civil': return True
+    
     return False
 
 def tela_bloqueio(area_necessaria, preco):
@@ -185,7 +191,7 @@ def buscar_jurisprudencia_oficial(tema, area):
     sites = ""
     if area == "Criminal": sites = "site:stf.jus.br OR site:stj.jus.br OR site:conjur.com.br"
     elif area == "Trabalhista": sites = "site:tst.jus.br OR site:csjt.jus.br OR site:trtsp.jus.br"
-    elif area == "Civil" or area == "Família": sites = "site:stj.jus.br OR site:tjsp.jus.br OR site:ibdfam.org.br"
+    elif area == "Civil" or area == "Família" or area == "Bancário": sites = "site:stj.jus.br OR site:tjsp.jus.br OR site:ibdfam.org.br"
     else: sites = "site:jusbrasil.com.br"
     query = f"{tema} {sites}"
     try:
@@ -193,6 +199,7 @@ def buscar_jurisprudencia_oficial(tema, area):
         if res: return "\n".join([f"- {r['body']} (Fonte: {r['href']})" for r in res])
         return "Nenhuma jurisprudência específica localizada nas bases oficiais."
     except: return "Erro de conexão com bases jurídicas."
+# -----------------------------------------------------------
 
 def init_db():
     conn = sqlite3.connect('legalhub.db')
@@ -451,6 +458,7 @@ elif menu_opcao == "✍️ Redator Jurídico":
     with col_config:
         with st.container(border=True):
             st.markdown("##### ⚙️ ESTRUTURA")
+            
             # --- DETECÇÃO AUTOMÁTICA DE ÁREA PELO PLANO ---
             plano = st.session_state.plano_atual
             opcoes_areas = ["Criminal", "Trabalhista", "Cível", "Família"]
@@ -546,18 +554,18 @@ elif menu_opcao == "✍️ Redator Jurídico":
                 except Exception as e: st.error(f"Erro: {str(e)}")
         else: st.error("Créditos insuficientes.")
 
-# 3. CALCULADORA (APRIMORADA PARA CÍVEL, FAMÍLIA E TRABALHISTA)
+# 3. CALCULADORA (APRIMORADA PARA CÍVEL, FAMÍLIA, TRABALHISTA E BANCÁRIO)
 elif menu_opcao == "🧮 Calculadoras & Perícia":
     st.markdown("<h2 class='tech-header'>🧮 CÁLCULOS ESPECIALIZADOS</h2>", unsafe_allow_html=True)
     
     # Detecção Automática do Plano
     plano_atual = st.session_state.plano_atual
     
-    opcoes_calc = ["Trabalhista", "Cível", "Criminal", "Família"]
+    opcoes_calc = ["Trabalhista", "Cível", "Criminal", "Família", "Bancário"]
     index_calc = 0
     if plano_atual == "criminal": opcoes_calc = ["Criminal"]
     elif plano_atual == "trabalhista": opcoes_calc = ["Trabalhista"]
-    elif plano_atual == "civil": opcoes_calc = ["Cível", "Família"]
+    elif plano_atual == "civil": opcoes_calc = ["Cível", "Família", "Bancário"]
     
     area_calc = st.selectbox("Selecione a Especialidade:", opcoes_calc)
     
@@ -565,14 +573,140 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
     liberado = False
     if area_calc == "Trabalhista" and verificar_permissao("trabalhista"): liberado = True
     elif area_calc == "Criminal" and verificar_permissao("criminal"): liberado = True
-    elif area_calc in ["Cível", "Família"] and verificar_permissao("civil"): liberado = True
+    elif area_calc in ["Cível", "Família", "Bancário"] and verificar_permissao("civil"): liberado = True
     elif verificar_permissao("full"): liberado = True
 
     if liberado:
         with st.container(border=True):
             
-            # --- TRABALHISTA (SUPER TURBINADO) ---
-            if area_calc == "Trabalhista":
+            # --- CÍVEL (NOVO E APROFUNDADO) ---
+            if area_calc == "Cível":
+                tab_debito, tab_aluguel, tab_rescisao = st.tabs(["💸 Atualização de Débitos Judiciais", "🏠 Reajuste de Aluguel", "🚫 Rescisão de Contrato"])
+                
+                with tab_debito:
+                    st.markdown("#### Correção Monetária e Juros")
+                    c1, c2, c3 = st.columns(3)
+                    valor = c1.number_input("Valor Original (R$)", min_value=0.0, value=1000.0)
+                    dt_inicio = c2.date_input("Data Inicial", value=date(2023, 1, 1))
+                    dt_final = c3.date_input("Data Final", value=date.today())
+                    
+                    c4, c5, c6 = st.columns(3)
+                    indice = c4.selectbox("Índice de Correção", ["Tabela Prática TJ", "IGP-M", "INPC", "IPCA-E", "CDI"])
+                    juros_tipo = c5.selectbox("Juros de Mora", ["1% a.m. Simples", "1% a.m. Composto", "Sem Juros"])
+                    multa = c6.checkbox("Multa de 10% (Art. 523 CPC)")
+                    honra = st.number_input("Honorários Advocatícios (%)", min_value=0, max_value=30, value=10)
+                    
+                    if st.button("CALCULAR ATUALIZAÇÃO"):
+                        # Simulação matemática (Fins demonstrativos)
+                        meses = (dt_final.year - dt_inicio.year) * 12 + dt_final.month - dt_inicio.month
+                        fator_correcao = 1.05 + (meses * 0.005) # Simulação 0.5% ao mês de inflação
+                        val_corrigido = valor * fator_correcao
+                        
+                        val_juros = 0
+                        if "1%" in juros_tipo:
+                            val_juros = val_corrigido * (0.01 * meses)
+                        
+                        subtotal = val_corrigido + val_juros
+                        val_multa = subtotal * 0.10 if multa else 0
+                        val_honra = (subtotal + val_multa) * (honra / 100)
+                        total_final = subtotal + val_multa + val_honra
+                        
+                        st.divider()
+                        col_res1, col_res2 = st.columns(2)
+                        col_res1.metric("Valor Corrigido", f"R$ {val_corrigido:,.2f}")
+                        col_res1.metric("Juros de Mora", f"R$ {val_juros:,.2f}")
+                        col_res2.metric("Multa + Honorários", f"R$ {val_multa + val_honra:,.2f}")
+                        col_res2.metric("TOTAL FINAL", f"R$ {total_final:,.2f}", delta="Atualizado")
+                
+                with tab_aluguel:
+                    st.markdown("#### Reajuste Anual de Contrato")
+                    val_aluguel = st.number_input("Valor Atual do Aluguel", min_value=0.0)
+                    idx_aluguel = st.selectbox("Índice do Contrato", ["IGP-M (FGV)", "IPCA (IBGE)", "IVAR"])
+                    if st.button("CALCULAR NOVO ALUGUEL"):
+                        # Simulação
+                        fator = 1.045 if idx_aluguel == "IPCA (IBGE)" else 1.005 # IGPM baixo na simulação
+                        novo_valor = val_aluguel * fator
+                        st.success(f"Novo Aluguel Sugerido: R$ {novo_valor:,.2f} (Baseado no acumulado de 12 meses)")
+                
+                with tab_rescisao:
+                    st.markdown("#### Cálculo de Multa por Rescisão Antecipada")
+                    val_aluguel_res = st.number_input("Valor do Aluguel", key="v_alug_res")
+                    multa_padrao = st.number_input("Multa prevista (em aluguéis)", value=3)
+                    data_inicio = st.date_input("Início do Contrato", key="dt_ini_res")
+                    data_fim = st.date_input("Fim do Contrato (Prazo Original)", key="dt_fim_res")
+                    data_saida = st.date_input("Data de Entrega das Chaves", key="dt_sai_res")
+
+                    if st.button("CALCULAR MULTA"):
+                        total_dias = (data_fim - data_inicio).days
+                        dias_cumpridos = (data_saida - data_inicio).days
+                        dias_restantes = total_dias - dias_cumpridos
+
+                        if dias_restantes <= 0:
+                            st.success("Sem multa! O contrato foi cumprido integralmente.")
+                        else:
+                            valor_multa_total = val_aluguel_res * multa_padrao
+                            multa_proporcional = (valor_multa_total / total_dias) * dias_restantes
+                            st.error(f"Multa Devida: R$ {multa_proporcional:.2f}")
+
+            # --- FAMÍLIA (NOVO E APROFUNDADO) ---
+            elif area_calc == "Família":
+                tab_pensao, tab_partilha = st.tabs(["👶 Pensão Alimentícia Completa", "💍 Partilha de Bens & Inventário"])
+                
+                with tab_pensao:
+                    st.markdown("#### Simulador de Pensão")
+                    base_calc = st.radio("Base de Cálculo", ["Salário Mínimo (2025: R$ 1.509)", "Renda Líquida do Alimentante"], horizontal=True)
+                    
+                    if "Mínimo" in base_calc:
+                        percentual = st.slider("Percentual do S.M. (%)", 10, 100, 30)
+                        valor_base = 1509.00
+                    else:
+                        valor_base = st.number_input("Renda Líquida (R$)", value=3000.0)
+                        percentual = st.slider("Percentual da Renda (%)", 10, 50, 30)
+                    
+                    incluir_13 = st.checkbox("Incidir sobre 13º e Férias?", value=True)
+                    filhos = st.number_input("Quantidade de Filhos", 1, 5, 1)
+                    
+                    if st.button("CALCULAR PENSÃO"):
+                        mensal = valor_base * (percentual / 100)
+                        total_anual = mensal * 12
+                        if incluir_13: total_anual += mensal + (mensal/3) # 13 + 1/3 ferias
+                        
+                        st.metric("Valor Mensal por Filho", f"R$ {mensal/filhos:,.2f}")
+                        st.metric("Valor Mensal Total", f"R$ {mensal:,.2f}")
+                        st.caption(f"Custo Anual Estimado: R$ {total_anual:,.2f}")
+
+                with tab_partilha:
+                    st.markdown("#### Simulador de Partilha de Bens (Divórcio)")
+                    regime = st.selectbox("Regime de Bens", ["Comunhão Parcial", "Comunhão Universal", "Separação Total"])
+                    
+                    c_bens1, c_bens2 = st.columns(2)
+                    imoveis = c_bens1.number_input("Valor Imóveis", min_value=0.0)
+                    veiculos = c_bens2.number_input("Valor Veículos", min_value=0.0)
+                    invest = c_bens1.number_input("Investimentos/Saldo", min_value=0.0)
+                    dividas = c_bens2.number_input("Dívidas do Casal", min_value=0.0)
+                    
+                    bem_particular = 0.0
+                    if regime == "Comunhão Parcial":
+                        bem_particular = st.number_input("Bens Particulares (Adquiridos antes/Herança)", min_value=0.0)
+                    
+                    if st.button("SIMULAR PARTILHA"):
+                        total_patrimonio = imoveis + veiculos + invest
+                        patrimonio_comum = total_patrimonio - bem_particular
+                        saldo_partilhavel = patrimonio_comum - dividas
+                        
+                        meacao = saldo_partilhavel / 2 if regime != "Separação Total" else 0
+                        
+                        if regime == "Separação Total":
+                            st.info("Neste regime, não há comunhão de bens (salvo pacto em contrário). Cada um fica com o que está em seu nome.")
+                        else:
+                            st.success(f"💰 Patrimônio Total: R$ {total_patrimonio:,.2f}")
+                            st.warning(f"📉 Dívidas: R$ {dividas:,.2f}")
+                            st.metric("Meação (Para cada cônjuge)", f"R$ {meacao:,.2f}")
+                            if bem_particular > 0:
+                                st.caption(f"Obs: R$ {bem_particular:,.2f} foram excluídos da partilha por serem bens particulares.")
+
+            # --- TRABALHISTA (MANTIDO) ---
+            elif area_calc == "Trabalhista":
                 # NOVAS ABAS DE CÁLCULO TRABALHISTA
                 tab_resc, tab_he, tab_adic = st.tabs(["📄 Rescisão Completa", "⏰ Horas Extras & Reflexos", "⚠️ Adicionais (Insal./Peric.)"])
 
@@ -677,130 +811,6 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
                         st.caption("Lembre-se de pedir reflexos em 13º, Férias e FGTS na petição!")
 
 
-            # --- CÍVEL (NOVO E APROFUNDADO) ---
-            elif area_calc == "Cível":
-                tab_debito, tab_aluguel, tab_rescisao = st.tabs(["💸 Atualização de Débitos Judiciais", "🏠 Reajuste de Aluguel", "🚫 Rescisão de Contrato"])
-                
-                with tab_debito:
-                    st.markdown("#### Correção Monetária e Juros")
-                    c1, c2, c3 = st.columns(3)
-                    valor = c1.number_input("Valor Original (R$)", min_value=0.0, value=1000.0)
-                    dt_inicio = c2.date_input("Data Inicial", value=date(2023, 1, 1))
-                    dt_final = c3.date_input("Data Final", value=date.today())
-                    
-                    c4, c5, c6 = st.columns(3)
-                    indice = c4.selectbox("Índice de Correção", ["Tabela Prática TJ", "IGP-M", "INPC", "IPCA-E", "CDI"])
-                    juros_tipo = c5.selectbox("Juros de Mora", ["1% a.m. Simples", "1% a.m. Composto", "Sem Juros"])
-                    multa = c6.checkbox("Multa de 10% (Art. 523 CPC)")
-                    honra = st.number_input("Honorários Advocatícios (%)", min_value=0, max_value=30, value=10)
-                    
-                    if st.button("CALCULAR ATUALIZAÇÃO"):
-                        meses = (dt_final.year - dt_inicio.year) * 12 + dt_final.month - dt_inicio.month
-                        fator_correcao = 1.05 + (meses * 0.005) 
-                        val_corrigido = valor * fator_correcao
-                        
-                        val_juros = 0
-                        if "1%" in juros_tipo:
-                            val_juros = val_corrigido * (0.01 * meses)
-                        
-                        subtotal = val_corrigido + val_juros
-                        val_multa = subtotal * 0.10 if multa else 0
-                        val_honra = (subtotal + val_multa) * (honra / 100)
-                        total_final = subtotal + val_multa + val_honra
-                        
-                        st.divider()
-                        col_res1, col_res2 = st.columns(2)
-                        col_res1.metric("Valor Corrigido", f"R$ {val_corrigido:,.2f}")
-                        col_res1.metric("Juros de Mora", f"R$ {val_juros:,.2f}")
-                        col_res2.metric("Multa + Honorários", f"R$ {val_multa + val_honra:,.2f}")
-                        col_res2.metric("TOTAL FINAL", f"R$ {total_final:,.2f}", delta="Atualizado")
-                
-                with tab_aluguel:
-                    st.markdown("#### Reajuste Anual de Contrato")
-                    val_aluguel = st.number_input("Valor Atual do Aluguel", min_value=0.0)
-                    idx_aluguel = st.selectbox("Índice do Contrato", ["IGP-M (FGV)", "IPCA (IBGE)", "IVAR"])
-                    if st.button("CALCULAR NOVO ALUGUEL"):
-                        fator = 1.045 if idx_aluguel == "IPCA (IBGE)" else 1.005 
-                        novo_valor = val_aluguel * fator
-                        st.success(f"Novo Aluguel Sugerido: R$ {novo_valor:,.2f} (Baseado no acumulado de 12 meses)")
-                
-                with tab_rescisao:
-                    st.markdown("#### Cálculo de Multa por Rescisão Antecipada")
-                    val_aluguel_res = st.number_input("Valor do Aluguel", key="v_alug_res")
-                    multa_padrao = st.number_input("Multa prevista (em aluguéis)", value=3)
-                    data_inicio = st.date_input("Início do Contrato", key="dt_ini_res")
-                    data_fim = st.date_input("Fim do Contrato (Prazo Original)", key="dt_fim_res")
-                    data_saida = st.date_input("Data de Entrega das Chaves", key="dt_sai_res")
-
-                    if st.button("CALCULAR MULTA"):
-                        total_dias = (data_fim - data_inicio).days
-                        dias_cumpridos = (data_saida - data_inicio).days
-                        dias_restantes = total_dias - dias_cumpridos
-
-                        if dias_restantes <= 0:
-                            st.success("Sem multa! O contrato foi cumprido integralmente.")
-                        else:
-                            valor_multa_total = val_aluguel_res * multa_padrao
-                            multa_proporcional = (valor_multa_total / total_dias) * dias_restantes
-                            st.error(f"Multa Devida: R$ {multa_proporcional:.2f}")
-
-            # --- FAMÍLIA (NOVO E APROFUNDADO) ---
-            elif area_calc == "Família":
-                tab_pensao, tab_partilha = st.tabs(["👶 Pensão Alimentícia Completa", "💍 Partilha de Bens & Inventário"])
-                
-                with tab_pensao:
-                    st.markdown("#### Simulador de Pensão")
-                    base_calc = st.radio("Base de Cálculo", ["Salário Mínimo (2025: R$ 1.509)", "Renda Líquida do Alimentante"], horizontal=True)
-                    
-                    if "Mínimo" in base_calc:
-                        percentual = st.slider("Percentual do S.M. (%)", 10, 100, 30)
-                        valor_base = 1509.00
-                    else:
-                        valor_base = st.number_input("Renda Líquida (R$)", value=3000.0)
-                        percentual = st.slider("Percentual da Renda (%)", 10, 50, 30)
-                    
-                    incluir_13 = st.checkbox("Incidir sobre 13º e Férias?", value=True)
-                    filhos = st.number_input("Quantidade de Filhos", 1, 5, 1)
-                    
-                    if st.button("CALCULAR PENSÃO"):
-                        mensal = valor_base * (percentual / 100)
-                        total_anual = mensal * 12
-                        if incluir_13: total_anual += mensal + (mensal/3) 
-                        
-                        st.metric("Valor Mensal por Filho", f"R$ {mensal/filhos:,.2f}")
-                        st.metric("Valor Mensal Total", f"R$ {mensal:,.2f}")
-                        st.caption(f"Custo Anual Estimado: R$ {total_anual:,.2f}")
-
-                with tab_partilha:
-                    st.markdown("#### Simulador de Partilha de Bens (Divórcio)")
-                    regime = st.selectbox("Regime de Bens", ["Comunhão Parcial", "Comunhão Universal", "Separação Total"])
-                    
-                    c_bens1, c_bens2 = st.columns(2)
-                    imoveis = c_bens1.number_input("Valor Imóveis", min_value=0.0)
-                    veiculos = c_bens2.number_input("Valor Veículos", min_value=0.0)
-                    invest = c_bens1.number_input("Investimentos/Saldo", min_value=0.0)
-                    dividas = c_bens2.number_input("Dívidas do Casal", min_value=0.0)
-                    
-                    bem_particular = 0.0
-                    if regime == "Comunhão Parcial":
-                        bem_particular = st.number_input("Bens Particulares (Adquiridos antes/Herança)", min_value=0.0)
-                    
-                    if st.button("SIMULAR PARTILHA"):
-                        total_patrimonio = imoveis + veiculos + invest
-                        patrimonio_comum = total_patrimonio - bem_particular
-                        saldo_partilhavel = patrimonio_comum - dividas
-                        
-                        meacao = saldo_partilhavel / 2 if regime != "Separação Total" else 0
-                        
-                        if regime == "Separação Total":
-                            st.info("Neste regime, não há comunhão de bens (salvo pacto em contrário). Cada um fica com o que está em seu nome.")
-                        else:
-                            st.success(f"💰 Patrimônio Total: R$ {total_patrimonio:,.2f}")
-                            st.warning(f"📉 Dívidas: R$ {dividas:,.2f}")
-                            st.metric("Meação (Para cada cônjuge)", f"R$ {meacao:,.2f}")
-                            if bem_particular > 0:
-                                st.caption(f"Obs: R$ {bem_particular:,.2f} foram excluídos da partilha por serem bens particulares.")
-
             # --- CRIMINAL (MANTIDO) ---
             elif area_calc == "Criminal":
                 st.markdown("#### 🚔 Dosimetria da Pena (Estimativa)")
@@ -810,6 +820,47 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
                 if st.button("CALCULAR PENA"):
                     pena = pena_base + ((agravantes - atenuantes) * (pena_base/6))
                     st.warning(f"⚖️ Pena Estimada: {pena:.1f} anos")
+            
+            # --- BANCÁRIO (NOVA ABA DE JUROS ABUSIVOS) ---
+            elif area_calc == "Bancário":
+                st.markdown("#### 🏦 Revisional de Juros (Abusividade)")
+                st.info("Compare a taxa do contrato com a Taxa Média de Mercado (BACEN).")
+
+                c1, c2 = st.columns(2)
+                valor_financiado = c1.number_input("Valor Financiado (R$)", value=50000.0)
+                parcelas = c2.number_input("Número de Parcelas", value=48)
+
+                c3, c4 = st.columns(2)
+                taxa_contrato = c3.number_input("Taxa do Contrato (% a.m.)", value=3.5)
+                taxa_bacen = c4.number_input("Taxa Média BACEN (% a.m.)", value=1.8, help="Consulte a série histórica do BACEN para o período.")
+
+                if st.button("CALCULAR ABUSIVIDADE"):
+                    # Helper function inside the block or use numpy (but keeping it simple with raw python)
+                    def pmt(p, i, n):
+                        i = i / 100
+                        return p * (i * (1 + i)**n) / ((1 + i)**n - 1)
+
+                    parcela_real = pmt(valor_financiado, taxa_contrato, parcelas)
+                    parcela_justa = pmt(valor_financiado, taxa_bacen, parcelas)
+
+                    total_real = parcela_real * parcelas
+                    total_justo = parcela_justa * parcelas
+                    excesso = total_real - total_justo
+
+                    st.divider()
+                    c_res1, c_res2, c_res3 = st.columns(3)
+                    c_res1.metric("Parcela Atual", f"R$ {parcela_real:,.2f}")
+                    c_res1.caption(f"Total: R$ {total_real:,.2f}")
+
+                    c_res2.metric("Parcela Recalculada", f"R$ {parcela_justa:,.2f}")
+                    c_res2.caption(f"Total: R$ {total_justo:,.2f}")
+
+                    c_res3.metric("Valor a Recuperar", f"R$ {excesso:,.2f}", delta="Excesso Cobrado")
+
+                    if taxa_contrato > (taxa_bacen * 1.5):
+                        st.error(f"⚠️ A taxa contratada é {taxa_contrato/taxa_bacen:.1f}x maior que a média! Há fortes indícios de abusividade.")
+                    else:
+                        st.warning("A taxa está acima da média, mas a abusividade depende da interpretação do juiz (geralmente acima de 1.5x a média).")
             
     else:
         # Mostra o bloqueio da área que ele tentou acessar
