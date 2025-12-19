@@ -323,14 +323,13 @@ elif menu_opcao == "✍️ Redator Jurídico":
         cli_final = ""
         if modo_cliente == "Selecionar Existente":
             if lista_clientes:
-                # Se veio de um arquivo aberto ("cliente_recuperado"), tenta selecionar ele
+                # Se veio de um arquivo aberto, tenta selecionar ele
                 idx = 0
                 if st.session_state.cliente_recuperado in lista_clientes:
                     idx = lista_clientes.index(st.session_state.cliente_recuperado)
-                
                 cli_final = st.selectbox("Selecione:", lista_clientes, index=idx)
             else:
-                st.warning("Nenhum cliente cadastrado. Cadastre o primeiro abaixo.")
+                st.warning("Nenhum cliente cadastrado.")
                 cli_final = st.text_input("Nome do Novo Cliente:")
         else:
             cli_final = st.text_input("Nome do Novo Cliente:")
@@ -349,9 +348,9 @@ elif menu_opcao == "✍️ Redator Jurídico":
                     res = genai.GenerativeModel(mod_escolhido).generate_content(prompt).text
                     run_query("UPDATE usuarios SET creditos = creditos - 1 WHERE username = ?", (st.session_state.usuario_atual,))
                     
-                    # Salva usando o nome do cliente selecionado (agrupando na pasta certa)
+                    # --- CORREÇÃO: Salva o texto COMPLETO (sem limite de 500) ---
                     run_query("INSERT INTO documentos (escritorio, data_criacao, cliente, area, tipo, conteudo) VALUES (?, ?, ?, ?, ?, ?)", 
-                                (st.session_state.escritorio_atual, datetime.now().strftime("%d/%m/%Y"), cli_final, area, tipo, fatos + "||" + res[:500]))
+                                (st.session_state.escritorio_atual, datetime.now().strftime("%d/%m/%Y"), cli_final, area, tipo, fatos + "||" + res))
                     
                     st.markdown(res)
                     st.download_button("Word", gerar_word(res), "Minuta.docx")
@@ -405,7 +404,7 @@ elif menu_opcao == "🏛️ Estratégia de Audiência":
                 except: st.error("Erro na IA")
 
 # ==========================================================
-# 5. GESTÃO DE CASOS
+# 5. GESTÃO DE CASOS (COM BOTÃO DE EXCLUIR)
 # ==========================================================
 elif menu_opcao == "📂 Gestão de Casos":
     st.markdown("<h2 class='highlight-gold'>📂 Arquivo Digital</h2>", unsafe_allow_html=True)
@@ -464,12 +463,22 @@ elif menu_opcao == "📂 Gestão de Casos":
             
             st.divider()
             arquivos_cliente = df_docs[df_docs['cliente'] == st.session_state.pasta_aberta]
+            
             for index, row in arquivos_cliente.iterrows():
                 icone = "📝" if row['area'] == "Anotações" else "📄"
                 with st.expander(f"{icone} {row['tipo']} ({row['data_criacao']}) - {row['area']}"):
                     texto_view = row['conteudo'].split("||")[-1] if "||" in row['conteudo'] else row['conteudo']
                     st.markdown(texto_view)
-                    st.download_button("📥 Baixar", gerar_word(texto_view), f"{row['tipo']}.docx", key=f"down_{row['id']}")
+                    
+                    c_down, c_del = st.columns([4, 1])
+                    with c_down:
+                        st.download_button("📥 Baixar", gerar_word(texto_view), f"{row['tipo']}.docx", key=f"down_{row['id']}")
+                    with c_del:
+                        if st.button("🗑️ Excluir", key=f"del_{row['id']}"):
+                            run_query("DELETE FROM documentos WHERE id = ?", (row['id'],))
+                            st.toast("Item excluído!")
+                            time.sleep(1)
+                            st.rerun()
     else: st.warning("📭 Nenhum arquivo encontrado.")
 
 # 6. MONITOR
@@ -508,4 +517,4 @@ elif menu_opcao == "🔧 Ferramentas Extras":
         if p1 and p2 and st.button("Comparar"): st.write(genai.GenerativeModel(mod_escolhido).generate_content(f"Dif: {extrair_texto_pdf(p1)} vs {extrair_texto_pdf(p2)}").text)
 
 st.markdown("---")
-st.markdown("<center style='color: #555;'>🔒 LegalHub Enterprise v5.0 | Client Selector</center>", unsafe_allow_html=True)
+st.markdown("<center style='color: #555;'>🔒 LegalHub Enterprise v5.5 | Delete & Fix Edition</center>", unsafe_allow_html=True)
