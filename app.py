@@ -89,7 +89,7 @@ def local_css():
         .plan-full { border: 1px solid var(--neon-gold); background: rgba(255, 215, 0, 0.05); }
 
         /* LOCK SCREEN */
-        .lock-screen { border: 1px solid var(--neon-red); background: rgba(255, 0, 85, 0.05); border-radius: 10px; padding: 40px; text-align: center; margin-top: 50px; }
+        .lock-screen { border: 1px solid var(--neon-red); background: rgba(255, 0, 85, 0.05); border-radius: 10px; padding: 40px; text-align: center; margin-top: 20px; }
         .lock-icon { font-size: 3rem; margin-bottom: 10px; }
         .lock-title { color: var(--neon-red) !important; font-family: 'Rajdhani'; font-size: 2rem; font-weight: bold; }
 
@@ -524,6 +524,7 @@ elif menu_opcao == "✍️ Redator Jurídico":
                     
                     with st.container(border=True): st.markdown(res)
                     st.download_button("📥 BAIXAR DOCX", gerar_word(res), f"{tipo}_{cli_final}.docx", use_container_width=True)
+                    st.success("Salvo no cofre.")
                 except Exception as e: st.error(f"Erro: {str(e)}")
         else: st.error("Créditos insuficientes.")
 
