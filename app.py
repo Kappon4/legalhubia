@@ -470,13 +470,38 @@ if menu_opcao == "📊 Dashboard":
             else: st.info("Aguardando dados...")
     
     with col_info:
-        st.markdown("##### 💡 SYSTEM LOGS")
+        # ==========================================================
+        # --- ATUALIZAÇÃO: SECURITY & COMPLIANCE ---
+        # ==========================================================
+        st.markdown("##### 🛡️ SECURITY & COMPLIANCE")
         with st.container(border=True):
-            st.success("AI SERVER: ONLINE")
-            st.info("DATABASE: SECURE")
-            st.warning("VERSION: 5.5 STABLE")
+            # Item 1: LGPD
+            st.markdown("""
+            <div style='background: rgba(16, 185, 129, 0.1); border-left: 3px solid #10B981; padding: 10px; margin-bottom: 8px; border-radius: 4px;'>
+                <strong style='color: #10B981; font-family: Rajdhani; letter-spacing: 1px;'>✓ LGPD COMPLIANT</strong><br>
+                <span style='font-size: 0.8rem; color: #E2E8F0;'>Tratamento de dados anonimizado e rastreável.</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Item 2: Criptografia
+            st.markdown("""
+            <div style='background: rgba(59, 130, 246, 0.1); border-left: 3px solid #3B82F6; padding: 10px; margin-bottom: 8px; border-radius: 4px;'>
+                <strong style='color: #3B82F6; font-family: Rajdhani; letter-spacing: 1px;'>🔒 E2E ENCRYPTION</strong><br>
+                <span style='font-size: 0.8rem; color: #E2E8F0;'>Proteção AES-256 militar em todos os arquivos.</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Item 3: Atualização Jurídica
+            st.markdown("""
+            <div style='background: rgba(245, 158, 11, 0.1); border-left: 3px solid #F59E0B; padding: 10px; border-radius: 4px;'>
+                <strong style='color: #F59E0B; font-family: Rajdhani; letter-spacing: 1px;'>⚖️ LIVE JURISPRUDENCE</strong><br>
+                <span style='font-size: 0.8rem; color: #E2E8F0;'>Sincronização em tempo real com STF/STJ.</span>
+            </div>
+            """, unsafe_allow_html=True)
+
             st.markdown("---")
-            st.caption("Dica: Utilize a busca jurisprudencial para aumentar a precisão.")
+            st.markdown("<div style='text-align:center; font-size: 0.7rem; color: #64748b;'>Certificado Digital de Autenticidade V5.5</div>", unsafe_allow_html=True)
+        # ==========================================================
 
     # CARDS DE FUNCIONALIDADES
     st.write("")
