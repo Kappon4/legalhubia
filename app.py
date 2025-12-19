@@ -34,7 +34,6 @@ st.set_page_config(
 def local_css():
     st.markdown("""
     <style>
-        /* Cores Gerais */
         :root {
             --primary-color: #0e1117;
             --background-color: #ffffff;
@@ -42,16 +41,12 @@ def local_css():
             --text-color: #262730;
             --font: "Source Sans Pro", sans-serif;
         }
-        
-        /* Cabeçalho e Títulos */
         h1, h2, h3 {
-            color: #1f2937; /* Azul Escuro Profissional */
+            color: #1f2937;
             font-family: 'Helvetica', sans-serif;
         }
-        
-        /* Botões Estilizados */
         .stButton>button {
-            background-color: #2563eb; /* Azul Royal */
+            background-color: #2563eb;
             color: white;
             border-radius: 8px;
             border: none;
@@ -60,23 +55,17 @@ def local_css():
             transition: all 0.3s ease;
         }
         .stButton>button:hover {
-            background-color: #1e40af; /* Azul mais escuro ao passar o mouse */
+            background-color: #1e40af;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
-
-        /* Inputs e Caixas de Texto */
         .stTextInput>div>div>input, .stTextArea>div>div>textarea {
             border-radius: 8px;
             border: 1px solid #d1d5db;
         }
-
-        /* Sidebar */
         section[data-testid="stSidebar"] {
             background-color: #f8fafc;
             border-right: 1px solid #e5e7eb;
         }
-        
-        /* Cards de Métricas */
         div[data-testid="metric-container"] {
             background-color: #ffffff;
             border: 1px solid #e5e7eb;
@@ -84,11 +73,8 @@ def local_css():
             border-radius: 10px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
-        
-        /* Esconder menu padrão do Streamlit para parecer App Nativo */
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
-        
     </style>
     """, unsafe_allow_html=True)
 
@@ -220,7 +206,6 @@ def buscar_intimacoes_email(user, pwd, server):
 if "GOOGLE_API_KEY" in st.secrets:
     api_key = st.secrets["GOOGLE_API_KEY"]
 else:
-    # Sidebar discreta para API Key se não estiver nos secrets
     api_key = st.sidebar.text_input("🔑 Google API Key:", type="password")
 
 if api_key:
@@ -248,7 +233,7 @@ with st.sidebar:
     
     st.divider()
     
-    # Mostrador de Créditos Estilizado
+    # Mostrador de Créditos
     col_cred1, col_cred2 = st.columns([1, 3])
     with col_cred1: st.write("💎")
     with col_cred2: 
@@ -258,7 +243,6 @@ with st.sidebar:
         else:
             st.error("Sem créditos")
     
-    # Configuração de E-mail
     with st.expander("📧 Configurar E-mail OAB"):
         email_leitura = st.text_input("E-mail:")
         senha_leitura = st.text_input("Senha App:", type="password")
@@ -288,10 +272,7 @@ if menu_opcao == "📊 Dashboard":
     st.title(f"Bem-vindo, Dr(a). {st.session_state.usuario_atual}")
     st.markdown("Visão geral do seu escritório hoje.")
     
-    # Métricas
     c1, c2, c3 = st.columns(3)
-    
-    # Conta documentos gerados
     docs_feitos = run_query("SELECT count(*) FROM documentos WHERE escritorio = ?", (st.session_state.escritorio_atual,), return_data=True).iloc[0][0]
     
     c1.metric("Documentos Gerados", docs_feitos, "+2 hoje")
@@ -300,15 +281,12 @@ if menu_opcao == "📊 Dashboard":
     
     st.subheader("🚀 Acesso Rápido")
     col_a, col_b = st.columns(2)
-    with col_a:
-        st.info("💡 **Nova Peça?** Vá para o Redator Jurídico.")
-    with col_b:
-        st.success("📈 **Cálculo Trabalhista?** Use a Calculadora.")
+    with col_a: st.info("💡 **Nova Peça?** Vá para o Redator Jurídico.")
+    with col_b: st.success("📈 **Cálculo Trabalhista?** Use a Calculadora.")
 
 # 2. REDATOR JURÍDICO
 elif menu_opcao == "✍️ Redator Jurídico":
     st.title("✍️ Redator de Peças com IA")
-    
     if "fatos_recuperados" not in st.session_state: st.session_state.fatos_recuperados = ""
     if "cliente_recuperado" not in st.session_state: st.session_state.cliente_recuperado = ""
 
@@ -322,7 +300,7 @@ elif menu_opcao == "✍️ Redator Jurídico":
     
     with c2:
         st.markdown("### Fatos e Dados")
-        fatos = st.text_area("Descreva o caso:", height=300, value=st.session_state.fatos_recuperados, placeholder="Cole aqui o resumo do caso, fatos narrados pelo cliente ou resumo do processo...")
+        fatos = st.text_area("Descreva o caso:", height=300, value=st.session_state.fatos_recuperados, placeholder="Cole aqui o resumo do caso...")
     
     col_btn, _ = st.columns([1, 4])
     with col_btn:
@@ -330,23 +308,20 @@ elif menu_opcao == "✍️ Redator Jurídico":
             if creditos_atuais > 0 and fatos:
                 with st.spinner("A IA está redigindo sua peça..."):
                     jurisp = buscar_jurisprudencia_real(f"{area} {tipo} {fatos}") if web else ""
-                    prompt = f"Advogado {area}. Peça: {tipo}. Fatos: {fatos}. Jurisprudência: {jurisp}. Estruture formalmente com qualificação, fatos, direito e pedidos."
+                    prompt = f"Advogado {area}. Peça: {tipo}. Fatos: {fatos}. Jurisprudência: {jurisp}. Estruture formalmente."
                     try:
                         res = genai.GenerativeModel(mod_escolhido).generate_content(prompt).text
                         run_query("UPDATE usuarios SET creditos = creditos - 1 WHERE username = ?", (st.session_state.usuario_atual,))
                         if cli:
                             run_query("INSERT INTO documentos (escritorio, data_criacao, cliente, area, tipo, conteudo) VALUES (?, ?, ?, ?, ?, ?)", 
                                      (st.session_state.escritorio_atual, datetime.now().strftime("%d/%m/%Y"), cli, area, tipo, fatos + "||" + res[:500]))
-                        
                         st.markdown("### 📄 Minuta Gerada")
                         st.markdown(res)
                         st.download_button("📥 Baixar Word (.docx)", gerar_word(res), f"Minuta_{tipo}.docx")
                         st.rerun()
                     except Exception as e: st.error(f"Erro: {e}")
-            elif creditos_atuais <= 0:
-                st.error("Créditos insuficientes.")
-            else:
-                st.warning("Preencha os fatos.")
+            elif creditos_atuais <= 0: st.error("Créditos insuficientes.")
+            else: st.warning("Preencha os fatos.")
 
 # 3. CALCULADORAS & PERÍCIA
 elif menu_opcao == "🧮 Calculadoras & Perícia":
@@ -355,10 +330,15 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
     
     c1, c2 = st.columns([1, 1])
     with c1:
-        tipo_calc = st.selectbox("Selecione o Cálculo:", [
-            "Trabalhista (Rescisão/Horas Extras)", "Criminal (Dosimetria)", "Revisional (Bancário)",
-            "Cível (Atualização/Danos)", "Família (Pensão)", "Previdenciário (RMI)"
-        ])
+        opcoes_calc = [
+            "Aluguel (Reajuste/Atraso)", "Divórcio (Partilha/Pensão)", 
+            "FGTS (Correção/Revisão)", "INSS (Renda Mensal/Aposentadoria)", 
+            "PASEP (Atualização)", "Pensão Alimentícia", 
+            "RMC e RCC (Cartão Crédito)", "Superendividamento (Lei 14.181)", 
+            "Criminal (Dosimetria)", "Revisional (Juros Bancários)", 
+            "Trabalhista (Rescisão)"
+        ]
+        tipo_calc = st.selectbox("Selecione o Cálculo:", opcoes_calc)
         dt_base = st.date_input("Data Base")
     with c2:
         upload_calc = st.file_uploader("📂 Anexar Contrato/Sentença (PDF)", type="pdf")
@@ -369,7 +349,14 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
         if dados_input or upload_calc:
             with st.spinner("Analisando documentos..."):
                 txt_pdf = f"\nPDF: {extrair_texto_pdf(upload_calc)}" if upload_calc else ""
-                prompt = f"Perito em {tipo_calc}. Data Base: {dt_base}. Dados: {dados_input} {txt_pdf}. Gere Laudo Técnico com memória de cálculo."
+                prompt = f"""
+                Atue como um Perito Judicial Contábil e Jurídico Especialista em {tipo_calc}.
+                Data Base: {dt_base.strftime('%d/%m/%Y')}.
+                DADOS DO USUÁRIO: "{dados_input}"
+                {txt_pdf}
+                TAREFA: Realize o cálculo ou perícia solicitada com base nos dados acima.
+                SAÍDA: Laudo Técnico com memória de cálculo.
+                """
                 try:
                     res = genai.GenerativeModel(mod_escolhido).generate_content(prompt).text
                     st.markdown("### 📊 Laudo Preliminar")
@@ -393,7 +380,14 @@ elif menu_opcao == "🏛️ Estratégia de Audiência":
         if upload_aud or obs_aud:
             with st.spinner("Criando estratégia..."):
                 txt = f"\nPDF: {extrair_texto_pdf(upload_aud)}" if upload_aud else ""
-                prompt = f"Advogado Senior {area_aud}. Audiência {tipo_aud}. Papel: {papel}. Dados: {obs_aud} {txt}. Gere ROTEIRO DE PERGUNTAS (Para mim e para o outro), RISCOS e ESTRATÉGIA DE ACORDO."
+                prompt = f"""
+                Advogado Senior {area_aud}. Audiência {tipo_aud}. Papel: {papel}. 
+                Dados: {obs_aud} {txt}. 
+                Gere: 
+                1. ROTEIRO DE PERGUNTAS (Para mim e para o outro)
+                2. RISCOS 
+                3. ESTRATÉGIA DE ACORDO.
+                """
                 try:
                     res = genai.GenerativeModel(mod_escolhido).generate_content(prompt).text
                     st.markdown(res)
@@ -408,7 +402,6 @@ elif menu_opcao == "📂 Gestão de Casos":
     df = run_query("SELECT * FROM documentos WHERE escritorio = ?", (st.session_state.escritorio_atual,), return_data=True)
     if not df.empty:
         st.dataframe(df[['id', 'data_criacao', 'cliente', 'area', 'tipo']], use_container_width=True)
-        
         c1, c2 = st.columns([1, 3])
         with c1:
             doc_id = st.selectbox("Selecionar ID:", df['id'].tolist())
@@ -419,7 +412,6 @@ elif menu_opcao == "📂 Gestão de Casos":
                 st.session_state.fatos_recuperados = row['conteudo'].split("||")[0]
                 st.success(f"Caso de {row['cliente']} carregado no Redator!")
                 time.sleep(1)
-                # O usuário deve ir manualmente para o redator ou podemos forçar reload
     else:
         st.info("Nenhum caso salvo ainda.")
 
@@ -442,7 +434,7 @@ elif menu_opcao == "🚦 Monitor de Prazos":
         else:
             st.error("Configure o e-mail na barra lateral.")
 
-# 7. FERRAMENTAS EXTRAS
+# 7. FERRAMENTAS EXTRAS (CORRIGIDO)
 elif menu_opcao == "🔧 Ferramentas Extras":
     st.title("🔧 Utilitários")
     tabs_ex = st.tabs(["PDF Resumo", "Áudio Transcrição", "Comparador"])
@@ -453,3 +445,21 @@ elif menu_opcao == "🔧 Ferramentas Extras":
             st.write(genai.GenerativeModel(mod_escolhido).generate_content(f"Resuma: {extrair_texto_pdf(up)}").text)
             
     with tabs_ex[1]:
+        aud = st.file_uploader("Áudio/WhatsApp", type=["mp3","ogg","wav"])
+        if aud and st.button("Transcrever"):
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
+                tmp.write(aud.getvalue())
+                path = tmp.name
+            f = genai.upload_file(path)
+            time.sleep(2)
+            st.write(genai.GenerativeModel(mod_escolhido).generate_content(["Transcreva", f]).text)
+            
+    with tabs_ex[2]:
+        p1 = st.file_uploader("Versão 1", key="v1")
+        p2 = st.file_uploader("Versão 2", key="v2")
+        if p1 and p2 and st.button("Comparar"):
+            st.write(genai.GenerativeModel(mod_escolhido).generate_content(f"Diferenças entre: {extrair_texto_pdf(p1)} E {extrair_texto_pdf(p2)}").text)
+
+# RODAPÉ
+st.markdown("---")
+st.caption("🔒 LegalHub Enterprise v2.0 | Sistema Seguro de Inteligência Jurídica")
