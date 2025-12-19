@@ -23,23 +23,30 @@ from google.api_core.exceptions import ResourceExhausted, NotFound, InvalidArgum
 # 1. CONFIGURAÇÃO VISUAL
 st.set_page_config(page_title="LegalHub SaaS", page_icon="⚖️", layout="wide")
 
-# --- 2. BANCO DE DADOS (SQLITE) - VERSÃO CORRIGIDA ---
+# --- 2. BANCO DE DADOS (SQLITE) ---
 def init_db():
-    """Cria o banco de dados e garante que o ADMIN exista."""
+    """Cria o banco e atualiza estrutura se necessário."""
     conn = sqlite3.connect('legalhub.db')
     c = conn.cursor()
     
-    # Cria Tabela de Usuários
+    # Cria tabelas base
     c.execute('''
         CREATE TABLE IF NOT EXISTS usuarios (
             username TEXT PRIMARY KEY,
             senha TEXT,
             escritorio TEXT,
-            email_oab TEXT
+            email_oab TEXT,
+            creditos INTEGER DEFAULT 10
         )
     ''')
     
-    # Cria Tabela de Documentos
+    # --- MIGRATION (ATUALIZAÇÃO DE BANCO ANTIGO) ---
+    try:
+        c.execute("ALTER TABLE usuarios ADD COLUMN creditos INTEGER DEFAULT 10")
+    except:
+        pass 
+    # -----------------------------------------------
+
     c.execute('''
         CREATE TABLE IF NOT EXISTS documentos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -52,22 +59,18 @@ def init_db():
         )
     ''')
     
-    # --- CORREÇÃO AQUI: INSERT OR IGNORE ---
-    # Isso força a criação dos usuários mesmo se o banco já existir.
-    # O "IGNORE" evita erro se o usuário já estiver lá.
+    # Usuários Padrão (Se banco estiver vazio)
+    c.execute('SELECT count(*) FROM usuarios')
+    if c.fetchone()[0] == 0:
+        c.execute("INSERT OR IGNORE INTO usuarios VALUES ('advogado1', '123', 'Escritório Alpha', 'lucas@alpha.adv.br', 10)")
+        c.execute("INSERT OR IGNORE INTO usuarios VALUES ('advogado2', '123', 'Escritório Beta', 'joao@beta.adv.br', 5)")
+        c.execute("INSERT OR IGNORE INTO usuarios VALUES ('admin', 'admin', 'LegalHub Master', 'suporte@legalhub.com', 9999)")
+        conn.commit()
     
-    # Usuários de Teste
-    c.execute("INSERT OR IGNORE INTO usuarios VALUES ('advogado1', '123', 'Escritório Alpha', 'lucas@alpha.adv.br')")
-    c.execute("INSERT OR IGNORE INTO usuarios VALUES ('advogado2', '123', 'Escritório Beta', 'joao@beta.adv.br')")
-    
-    # Usuário ADMIN (Obrigatório para o painel)
-    c.execute("INSERT OR IGNORE INTO usuarios VALUES ('admin', 'admin', 'LegalHub Master', 'suporte@legalhub.com')")
-    
-    conn.commit()
     conn.close()
 
 def run_query(query, params=(), return_data=False):
-    """Função auxiliar para rodar comandos no banco de dados com segurança."""
+    """Função para rodar SQL."""
     conn = sqlite3.connect('legalhub.db')
     c = conn.cursor()
     try:
@@ -86,7 +89,7 @@ def run_query(query, params=(), return_data=False):
         st.error(f"Erro no Banco de Dados: {e}")
         return None
 
-# Inicializa o banco ao abrir o app
+# Inicializa/Atualiza DB
 init_db()
 
 # --- 3. SISTEMA DE LOGIN ---
@@ -98,7 +101,7 @@ def login_screen():
     c1, c2, c3 = st.columns([1,1,1])
     with c2:
         st.title("⚖️ LegalHub Login")
-        st.info("Teste: 'advogado1' / '123' | Admin: 'admin' / 'admin'")
+        st.info("Teste: 'advogado1' (10 créditos) | 'advogado2' (5 créditos)")
         
         username = st.text_input("Usuário")
         password = st.text_input("Senha", type="password")
@@ -142,43 +145,58 @@ def extrair_texto_pdf(arquivo):
     try: return "".join([p.extract_text() for p in PdfReader(arquivo).pages])
     except: return ""
 
+# --- RECUPERAR CRÉDITOS DO USUÁRIO ATUAL ---
+df_user = run_query("SELECT creditos FROM usuarios WHERE username = ?", (st.session_state.usuario_atual,), return_data=True)
+creditos_atuais = df_user.iloc[0]['creditos'] if not df_user.empty else 0
+
 # --- BARRA LATERAL ---
 st.sidebar.header(f"🏢 {st.session_state.escritorio_atual}")
-st.sidebar.caption(f"Usuário: {st.session_state.usuario_atual}")
+st.sidebar.text(f"Usuário: {st.session_state.usuario_atual}")
+
+# MOSTRADOR DE CRÉDITOS
+if creditos_atuais > 0:
+    st.sidebar.metric("Créditos de IA", creditos_atuais)
+else:
+    st.sidebar.error("⚠️ Créditos Esgotados")
 
 if st.sidebar.button("Sair (Logout)"):
     st.session_state.logado = False
-    st.session_state.usuario_atual = ""
-    st.session_state.escritorio_atual = ""
     st.rerun()
 
 st.sidebar.divider()
 
 # --- PAINEL DE ADMINISTRAÇÃO ---
-# Só aparece se o usuário for 'admin'
 if st.session_state.usuario_atual == 'admin':
-    with st.sidebar.expander("👑 Cadastrar Novo Escritório"):
-        st.markdown("**Novo Contrato**")
-        novo_user = st.text_input("Login (Novo Usuário)")
-        novo_pass = st.text_input("Senha Provisória", type="password")
-        novo_banca = st.text_input("Nome do Escritório")
-        novo_email = st.text_input("E-mail OAB")
+    with st.sidebar.expander("👑 Gestão de Escritórios"):
+        tabs_admin = st.tabs(["Novo", "Recarregar"])
         
-        if st.button("💾 Cadastrar Cliente"):
-            if novo_user and novo_pass and novo_banca:
+        with tabs_admin[0]: # Criar Novo
+            st.markdown("**Novo Contrato**")
+            novo_user = st.text_input("Login")
+            novo_pass = st.text_input("Senha", type="password")
+            novo_banca = st.text_input("Escritório")
+            novo_email = st.text_input("E-mail")
+            novo_credito = st.number_input("Créditos Iniciais", value=50)
+            
+            if st.button("💾 Criar"):
                 try:
-                    sql = "INSERT INTO usuarios (username, senha, escritorio, email_oab) VALUES (?, ?, ?, ?)"
-                    res = run_query(sql, (novo_user, novo_pass, novo_banca, novo_email))
-                    if res:
-                        st.success(f"✅ Sucesso! Escritório '{novo_banca}' criado.")
-                except sqlite3.IntegrityError:
-                    st.error("Erro: Esse login já existe.")
-                except Exception as e:
-                    st.error(f"Erro: {e}")
-            else:
-                st.warning("Preencha todos os campos.")
+                    sql = "INSERT INTO usuarios (username, senha, escritorio, email_oab, creditos) VALUES (?, ?, ?, ?, ?)"
+                    run_query(sql, (novo_user, novo_pass, novo_banca, novo_email, novo_credito))
+                    st.success("Criado!")
+                except Exception as e: st.error(f"Erro: {e}")
+        
+        with tabs_admin[1]: # Recarregar Créditos
+            st.markdown("**Adicionar Créditos**")
+            all_users = run_query("SELECT username, creditos FROM usuarios", return_data=True)
+            if not all_users.empty:
+                user_recarga = st.selectbox("Selecione o Cliente:", all_users['username'])
+                qtd_recarga = st.number_input("Adicionar quanto?", value=10)
+                if st.button("💰 Adicionar"):
+                    run_query("UPDATE usuarios SET creditos = creditos + ? WHERE username = ?", (qtd_recarga, user_recarga))
+                    st.success("Recarregado!")
+                    time.sleep(1)
+                    st.rerun()
     st.sidebar.divider()
-# -------------------------------------------------------------
 
 # Seleção de Chave API
 uso_manual = st.sidebar.checkbox("Usar chave manual", value=False)
@@ -186,12 +204,13 @@ if uso_manual:
     api_key = st.sidebar.text_input("Sua API Key:", type="password")
 elif "GOOGLE_API_KEY" in st.secrets:
     api_key = st.secrets["GOOGLE_API_KEY"]
-    st.sidebar.success("✅ IA Conectada")
 else:
     api_key = st.sidebar.text_input("API Key:", type="password")
 
+if api_key: st.sidebar.success("✅ IA Conectada")
+
 # Configuração E-mail
-st.sidebar.markdown("📧 **E-mail OAB (Leitura)**")
+st.sidebar.markdown("📧 **E-mail OAB**")
 email_leitura = st.sidebar.text_input("E-mail:")
 senha_leitura = st.sidebar.text_input("Senha App:", type="password")
 servidor_imap = st.sidebar.text_input("Servidor IMAP:", value="imap.gmail.com")
@@ -203,7 +222,6 @@ def buscar_intimacoes_email(user, pwd, server):
         mail.select("inbox")
         status, msgs = mail.search(None, '(UNSEEN)')
         if not msgs[0]: return [], "Nada novo."
-        
         found = []
         for e_id in msgs[0].split()[-5:]:
             res, data = mail.fetch(e_id, "(RFC822)")
@@ -212,7 +230,6 @@ def buscar_intimacoes_email(user, pwd, server):
                     msg = email.message_from_bytes(response[1])
                     subj = decode_header(msg["Subject"])[0][0]
                     if isinstance(subj, bytes): subj = subj.decode()
-                    
                     termos = ["intimação", "processo", "movimentação"]
                     if any(t in str(subj).lower() for t in termos):
                         found.append({"assunto": subj, "corpo": str(msg)[:2000]})
@@ -232,9 +249,9 @@ if api_key:
     except: mod_escolhido = "models/gemini-1.5-flash"
 
     st.title("⚖️ LegalHub IA")
-    tabs = st.tabs(["✍️ Redator", "📂 PDF", "🎙️ Áudio", "⚖️ Comparar", "💬 Chat", "📂 Pastas (SaaS)", "📅 Calc", "🏛️ Audiência", "🚦 Monitor"])
+    tabs = st.tabs(["✍️ Redator", "📂 PDF", "🎙️ Áudio", "⚖️ Comparar", "💬 Chat", "📂 Pastas", "📅 Calc", "🏛️ Audiência", "🚦 Monitor"])
 
-    # --- ABA 1: REDATOR ---
+    # --- ABA 1: REDATOR (COM BLOQUEIO DE CRÉDITOS) ---
     with tabs[0]:
         st.header("Gerador de Peças")
         if st.button("🔄 Limpar"):
@@ -251,23 +268,36 @@ if api_key:
             cli = st.text_input("Cliente:", value=st.session_state.cliente_recuperado)
             fatos = st.text_area("Fatos:", height=150, value=st.session_state.fatos_recuperados)
             
-        if st.button("✨ Gerar"):
-            if fatos:
-                with st.spinner("Gerando..."):
-                    jur = buscar_jurisprudencia_real(f"{area} {tipo} {fatos}") if web else ""
-                    prompt = f"Advogado {area}. Peça: {tipo}. Fatos: {fatos}. Jurisp: {jur}. Formal."
-                    try:
-                        res = genai.GenerativeModel(mod_escolhido).generate_content(prompt).text
-                        st.markdown(res)
-                        st.download_button("Word", gerar_word(res), "minuta.docx")
-                        if cli:
-                            conteudo_salvar = fatos + "||" + res[:500]
-                            sql = "INSERT INTO documentos (escritorio, data_criacao, cliente, area, tipo, conteudo) VALUES (?, ?, ?, ?, ?, ?)"
-                            run_query(sql, (st.session_state.escritorio_atual, datetime.now().strftime("%d/%m/%Y"), cli, area, tipo, conteudo_salvar))
-                            st.success(f"Salvo no banco de dados do {st.session_state.escritorio_atual}!")
-                    except Exception as e: st.error(str(e))
+        # VERIFICAÇÃO DE CRÉDITOS
+        if creditos_atuais > 0:
+            if st.button("✨ Gerar (Custa 1 Crédito)"):
+                if fatos:
+                    with st.spinner("Gerando e descontando crédito..."):
+                        jur = buscar_jurisprudencia_real(f"{area} {tipo} {fatos}") if web else ""
+                        prompt = f"Advogado {area}. Peça: {tipo}. Fatos: {fatos}. Jurisp: {jur}. Formal."
+                        try:
+                            res = genai.GenerativeModel(mod_escolhido).generate_content(prompt).text
+                            
+                            # Desconta crédito
+                            run_query("UPDATE usuarios SET creditos = creditos - 1 WHERE username = ?", (st.session_state.usuario_atual,))
+                            
+                            if cli:
+                                conteudo_salvar = fatos + "||" + res[:500]
+                                sql = "INSERT INTO documentos (escritorio, data_criacao, cliente, area, tipo, conteudo) VALUES (?, ?, ?, ?, ?, ?)"
+                                run_query(sql, (st.session_state.escritorio_atual, datetime.now().strftime("%d/%m/%Y"), cli, area, tipo, conteudo_salvar))
+                                st.success(f"Salvo! Créditos restantes: {creditos_atuais - 1}")
+                            
+                            st.markdown(res)
+                            st.download_button("Word", gerar_word(res), "minuta.docx")
+                            time.sleep(2)
+                            st.rerun()
+                                
+                        except Exception as e: st.error(str(e))
+        else:
+            st.error("🚫 Créditos Esgotados.")
+            st.button("✨ Gerar (Bloqueado)", disabled=True)
 
-    # --- ABA 2 a 5 ---
+    # --- ABAS 2 a 6 (Padrão) ---
     with tabs[1]:
         st.header("Ler PDF")
         up = st.file_uploader("PDF", type="pdf")
@@ -305,7 +335,6 @@ if api_key:
             st.chat_message("assistant").write(res)
             st.session_state.hist.append({"role":"assistant", "content":res})
 
-    # --- ABA 6: PASTAS SAAS ---
     with tabs[5]:
         st.header(f"📂 Arquivos: {st.session_state.escritorio_atual}")
         if st.button("Atualizar Lista"): st.rerun()
@@ -319,9 +348,8 @@ if api_key:
                 st.session_state.fatos_recuperados = row['conteudo'].split("||")[0]
                 st.success("Carregado no Redator!")
         else:
-            st.info("Nenhum arquivo salvo neste escritório ainda.")
+            st.info("Nenhum arquivo salvo ainda.")
 
-    # --- ABA 7 E 8 ---
     with tabs[6]:
         st.header("Calc Prazo")
         dt = st.date_input("Data")
@@ -330,6 +358,7 @@ if api_key:
         if st.button("Calc"):
              st.write(genai.GenerativeModel(mod_escolhido).generate_content(f"Calc prazo {esf} {dt}: {txt}").text)
 
+    # --- ABA 7: PREPARADOR DE AUDIÊNCIA (DETALHADA) ---
     with tabs[7]:
         st.header("🏛️ Preparador de Audiência")
         st.markdown("Gere um roteiro estratégico de perguntas e riscos para sua audiência.")
@@ -359,7 +388,7 @@ if api_key:
                     Use linguagem direta e prática para leitura rápida na mesa de audiência.
                     """
                     try:
-                        res_aud = genai.GenerativeModel(modelo_escolhido).generate_content(prompt_aud).text
+                        res_aud = genai.GenerativeModel(mod_escolhido).generate_content(prompt_aud).text
                         st.markdown(res_aud)
                         st.download_button("Baixar Roteiro (Word)", gerar_word(res_aud), "roteiro_audiencia.docx")
                     except Exception as e:
@@ -388,4 +417,3 @@ if api_key:
                                 st.toast("Salvo!")
 
 else: st.warning("Configure a API Key.")
-
