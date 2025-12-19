@@ -28,10 +28,10 @@ st.set_page_config(
     page_title="LegalHub Elite | AI System", 
     page_icon="🛡️", 
     layout="wide",
-    initial_sidebar_state="collapsed" # Sidebar recolhida por padrão
+    initial_sidebar_state="collapsed"
 )
 
-# --- CSS AVANÇADO (MENU HORIZONTAL FUTURISTA NATIVO) ---
+# --- CSS AVANÇADO (FUNDO SUAVE + ANIMAÇÃO FLUTUANTE) ---
 def local_css():
     st.markdown("""
     <style>
@@ -40,21 +40,21 @@ def local_css():
 
         /* --- VARIÁVEIS CYBER --- */
         :root {
-            --bg-dark: #050A14;
-            --bg-card: rgba(20, 30, 50, 0.6);
-            --text-main: #FFFFFF;
-            --neon-blue: #00F3FF;
-            --neon-purple: #BC13FE;
-            --border-glow: 1px solid rgba(0, 243, 255, 0.2);
+            --bg-dark: #020617;         /* Preto Azulado Profundo */
+            --bg-card: rgba(15, 23, 42, 0.6); /* Slate Escuro Transparente */
+            --text-main: #F8FAFC;       /* Branco Gelo */
+            --neon-blue: #0EA5E9;       /* Azul Sky Brilhante */
+            --neon-glow: rgba(14, 165, 233, 0.5);
+            --border-glass: 1px solid rgba(255, 255, 255, 0.05);
         }
 
-        /* --- GERAL --- */
+        /* --- GERAL & BACKGROUND SUAVE --- */
         .stApp {
             background-color: var(--bg-dark);
+            /* Gradiente Radial Suave (Sem Quadriculado) */
             background-image: 
-                linear-gradient(rgba(0, 243, 255, 0.03) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0, 243, 255, 0.03) 1px, transparent 1px);
-            background-size: 30px 30px;
+                radial-gradient(circle at 15% 50%, rgba(14, 165, 233, 0.08), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(99, 102, 241, 0.08), transparent 25%);
             font-family: 'Inter', sans-serif;
             color: var(--text-main);
         }
@@ -63,10 +63,35 @@ def local_css():
             color: #FFFFFF !important;
             font-family: 'Rajdhani', sans-serif;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 1.5px;
         }
 
-        /* --- TEXTOS BRANCOS --- */
+        /* --- ANIMAÇÃO DE FLUTUAÇÃO (FLOATING) --- */
+        @keyframes float {
+            0% {
+                transform: translateY(0px);
+                filter: drop-shadow(0 5px 15px rgba(14, 165, 233, 0.2));
+            }
+            50% {
+                transform: translateY(-20px);
+                filter: drop-shadow(0 25px 30px rgba(14, 165, 233, 0.5));
+            }
+            100% {
+                transform: translateY(0px);
+                filter: drop-shadow(0 5px 15px rgba(14, 165, 233, 0.2));
+            }
+        }
+
+        .floating-logo {
+            animation: float 6s ease-in-out infinite;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+            width: 250px; /* Tamanho da logo flutuante */
+            margin-bottom: 30px;
+        }
+
+        /* --- TEXTOS E ELEMENTOS --- */
         p, .stCaption, div[data-testid="caption"], div[data-testid="stMetricLabel"] label, div[data-testid="stMarkdownContainer"] p {
             color: #E2E8F0 !important;
             font-family: 'Inter', sans-serif;
@@ -74,23 +99,21 @@ def local_css():
         
         div[data-testid="stMetricValue"] {
             color: var(--neon-blue) !important;
-            text-shadow: 0 0 10px rgba(0, 243, 255, 0.5);
+            text-shadow: 0 0 15px var(--neon-glow);
         }
         
-        label, .stTextInput label, .stSelectbox label, .stTextArea label {
-            color: #CBD5E1 !important;
-        }
+        label { color: #94A3B8 !important; }
 
-        /* --- TÍTULOS COM EFEITO GLITCH --- */
+        /* --- TÍTULOS COM GLOW --- */
         .tech-header {
             background: linear-gradient(90deg, #FFFFFF 0%, var(--neon-blue) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             font-weight: 700;
-            text-shadow: 0 0 20px rgba(0, 243, 255, 0.3);
+            text-shadow: 0 0 30px rgba(14, 165, 233, 0.4);
         }
 
-        /* --- LOGOTIPO NO CABEÇALHO --- */
+        /* --- LOGOTIPO NO CABEÇALHO SUPERIOR --- */
         .header-logo {
             display: flex;
             align-items: center;
@@ -99,61 +122,94 @@ def local_css():
         .header-logo h1 {
             font-size: 1.8rem;
             margin: 0;
-            letter-spacing: 2px;
-            text-shadow: 0 0 10px rgba(0, 243, 255, 0.5);
+            letter-spacing: 3px;
         }
         .header-logo span {
             font-weight: 300;
             color: #fff;
+            opacity: 0.7;
             font-size: 1.2rem;
         }
 
-        /* --- SIDEBAR PARA CONFIGURAÇÕES --- */
+        /* --- SIDEBAR --- */
         section[data-testid="stSidebar"] {
-            background-color: #020408;
-            border-right: 1px solid rgba(0, 243, 255, 0.1);
+            background-color: #0B1120;
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
         }
 
-        /* --- BOTÕES DE AÇÃO --- */
+        /* --- BOTÕES FUTURISTAS --- */
         .stButton>button {
-            background: transparent;
+            background: rgba(14, 165, 233, 0.1);
             color: var(--neon-blue);
             border: 1px solid var(--neon-blue);
-            border-radius: 0px;
+            border-radius: 4px;
             padding: 0.6rem 1.2rem;
             font-family: 'Rajdhani', sans-serif;
             font-weight: 700;
             text-transform: uppercase;
             transition: all 0.3s ease;
-            position: relative;
-            clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+            backdrop-filter: blur(5px);
         }
         
         .stButton>button:hover {
             background: var(--neon-blue);
             color: #000;
-            box-shadow: 0 0 20px rgba(0, 243, 255, 0.6);
+            box-shadow: 0 0 25px var(--neon-glow);
+            transform: scale(1.02);
         }
 
-        /* --- CARDS/CONTAINERS --- */
+        /* --- CARDS/CONTAINERS (GLASS EFFECT) --- */
         div[data-testid="metric-container"], div[data-testid="stExpander"], .folder-card {
-            background: rgba(10, 15, 30, 0.7);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 0px;
-            backdrop-filter: blur(10px);
-            clip-path: polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%); 
+            background: var(--bg-card);
+            border: var(--border-glass);
+            border-radius: 8px;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
         }
 
         /* --- INPUTS --- */
         .stTextInput>div>div>input, .stTextArea>div>div>textarea {
-            background-color: rgba(0, 0, 0, 0.3) !important;
+            background-color: rgba(15, 23, 42, 0.8) !important;
             border: 1px solid #334155 !important;
             color: #FFF !important;
-            border-radius: 0px;
+            border-radius: 4px;
         }
         .stTextInput>div>div>input:focus {
             border-color: var(--neon-blue) !important;
-            box-shadow: 0 0 15px rgba(0, 243, 255, 0.1);
+            box-shadow: 0 0 10px var(--neon-glow);
+        }
+
+        /* --- MENU HORIZONTAL RADIO CSS --- */
+        div[role="radiogroup"] {
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            background: rgba(15, 23, 42, 0.6);
+            padding: 8px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        div[role="radiogroup"] label {
+            background: transparent !important;
+            border: none !important;
+            margin: 0 5px !important;
+            padding: 8px 20px !important;
+            color: #94A3B8 !important;
+            transition: all 0.3s;
+            border-radius: 8px !important;
+        }
+        div[role="radiogroup"] label:hover {
+            color: #FFF !important;
+            background: rgba(255, 255, 255, 0.05) !important;
+        }
+        div[role="radiogroup"] label[data-checked="true"] {
+            color: #FFF !important;
+            background: linear-gradient(135deg, #0EA5E9 0%, #3B82F6 100%) !important;
+            box-shadow: 0 0 15px rgba(14, 165, 233, 0.4);
+            font-weight: bold;
+        }
+        div[role="radiogroup"] div[data-testid="stMarkdownContainer"] p {
+             font-size: 0.95rem !important; 
         }
 
         #MainMenu {visibility: hidden;}
@@ -215,16 +271,20 @@ def login_screen():
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
         st.markdown("<br><br>", unsafe_allow_html=True)
-        # Logo Tech
-        st.markdown("""
-            <div style='text-align: center;'>
-                <h1 style='font-size: 3.5rem; margin-bottom: 0; text-shadow: 0 0 20px rgba(0, 243, 255, 0.5);'>🛡️</h1>
-                <h1 class='tech-header' style='font-size: 2.5rem; letter-spacing: 3px;'>LEGALHUB <span style='font-weight: 300; color: #fff;'>ELITE</span></h1>
-                <p style='color: #00F3FF; font-size: 0.8rem; letter-spacing: 2px; text-transform: uppercase;'>Artificial Intelligence System</p>
+        # Tenta mostrar logo flutuante no login também
+        st.markdown(f"""
+            <div style="text-align: center;">
+                <img src="https://i.imgur.com/gJ5dZ5S.png" class="floating-logo" style="width: 150px; margin-bottom: 20px;">
             </div>
         """, unsafe_allow_html=True)
         
-        st.write("")
+        st.markdown("""
+            <div style='text-align: center;'>
+                <h1 class='tech-header' style='font-size: 2.5rem; letter-spacing: 3px;'>LEGALHUB <span style='font-weight: 300; color: #fff;'>ELITE</span></h1>
+                <p style='color: #0EA5E9; font-size: 0.8rem; letter-spacing: 2px; text-transform: uppercase;'>Artificial Intelligence System</p>
+            </div>
+        """, unsafe_allow_html=True)
+        
         st.write("")
         
         with st.container(border=True):
@@ -313,7 +373,7 @@ creditos_atuais = df_user.iloc[0]['creditos'] if not df_user.empty else 0
 if "navegacao_override" not in st.session_state:
     st.session_state.navegacao_override = None
 
-# --- CABEÇALHO HORIZONTAL (VERSÃO CSS NATIVO) ---
+# --- CABEÇALHO HORIZONTAL ---
 col_logo, col_menu = st.columns([1, 4])
 
 with col_logo:
@@ -336,46 +396,10 @@ with col_menu:
     }
     opcoes_menu = list(mapa_nav.keys())
 
-    # CSS para transformar o Radio em Menu Horizontal
-    st.markdown("""
-    <style>
-        div[role="radiogroup"] {
-            display: flex;
-            flex-direction: row;
-            justify-content: space-between;
-            background: rgba(10, 15, 30, 0.8);
-            padding: 10px;
-            border-radius: 8px;
-            border-bottom: 1px solid rgba(0, 243, 255, 0.3);
-        }
-        div[role="radiogroup"] label {
-            background: transparent !important;
-            border: none !important;
-            margin: 0 !important;
-            padding: 5px 15px !important;
-            color: #94A3B8 !important;
-            transition: all 0.3s;
-        }
-        div[role="radiogroup"] label:hover {
-            color: #FFF !important;
-            text-shadow: 0 0 5px #00F3FF;
-        }
-        div[role="radiogroup"] label[data-checked="true"] {
-            color: #00F3FF !important;
-            border-bottom: 2px solid #00F3FF !important;
-            background: rgba(0, 243, 255, 0.1) !important;
-        }
-        div[role="radiogroup"] div[data-testid="stMarkdownContainer"] p {
-             font-size: 1rem !important; 
-        }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    # Determinar índice para o radio button se houver override
+    # Lógica de seleção
     idx_radio = 0
     if st.session_state.navegacao_override:
         try:
-            # Encontrar a chave correta baseada no valor
             key_override = [k for k, v in mapa_nav.items() if v == st.session_state.navegacao_override][0]
             idx_radio = opcoes_menu.index(key_override)
         except:
@@ -387,17 +411,12 @@ with col_menu:
 
 st.markdown("---")
 
-# --- SIDEBAR (AGORA APENAS PARA CONFIGURAÇÕES E LOGOUT) ---
+# --- SIDEBAR (CONFIGURAÇÕES) ---
 with st.sidebar:
-    # ---------------------------------------------------------------------
-    # LOGO: CARREGA A IMAGEM UPLOADED PELO NOME
-    # ---------------------------------------------------------------------
+    # LOGO ESTÁTICA NA SIDEBAR (OPCIONAL, JÁ TEMOS NO DASHBOARD)
     try:
-        # Tenta carregar a imagem local
         st.sidebar.image("diagrama-ia.png", use_container_width=True)
-    except:
-        # Se não encontrar, mostra um placeholder para não quebrar o layout
-        st.warning("⚠️ Imagem 'diagrama-ia.png' não encontrada na pasta.")
+    except: pass
 
     st.markdown("<h2 class='tech-header' style='font-size:1.5rem;'>CONFIGURAÇÕES</h2>", unsafe_allow_html=True)
     st.markdown(f"<div style='font-size:0.8rem; color:#E2E8F0; margin-bottom: 20px;'>Usuário: {st.session_state.usuario_atual}<br>Escritório: {st.session_state.escritorio_atual}</div>", unsafe_allow_html=True)
@@ -410,12 +429,11 @@ with st.sidebar:
 
     st.markdown("---")
     
-    # Display de Créditos Moderno
     st.markdown("<h4 style='font-size:1rem; color:#94A3B8;'>CRÉDITOS</h4>", unsafe_allow_html=True)
     col_cred1, col_cred2 = st.columns([1, 3])
-    with col_cred1: st.markdown("<h3 style='color:#00F3FF; margin:0;'>💎</h3>", unsafe_allow_html=True)
+    with col_cred1: st.markdown("<h3 style='color:#0EA5E9; margin:0;'>💎</h3>", unsafe_allow_html=True)
     with col_cred2: 
-        st.markdown(f"<h3 style='margin:0; color:#FFFFFF; text-shadow: 0 0 10px #00F3FF;'>{creditos_atuais}</h3>", unsafe_allow_html=True)
+        st.markdown(f"<h3 style='margin:0; color:#FFFFFF; text-shadow: 0 0 10px #0EA5E9;'>{creditos_atuais}</h3>", unsafe_allow_html=True)
     st.progress(min(creditos_atuais/50, 1.0))
     
     st.write("")
@@ -423,7 +441,6 @@ with st.sidebar:
         st.session_state.logado = False
         st.rerun()
 
-    # --- ÁREA DE ADMINISTRAÇÃO ---
     if st.session_state.usuario_atual == 'admin':
         st.markdown("---")
         with st.expander("🛠️ ADMIN CONSOLE"):
@@ -453,6 +470,31 @@ with st.sidebar:
 
 # 1. DASHBOARD
 if menu_opcao == "📊 Dashboard":
+    # -------------------------------------------------------------
+    # LOGO FLUTUANTE CENTRALIZADA COM EFEITO DE SOMBRA (HERO)
+    # Certifique-se de que "diagrama-ia.png" está na pasta do app
+    # -------------------------------------------------------------
+    
+    # Tentativa de carregar a imagem local com HTML para aplicar a classe CSS de animação
+    import base64
+    def get_base64_of_bin_file(bin_file):
+        with open(bin_file, 'rb') as f:
+            data = f.read()
+        return base64.b64encode(data).decode()
+
+    try:
+        img_base64 = get_base64_of_bin_file("diagrama-ia.png")
+        st.markdown(
+            f"""
+            <div style="display: flex; justify-content: center;">
+                <img src="data:image/png;base64,{img_base64}" class="floating-logo">
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    except:
+        st.warning("⚠️ Arquivo 'diagrama-ia.png' não encontrado. Adicione a imagem na pasta.")
+
     st.markdown(f"<h2 class='tech-header'>SYSTEM STATUS <span style='font-weight:300; font-size: 1.5rem; color:#64748b;'>| {st.session_state.usuario_atual}</span></h2>", unsafe_allow_html=True)
     
     # Métricas Superiores
@@ -473,19 +515,16 @@ if menu_opcao == "📊 Dashboard":
             df_areas = run_query("SELECT area, COUNT(*) as qtd FROM documentos WHERE escritorio = ? GROUP BY area", (st.session_state.escritorio_atual,), return_data=True)
             if not df_areas.empty:
                 # Cores Tech para o gráfico
-                colors_tech = ['#00F3FF', '#BC13FE', '#2E5CFF', '#FFFFFF', '#4A4A4A']
+                colors_tech = ['#0EA5E9', '#3B82F6', '#6366F1', '#8B5CF6', '#D946EF']
                 fig = px.pie(df_areas, values='qtd', names='area', hole=0.7, color_discrete_sequence=colors_tech)
                 fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#E2E8F0", showlegend=True, margin=dict(t=20, b=20, l=20, r=20))
                 st.plotly_chart(fig, use_container_width=True)
             else: st.info("Aguardando dados...")
     
     with col_info:
-        # ==========================================================
         # --- ATUALIZAÇÃO: SECURITY & COMPLIANCE ---
-        # ==========================================================
         st.markdown("##### 🛡️ SECURITY & COMPLIANCE")
         with st.container(border=True):
-            # Item 1: LGPD
             st.markdown("""
             <div style='background: rgba(16, 185, 129, 0.1); border-left: 3px solid #10B981; padding: 10px; margin-bottom: 8px; border-radius: 4px;'>
                 <strong style='color: #10B981; font-family: Rajdhani; letter-spacing: 1px;'>✓ LGPD COMPLIANT</strong><br>
@@ -493,7 +532,6 @@ if menu_opcao == "📊 Dashboard":
             </div>
             """, unsafe_allow_html=True)
 
-            # Item 2: Criptografia
             st.markdown("""
             <div style='background: rgba(59, 130, 246, 0.1); border-left: 3px solid #3B82F6; padding: 10px; margin-bottom: 8px; border-radius: 4px;'>
                 <strong style='color: #3B82F6; font-family: Rajdhani; letter-spacing: 1px;'>🔒 E2E ENCRYPTION</strong><br>
@@ -501,7 +539,6 @@ if menu_opcao == "📊 Dashboard":
             </div>
             """, unsafe_allow_html=True)
 
-            # Item 3: Atualização Jurídica
             st.markdown("""
             <div style='background: rgba(245, 158, 11, 0.1); border-left: 3px solid #F59E0B; padding: 10px; border-radius: 4px;'>
                 <strong style='color: #F59E0B; font-family: Rajdhani; letter-spacing: 1px;'>⚖️ LIVE JURISPRUDENCE</strong><br>
@@ -511,7 +548,6 @@ if menu_opcao == "📊 Dashboard":
 
             st.markdown("---")
             st.markdown("<div style='text-align:center; font-size: 0.7rem; color: #64748b;'>Certificado Digital de Autenticidade V5.5</div>", unsafe_allow_html=True)
-        # ==========================================================
 
     # CARDS DE FUNCIONALIDADES
     st.write("")
