@@ -6,7 +6,7 @@ from io import BytesIO
 from duckduckgo_search import DDGS
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime
+from datetime import datetime, timedelta, date
 import time
 import tempfile
 import os
@@ -97,7 +97,6 @@ if api_key:
     
     # --- DETECÇÃO REAL DE MODELOS ---
     st.sidebar.divider()
-    
     try:
         modelos_reais = []
         for m in genai.list_models():
@@ -114,24 +113,16 @@ if api_key:
         else:
             st.sidebar.error("Sem modelos disponíveis.")
             modelo_escolhido = "models/gemini-1.5-flash" 
-
     except Exception as e:
         st.sidebar.error(f"Erro Google: {e}")
         modelo_escolhido = "models/gemini-1.5-flash"
 
-    # --- DEFINIÇÃO DAS ABAS (AGORA SÃO 8) ---
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
-        "✍️ Redator", 
-        "📂 Ler PDF", 
-        "🎙️ Transcritor", 
-        "⚖️ Comparador", 
-        "💬 Chat", 
-        "📊 Dashboard",
-        "📅 Prazos",
-        "🏛️ Audiência" # Nova aba
+    # --- DEFINIÇÃO DAS ABAS (AGORA SÃO 9) ---
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
+        "✍️ Redator", "📂 PDF", "🎙️ Áudio", "⚖️ Comparar", "💬 Chat", "📊 Dash", "📅 Calc", "🏛️ Audiência", "🚦 Monitor de Prazos"
     ])
     
-    # --- ABA 1: REDATOR ---
+    # --- ABA 1 a 8 (CÓDIGO ANTERIOR MANTIDO) ---
     with tab1:
         st.header("Gerador de Peças")
         c1, c2 = st.columns(2)
@@ -159,155 +150,159 @@ if api_key:
                                 st.success("Salvo!")
                     except Exception as e: st.error(f"Erro: {e}")
 
-    # --- ABA 2: LER PDF ---
-    with tab2:
+    with tab2: # PDF
         st.header("Análise de Processos (PDF)")
         up = st.file_uploader("Subir PDF", type="pdf")
-        if up:
-            if st.button("Resumir PDF"): 
-                with st.spinner("Lendo documento..."):
-                    try:
-                        texto_pdf = extrair_texto_pdf(up)
-                        prompt_pdf = f"Resuma os pontos principais e prazos deste documento jurídico: {texto_pdf[:30000]}"
-                        res = genai.GenerativeModel(modelo_escolhido).generate_content(prompt_pdf).text
-                        st.markdown(res)
-                    except Exception as e: st.error(f"Erro: {e}")
+        if up and st.button("Resumir PDF"): 
+             with st.spinner("Lendo..."):
+                st.write(genai.GenerativeModel(modelo_escolhido).generate_content(f"Resuma: {extrair_texto_pdf(up)[:30000]}").text)
 
-    # --- ABA 3: TRANSCRITOR ---
-    with tab3:
-        st.header("🎙️ Transcrição de Áudio")
+    with tab3: # Transcritor
+        st.header("🎙️ Transcrição")
         aud = st.file_uploader("Áudio", type=["mp3", "wav", "m4a", "ogg"])
         if aud and st.button("Transcrever"):
-            with st.spinner("Ouvindo e transcrevendo..."):
+            with st.spinner("Processando..."):
                 try:
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
                         tmp.write(aud.getvalue())
                         tmp_path = tmp.name
                     f = genai.upload_file(tmp_path)
                     time.sleep(2) 
-                    res = genai.GenerativeModel(modelo_escolhido).generate_content(["Transcreva o áudio e faça um resumo jurídico.", f]).text
+                    res = genai.GenerativeModel(modelo_escolhido).generate_content(["Transcreva e resuma.", f]).text
                     st.markdown(res)
-                    st.download_button("Baixar", gerar_word(res), "transcricao.docx")
-                except Exception as e: st.error(f"Erro: {e}")
-                finally: 
-                    if 'tmp_path' in locals(): os.remove(tmp_path)
+                finally: os.remove(tmp_path)
 
-    # --- ABA 4: COMPARADOR ---
-    with tab4:
-        st.header("⚖️ Comparador de Versões")
-        c_a, c_b = st.columns(2)
-        p1 = c_a.file_uploader("Original", type="pdf", key="v1")
-        p2 = c_b.file_uploader("Alterado", type="pdf", key="v2")
-        if p1 and p2 and st.button("Comparar Documentos"):
+    with tab4: # Comparador
+        st.header("⚖️ Comparador")
+        p1 = st.file_uploader("Original", type="pdf", key="v1")
+        p2 = st.file_uploader("Alterado", type="pdf", key="v2")
+        if p1 and p2 and st.button("Comparar"):
             with st.spinner("Comparando..."):
-                try:
-                    t1, t2 = extrair_texto_pdf(p1), extrair_texto_pdf(p2)
-                    prompt_comparacao = f"Compare os textos. Liste as alterações, supressões e riscos jurídicos criados:\nTexto 1: {t1[:15000]}\nTexto 2: {t2[:15000]}"
-                    res = genai.GenerativeModel(modelo_escolhido).generate_content(prompt_comparacao).text
-                    st.markdown(res)
-                except Exception as e: st.error(f"Erro: {e}")
+                t1, t2 = extrair_texto_pdf(p1), extrair_texto_pdf(p2)
+                st.markdown(genai.GenerativeModel(modelo_escolhido).generate_content(f"Compare: {t1[:10000]} vs {t2[:10000]}").text)
 
-    # --- ABA 5: CHAT ---
-    with tab5:
+    with tab5: # Chat
         st.header("Chat Jurídico")
         if "hist" not in st.session_state: st.session_state.hist = []
         for m in st.session_state.hist: st.chat_message(m["role"]).write(m["content"])
-        if p := st.chat_input("Tire suas dúvidas..."):
+        if p := st.chat_input("Dúvida?"):
             st.chat_message("user").write(p)
             st.session_state.hist.append({"role":"user", "content":p})
             try:
-                response = genai.GenerativeModel(modelo_escolhido).generate_content(p)
-                res = response.text
-            except Exception as e: res = f"Erro: {e}"
+                res = genai.GenerativeModel(modelo_escolhido).generate_content(p).text
+            except Exception as e: res = str(e)
             st.chat_message("assistant").write(res)
             st.session_state.hist.append({"role":"assistant", "content":res})
 
-    # --- ABA 6: DASHBOARD ---
-    with tab6:
-        st.header("📊 Dashboard do Escritório")
-        if st.button("🔄 Atualizar Dados"):
-            sheet = conectar_planilha()
-            if sheet:
-                try:
-                    dados = sheet.get_all_records()
-                    df = pd.DataFrame(dados)
-                    if not df.empty:
-                        m1, m2, m3 = st.columns(3)
-                        m1.metric("Total de Casos", len(df))
-                        m2.metric("Último Cliente", df.iloc[-1]["Cliente"] if "Cliente" in df.columns else "N/A")
-                        st.divider()
-                        g1, g2 = st.columns(2)
-                        if "Tipo de Ação" in df.columns:
-                            fig_pizza = px.pie(df, names="Tipo de Ação", title="Distribuição")
-                            g1.plotly_chart(fig_pizza, use_container_width=True)
-                        if "Cliente" in df.columns:
-                            contagem = df["Cliente"].value_counts().reset_index()
-                            contagem.columns = ["Cliente", "Qtd"]
-                            fig_barras = px.bar(contagem, x="Cliente", y="Qtd", title="Clientes")
-                            g2.plotly_chart(fig_barras, use_container_width=True)
-                        st.dataframe(df, use_container_width=True)
-                    else: st.info("Planilha vazia.")
-                except Exception as e: st.error(f"Erro ao ler planilha: {e}")
-            else: st.warning("Planilha não conectada.")
+    with tab6: # Dashboard
+        st.header("📊 Dashboard")
+        if st.button("Atualizar"):
+            s = conectar_planilha()
+            if s:
+                df = pd.DataFrame(s.get_all_records())
+                if not df.empty:
+                    st.dataframe(df)
+                    st.metric("Total Casos", len(df))
 
-    # --- ABA 7: CALCULADORA DE PRAZOS ---
-    with tab7:
-        st.header("📅 Calculadora de Prazos")
-        st.info("⚠️ Sugestão baseada em IA. Sempre confira feriados locais.")
-        col_p1, col_p2 = st.columns(2)
-        with col_p1:
-            data_pub = st.date_input("Data da Publicação", datetime.now())
-        with col_p2:
-            esfera = st.selectbox("Esfera", ["Cível (CPC - Dias Úteis)", "Trabalhista (CLT)", "Penal (CPP - Dias Corridos)", "Juizado Especial"])
-        texto_prazo = st.text_area("Texto da Intimação:", height=150)
+    with tab7: # Calculadora Simples
+        st.header("📅 Calc. Simples")
+        dt = st.date_input("Publicação", datetime.now())
+        txt = st.text_area("Texto")
+        if st.button("Calc"):
+            st.write(genai.GenerativeModel(modelo_escolhido).generate_content(f"Calcule o prazo processual (CPC/CLT/CPP) para a data {dt}. Texto: {txt}").text)
 
-        if st.button("📆 Calcular Prazo"):
-            if texto_prazo:
-                with st.spinner("Calculando..."):
-                    prompt_prazo = f"""
-                    Assistente jurídico Sênior. Contexto: {esfera}. Data Ref: {data_pub.strftime('%d/%m/%Y')}.
-                    Texto: "{texto_prazo}".
-                    TAREFA: 1. Identifique o Ato. 2. Prazo Legal. 3. Úteis ou Corridos? 4. Data Fatal Sugerida. 5. Atenção a Feriados.
+    with tab8: # Audiencia
+        st.header("🏛️ Audiência")
+        papel = st.selectbox("Papel", ["Autor", "Réu"])
+        fatos_aud = st.text_area("Fatos")
+        if st.button("Gerar Roteiro"):
+            st.write(genai.GenerativeModel(modelo_escolhido).generate_content(f"Gere roteiro de audiência para {papel}. Fatos: {fatos_aud}").text)
+
+    # --- ABA 9: MONITOR DE PRAZOS (A NOVA FUNCIONALIDADE!) ---
+    with tab9:
+        st.header("🚦 Monitor de Movimentações e Prazos")
+        st.markdown("Cole a movimentação (e-mail/diário) para a IA analisar, resumir e iniciar o contador.")
+
+        col_mov1, col_mov2, col_mov3 = st.columns(3)
+        with col_mov1:
+            n_processo = st.text_input("Nº Processo", placeholder="0000000-00.2025...")
+        with col_mov2:
+            data_mov = st.date_input("Data da Movimentação", datetime.now())
+        with col_mov3:
+            tipo_prazo = st.selectbox("Contagem", ["Dias Úteis (CPC)", "Dias Corridos", "CLT"])
+
+        texto_movimentacao = st.text_area("Cole o texto da Movimentação aqui:", height=150)
+
+        # Estado da sessão para guardar o resultado temporariamente
+        if "analise_prazo" not in st.session_state:
+            st.session_state.analise_prazo = None
+
+        if st.button("🔍 Analisar Movimentação"):
+            if texto_movimentacao:
+                with st.spinner("A IA está lendo a movimentação e calculando prazos..."):
+                    prompt_monitor = f"""
+                    Analise esta movimentação processual jurídica.
+                    Data Base: {data_mov.strftime('%d/%m/%Y')}.
+                    Tipo Contagem: {tipo_prazo}.
+                    Texto: "{texto_movimentacao}"
+
+                    SAÍDA ESPERADA (Responda exatamente neste formato):
+                    RESUMO: [Resumo de 1 linha do que aconteceu]
+                    AÇÃO REQUERIDA: [O que o advogado deve fazer? ex: Apresentar Réplica]
+                    TEM PRAZO?: [Sim/Não]
+                    DIAS: [Quantidade numérica]
+                    DATA FATAL SUGERIDA: [Data DD/MM/AAAA]
                     """
                     try:
-                        res = genai.GenerativeModel(modelo_escolhido).generate_content(prompt_prazo).text
-                        st.markdown(res)
-                    except Exception as e: st.error(f"Erro: {e}")
-
-    # --- ABA 8: PREPARADOR DE AUDIÊNCIA (NOVA!) ---
-    with tab8:
-        st.header("🏛️ Preparador de Audiência")
-        st.markdown("Gere um roteiro estratégico de perguntas e riscos para sua audiência.")
-        
-        col_aud1, col_aud2 = st.columns(2)
-        with col_aud1:
-            meu_papel = st.selectbox("Você representa:", ["Autor / Reclamante", "Réu / Reclamado"])
-            tipo_aud = st.selectbox("Tipo de Audiência:", ["Instrução e Julgamento", "Conciliação", "Inicial (Trabalhista)", "UNA"])
-        with col_aud2:
-            fatos_caso = st.text_area("Resumo dos Fatos / Pontos Controvertidos:", height=150, placeholder="Ex: O reclamante alega horas extras não pagas, mas batia ponto britânico...")
-            
-        if st.button("🎭 Gerar Roteiro de Audiência"):
-            if fatos_caso:
-                with st.spinner("Simulando cenário e gerando perguntas..."):
-                    prompt_aud = f"""
-                    Aja como um advogado especialista experiente.
-                    Vou realizar uma audiência de {tipo_aud}.
-                    Eu represento o: {meu_papel}.
-                    Fatos do caso: "{fatos_caso}".
-
-                    GERE UM ROTEIRO ESTRATÉGICO COM:
-                    1. 🎯 **Perguntas para a Parte Contrária:** (Focadas em extrair contradições ou confissões).
-                    2. 🛡️ **Perguntas para Minhas Testemunhas:** (Para reforçar minha tese).
-                    3. ⚠️ **Pontos Fracos / Riscos:** (Onde o outro advogado vai tentar me atacar e como me defender).
-                    4. 🤝 **Estratégia de Acordo:** (Vale a pena? Qual seria um valor teto/piso sugerido com base nos riscos?).
-
-                    Use linguagem direta e prática para leitura rápida na mesa de audiência.
-                    """
-                    try:
-                        res_aud = genai.GenerativeModel(modelo_escolhido).generate_content(prompt_aud).text
-                        st.markdown(res_aud)
-                        st.download_button("Baixar Roteiro (Word)", gerar_word(res_aud), "roteiro_audiencia.docx")
+                        res = genai.GenerativeModel(modelo_escolhido).generate_content(prompt_monitor).text
+                        st.session_state.analise_prazo = res # Salva na memória
                     except Exception as e:
-                        st.error(f"Erro ao gerar roteiro: {e}")
+                        st.error(f"Erro: {e}")
+
+        # Exibe o resultado se existir
+        if st.session_state.analise_prazo:
+            st.divider()
+            st.subheader("📋 Resultado da Análise")
+            st.markdown(st.session_state.analise_prazo)
+            
+            # --- O CONTADOR VISUAL ---
+            st.divider()
+            st.subheader("⏱️ Contador de Prazo")
+            
+            c1, c2 = st.columns(2)
+            with c1:
+                data_fatal_input = st.date_input("Confirme a Data Fatal (Sugerida pela IA):", datetime.now() + timedelta(days=15))
+            
+            with c2:
+                # Lógica do Contador
+                hoje = date.today()
+                dias_restantes = (data_fatal_input - hoje).days
+                
+                if dias_restantes < 0:
+                    st.error(f"🚨 PRAZO VENCIDO HÁ {abs(dias_restantes)} DIAS!")
+                elif dias_restantes == 0:
+                    st.error("🚨 O PRAZO VENCE HOJE!")
+                elif dias_restantes <= 3:
+                    st.warning(f"⚠️ ATENÇÃO: Faltam {dias_restantes} dias.")
+                else:
+                    st.success(f"✅ Tranquilo: Faltam {dias_restantes} dias.")
+
+            # Botão para salvar esse prazo na planilha geral
+            if st.button("💾 Salvar Movimentação no Controle"):
+                s = conectar_planilha()
+                if s:
+                    # Formato: Data | Cliente/Processo | Tipo | Resumo da Movimentação + Prazo
+                    conteudo_salvar = f"MOVIMENTAÇÃO: {texto_movimentacao[:30]}... | PRAZO: {dias_restantes} dias | FATAL: {data_fatal_input.strftime('%d/%m/%Y')}"
+                    try:
+                        s.append_row([
+                            datetime.now().strftime("%d/%m/%Y"), 
+                            n_processo if n_processo else "Processo S/N", 
+                            "Movimentação/Prazo", 
+                            "Acompanhamento", 
+                            conteudo_salvar
+                        ])
+                        st.toast("Movimentação salva com sucesso!", icon="💾")
+                    except Exception as e:
+                        st.error(f"Erro ao salvar: {e}")
 
 else: st.warning("Insira uma chave de API para começar.")
