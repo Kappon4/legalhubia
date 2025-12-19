@@ -23,13 +23,13 @@ from google.api_core.exceptions import ResourceExhausted, NotFound, InvalidArgum
 # 1. CONFIGURAÇÃO VISUAL
 st.set_page_config(page_title="LegalHub SaaS", page_icon="⚖️", layout="wide")
 
-# --- 2. BANCO DE DADOS (SQLITE) - VERSÃO CORRIGIDA ---
+# --- 2. BANCO DE DADOS (SQLITE) ---
 def init_db():
-    """Cria o banco de dados e garante que o ADMIN exista."""
+    """Cria o banco e atualiza estrutura se necessário."""
     conn = sqlite3.connect('legalhub.db')
     c = conn.cursor()
     
-    # Cria Tabela de Usuários
+    # Cria tabelas base
     c.execute('''
         CREATE TABLE IF NOT EXISTS usuarios (
             username TEXT PRIMARY KEY,
@@ -40,14 +40,13 @@ def init_db():
         )
     ''')
     
-    # --- MIGRATION (ATUALIZAÇÃO DE BANCO ANTIGO) ---
+    # --- MIGRATION ---
     try:
         c.execute("ALTER TABLE usuarios ADD COLUMN creditos INTEGER DEFAULT 10")
     except:
         pass 
-    # -----------------------------------------------
+    # -----------------
 
-    # Cria Tabela de Documentos
     c.execute('''
         CREATE TABLE IF NOT EXISTS documentos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,21 +59,18 @@ def init_db():
         )
     ''')
     
-    # --- CORREÇÃO AQUI: INSERT OR IGNORE ---
-    # Isso força a criação dos usuários mesmo se o banco já existir.
+    # Usuários Padrão
+    c.execute('SELECT count(*) FROM usuarios')
+    if c.fetchone()[0] == 0:
+        c.execute("INSERT OR IGNORE INTO usuarios VALUES ('advogado1', '123', 'Escritório Alpha', 'lucas@alpha.adv.br', 10)")
+        c.execute("INSERT OR IGNORE INTO usuarios VALUES ('advogado2', '123', 'Escritório Beta', 'joao@beta.adv.br', 5)")
+        c.execute("INSERT OR IGNORE INTO usuarios VALUES ('admin', 'admin', 'LegalHub Master', 'suporte@legalhub.com', 9999)")
+        conn.commit()
     
-    # Usuários de Teste
-    c.execute("INSERT OR IGNORE INTO usuarios VALUES ('advogado1', '123', 'Escritório Alpha', 'lucas@alpha.adv.br', 10)")
-    c.execute("INSERT OR IGNORE INTO usuarios VALUES ('advogado2', '123', 'Escritório Beta', 'joao@beta.adv.br', 5)")
-    
-    # Usuário ADMIN (Obrigatório para o painel)
-    c.execute("INSERT OR IGNORE INTO usuarios VALUES ('admin', 'admin', 'LegalHub Master', 'suporte@legalhub.com', 9999)")
-    
-    conn.commit()
     conn.close()
 
 def run_query(query, params=(), return_data=False):
-    """Função auxiliar para rodar comandos no banco de dados com segurança."""
+    """Função para rodar SQL."""
     conn = sqlite3.connect('legalhub.db')
     c = conn.cursor()
     try:
@@ -93,7 +89,7 @@ def run_query(query, params=(), return_data=False):
         st.error(f"Erro no Banco de Dados: {e}")
         return None
 
-# Inicializa o banco ao abrir o app
+# Inicializa/Atualiza DB
 init_db()
 
 # --- 3. SISTEMA DE LOGIN ---
@@ -105,7 +101,7 @@ def login_screen():
     c1, c2, c3 = st.columns([1,1,1])
     with c2:
         st.title("⚖️ LegalHub Login")
-        st.info("Teste: 'advogado1' / '123' | Admin: 'admin' / 'admin'")
+        st.info("Teste: 'advogado1' (10 créditos) | 'advogado2' (5 créditos)")
         
         username = st.text_input("Usuário")
         password = st.text_input("Senha", type="password")
@@ -176,24 +172,18 @@ if st.session_state.usuario_atual == 'admin':
         
         with tabs_admin[0]: # Criar Novo
             st.markdown("**Novo Contrato**")
-            novo_user = st.text_input("Login (Novo Usuário)")
-            novo_pass = st.text_input("Senha Provisória", type="password")
-            novo_banca = st.text_input("Nome do Escritório")
-            novo_email = st.text_input("E-mail OAB")
+            novo_user = st.text_input("Login")
+            novo_pass = st.text_input("Senha", type="password")
+            novo_banca = st.text_input("Escritório")
+            novo_email = st.text_input("E-mail")
+            novo_credito = st.number_input("Créditos Iniciais", value=50)
             
-            if st.button("💾 Cadastrar Cliente"):
-                if novo_user and novo_pass and novo_banca:
-                    try:
-                        sql = "INSERT INTO usuarios (username, senha, escritorio, email_oab, creditos) VALUES (?, ?, ?, ?, ?)"
-                        res = run_query(sql, (novo_user, novo_pass, novo_banca, novo_email, 10)) # Default 10 creditos
-                        if res:
-                            st.success(f"✅ Sucesso! Escritório '{novo_banca}' criado.")
-                    except sqlite3.IntegrityError:
-                        st.error("Erro: Esse login já existe.")
-                    except Exception as e:
-                        st.error(f"Erro: {e}")
-                else:
-                    st.warning("Preencha todos os campos.")
+            if st.button("💾 Criar"):
+                try:
+                    sql = "INSERT INTO usuarios (username, senha, escritorio, email_oab, creditos) VALUES (?, ?, ?, ?, ?)"
+                    run_query(sql, (novo_user, novo_pass, novo_banca, novo_email, novo_credito))
+                    st.success("Criado!")
+                except Exception as e: st.error(f"Erro: {e}")
         
         with tabs_admin[1]: # Recarregar Créditos
             st.markdown("**Adicionar Créditos**")
@@ -214,12 +204,13 @@ if uso_manual:
     api_key = st.sidebar.text_input("Sua API Key:", type="password")
 elif "GOOGLE_API_KEY" in st.secrets:
     api_key = st.secrets["GOOGLE_API_KEY"]
-    st.sidebar.success("✅ IA Conectada")
 else:
     api_key = st.sidebar.text_input("API Key:", type="password")
 
+if api_key: st.sidebar.success("✅ IA Conectada")
+
 # Configuração E-mail
-st.sidebar.markdown("📧 **E-mail OAB (Leitura)**")
+st.sidebar.markdown("📧 **E-mail OAB**")
 email_leitura = st.sidebar.text_input("E-mail:")
 senha_leitura = st.sidebar.text_input("Senha App:", type="password")
 servidor_imap = st.sidebar.text_input("Servidor IMAP:", value="imap.gmail.com")
@@ -231,7 +222,6 @@ def buscar_intimacoes_email(user, pwd, server):
         mail.select("inbox")
         status, msgs = mail.search(None, '(UNSEEN)')
         if not msgs[0]: return [], "Nada novo."
-        
         found = []
         for e_id in msgs[0].split()[-5:]:
             res, data = mail.fetch(e_id, "(RFC822)")
@@ -240,7 +230,6 @@ def buscar_intimacoes_email(user, pwd, server):
                     msg = email.message_from_bytes(response[1])
                     subj = decode_header(msg["Subject"])[0][0]
                     if isinstance(subj, bytes): subj = subj.decode()
-                    
                     termos = ["intimação", "processo", "movimentação"]
                     if any(t in str(subj).lower() for t in termos):
                         found.append({"assunto": subj, "corpo": str(msg)[:2000]})
@@ -260,7 +249,7 @@ if api_key:
     except: mod_escolhido = "models/gemini-1.5-flash"
 
     st.title("⚖️ LegalHub IA")
-    tabs = st.tabs(["✍️ Redator", "📂 PDF", "🎙️ Áudio", "⚖️ Comparar", "💬 Chat", "📂 Pastas (SaaS)", "🧮 Calculadora", "🏛️ Audiência", "🚦 Monitor"])
+    tabs = st.tabs(["✍️ Redator", "📂 PDF", "🎙️ Áudio", "⚖️ Comparar", "💬 Chat", "📂 Pastas", "🧮 Calculadora", "🏛️ Audiência", "🚦 Monitor"])
 
     # --- ABA 1: REDATOR ---
     with tabs[0]:
@@ -279,7 +268,6 @@ if api_key:
             cli = st.text_input("Cliente:", value=st.session_state.cliente_recuperado)
             fatos = st.text_area("Fatos:", height=150, value=st.session_state.fatos_recuperados)
             
-        # VERIFICAÇÃO DE CRÉDITOS
         if creditos_atuais > 0:
             if st.button("✨ Gerar (Custa 1 Crédito)"):
                 if fatos:
@@ -288,21 +276,16 @@ if api_key:
                         prompt = f"Advogado {area}. Peça: {tipo}. Fatos: {fatos}. Jurisp: {jur}. Formal."
                         try:
                             res = genai.GenerativeModel(mod_escolhido).generate_content(prompt).text
-                            
-                            # Desconta crédito
                             run_query("UPDATE usuarios SET creditos = creditos - 1 WHERE username = ?", (st.session_state.usuario_atual,))
-                            
                             if cli:
                                 conteudo_salvar = fatos + "||" + res[:500]
                                 sql = "INSERT INTO documentos (escritorio, data_criacao, cliente, area, tipo, conteudo) VALUES (?, ?, ?, ?, ?, ?)"
                                 run_query(sql, (st.session_state.escritorio_atual, datetime.now().strftime("%d/%m/%Y"), cli, area, tipo, conteudo_salvar))
                                 st.success(f"Salvo! Créditos restantes: {creditos_atuais - 1}")
-                            
                             st.markdown(res)
                             st.download_button("Word", gerar_word(res), "minuta.docx")
                             time.sleep(2)
                             st.rerun()
-                                
                         except Exception as e: st.error(str(e))
         else:
             st.error("🚫 Créditos Esgotados.")
@@ -346,7 +329,6 @@ if api_key:
             st.chat_message("assistant").write(res)
             st.session_state.hist.append({"role":"assistant", "content":res})
 
-    # --- ABA 6: PASTAS SAAS ---
     with tabs[5]:
         st.header(f"📂 Arquivos: {st.session_state.escritorio_atual}")
         if st.button("Atualizar Lista"): st.rerun()
@@ -360,69 +342,64 @@ if api_key:
                 st.session_state.fatos_recuperados = row['conteudo'].split("||")[0]
                 st.success("Carregado no Redator!")
         else:
-            st.info("Nenhum arquivo salvo neste escritório ainda.")
+            st.info("Nenhum arquivo salvo ainda.")
 
-    # --- ABA 7: CALCULADORA JURÍDICA AVANÇADA (NOVA FUNÇÃO) ---
+    # --- ABA 7: CALCULADORA COM UPLOAD PDF (NOVA) ---
     with tabs[6]:
         st.header("🧮 Calculadoras Jurídicas & Perícias")
-        st.markdown("Selecione o tipo de cálculo. A IA atuará como Perito Contábil/Jurídico para estruturar os valores.")
+        st.markdown("Selecione o tipo de cálculo. Você pode anexar o contrato (PDF) para a IA extrair os dados automaticamente.")
         
         col_calc1, col_calc2 = st.columns(2)
         with col_calc1:
             opcoes_calc = [
-                "Prazos Processuais",
-                "Aluguel (Reajuste/Atraso)",
-                "Divórcio (Partilha/Pensão)",
-                "FGTS (Correção/Revisão)",
-                "INSS (Renda Mensal/Aposentadoria)",
-                "PASEP (Atualização)",
-                "Pensão Alimentícia (Cálculo)",
-                "RMC e RCC (Cartão Crédito)",
-                "Superendividamento (Lei 14.181)",
-                "Criminal (Dosimetria da Pena)",
-                "Revisional (Juros/Contratos Bancários)",
-                "Trabalhista (Rescisão/Horas Extras)"
+                "Aluguel (Reajuste/Atraso)", "Divórcio (Partilha/Pensão)", 
+                "FGTS (Correção/Revisão)", "INSS (Renda Mensal/Aposentadoria)", 
+                "PASEP (Atualização)", "Pensão Alimentícia", 
+                "RMC e RCC (Cartão Crédito)", "Superendividamento (Lei 14.181)", 
+                "Criminal (Dosimetria)", "Revisional (Juros Bancários)", 
+                "Trabalhista (Rescisão)"
             ]
             tipo_calc = st.selectbox("Tipo de Cálculo:", opcoes_calc)
-            dt_base = st.date_input("Data Base / Data do Fato", datetime.now())
+            dt_base = st.date_input("Data Base", datetime.now())
         
         with col_calc2:
-            st.info("💡 **Dica:** Cole abaixo os dados brutos (valores, datas, contratos, salários, penas). Quanto mais detalhes, mais preciso o laudo.")
+            # --- CAMPO DE UPLOAD ADICIONADO AQUI ---
+            upload_calc = st.file_uploader("📂 Anexar Contrato/Documento (PDF)", type="pdf")
+            if upload_calc: st.info("Arquivo anexado. A IA lerá o conteúdo.")
         
-        dados_input = st.text_area(f"Dados para cálculo de {tipo_calc}:", height=200, placeholder="Ex: Valor da causa, salários de contribuição, datas de admissão/demissão, pena base, juros do contrato...")
+        dados_input = st.text_area(f"Observações / Dados Manuais:", height=150, placeholder="Ex: Valor da causa, datas, salários...")
 
         if st.button("🧮 Calcular / Gerar Laudo"):
-            if dados_input:
-                with st.spinner(f"Processando cálculo de {tipo_calc}..."):
+            if dados_input or upload_calc:
+                with st.spinner(f"Analisando documentos e calculando..."):
+                    # Extrai texto do PDF se houver
+                    texto_anexo = ""
+                    if upload_calc:
+                        texto_anexo = f"\n\n--- CONTEÚDO DO PDF ANEXADO ---\n{extrair_texto_pdf(upload_calc)}"
+                    
                     prompt_calc = f"""
                     Atue como um Perito Judicial Contábil e Jurídico Especialista em {tipo_calc}.
-                    Data Base de Referência: {dt_base.strftime('%d/%m/%Y')}.
+                    Data Base: {dt_base.strftime('%d/%m/%Y')}.
                     
-                    DADOS FORNECIDOS:
-                    "{dados_input}"
+                    DADOS DO USUÁRIO: "{dados_input}"
+                    {texto_anexo}
 
-                    TAREFA:
-                    Realize o cálculo, estimativa ou dosimetria solicitada.
+                    TAREFA: Realize o cálculo ou perícia solicitada com base nos dados acima.
+                    Se for Revisional/RMC, identifique juros no texto do PDF.
+                    Se for Criminal, use os fatos narrados.
                     
-                    DIRETRIZES ESPECÍFICAS:
-                    - Se for 'Criminal': Faça a dosimetria trifásica (pena base, agravantes/atenuantes, causas de aumento/diminuição).
-                    - Se for 'Trabalhista': Liste as verbas rescisórias estimadas.
-                    - Se for 'Revisional/RMC': Aponte juros abusivos e o valor incontroverso.
-                    - Se for 'Superendividamento': Calcule o mínimo existencial e plano de pagamento.
-                    - Se for 'Aluguel': Aplique índices (IGPM/IPCA) se mencionado.
-                    
-                    SAÍDA ESPERADA:
-                    Apresente o resultado em formato de Tabela ou Laudo Técnico claro, com memória de cálculo explicada.
+                    SAÍDA: Laudo Técnico com memória de cálculo.
                     """
                     try:
                         res_calc = genai.GenerativeModel(mod_escolhido).generate_content(prompt_calc).text
                         st.markdown(f"### 📊 Resultado: {tipo_calc}")
                         st.markdown(res_calc)
-                        st.download_button("Baixar Laudo (DOCX)", gerar_word(res_calc), f"calculo_{tipo_calc.split()[0]}.docx")
+                        st.download_button("Baixar Laudo (DOCX)", gerar_word(res_calc), f"calculo.docx")
                     except Exception as e:
-                        st.error(f"Erro ao calcular: {e}")
+                        st.error(f"Erro: {e}")
+            else:
+                st.warning("Preencha os dados ou anexe um PDF.")
 
-    # --- ABA 8: AUDIENCIA ---
     with tabs[7]:
         st.header("Audiência")
         pap = st.selectbox("Papel", ["Autor", "Réu"])
@@ -430,7 +407,6 @@ if api_key:
         if st.button("Gerar"):
             st.write(genai.GenerativeModel(mod_escolhido).generate_content(f"Roteiro {pap}: {fat}").text)
 
-    # --- ABA 9: MONITOR ---
     with tabs[8]:
         st.header("🚦 Monitor")
         if st.button("🔄 Ler E-mail OAB"):
