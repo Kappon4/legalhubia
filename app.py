@@ -117,6 +117,7 @@ def get_base64_of_bin_file(bin_file):
     except FileNotFoundError: return None
 
 def gerar_word(texto):
+    """Gera um arquivo Word a partir de um texto."""
     doc = Document()
     for p in texto.split('\n'):
         if p.strip(): doc.add_paragraph(p)
@@ -126,10 +127,12 @@ def gerar_word(texto):
     return buf
 
 def extrair_texto_pdf(arquivo):
+    """Extrai texto de um PDF."""
     try: return "".join([p.extract_text() for p in PdfReader(arquivo).pages])
     except: return ""
 
 def buscar_intimacoes_email(user, pwd, server):
+    """Busca emails via IMAP."""
     try:
         mail = imaplib.IMAP4_SSL(server)
         mail.login(user, pwd)
@@ -150,19 +153,61 @@ def buscar_intimacoes_email(user, pwd, server):
         return found, None
     except Exception as e: return [], str(e)
 
+# --- FUNÇÃO DE BUSCA ESPECIALIZADA POR ÁREA (RAG) ---
+def buscar_jurisprudencia_especializada(tema, area):
+    """
+    Realiza busca focada nos tribunais superiores corretos para evitar alucinação.
+    """
+    sites_busca = ""
+    
+    if area == "Criminal":
+        # Foco total em liberdade e jurisprudencia penal superior
+        sites_busca = "site:stf.jus.br OR site:stj.jus.br OR site:tjsp.jus.br"
+    elif area == "Trabalhista":
+        # Foco no TST e CSJT
+        sites_busca = "site:tst.jus.br OR site:csjt.jus.br"
+    elif area == "Previdenciário":
+        # Foco em TRF e STJ
+        sites_busca = "site:trf3.jus.br OR site:stj.jus.br"
+    elif area == "Tributário":
+        # Foco em CARF e Superiores
+        sites_busca = "site:carf.fazenda.gov.br OR site:stj.jus.br"
+    else:
+        # Padrão
+        sites_busca = "site:jusbrasil.com.br OR site:stj.jus.br"
+
+    query = f"{tema} {sites_busca}"
+    
+    try:
+        res = DDGS().text(query, region="br-pt", max_results=5)
+        if res:
+            # Formata para a IA ler melhor
+            texto_retorno = "\n".join([f"- EMENTA/RESUMO: {r['body']}\n  FONTE: {r['href']}" for r in res])
+            return texto_retorno
+        return "Nenhuma jurisprudência específica encontrada nos sites oficiais."
+    except: 
+        return "Erro de conexão com os tribunais."
+# ---------------------------------------------------
+
 def init_db():
     conn = sqlite3.connect('legalhub.db')
     c = conn.cursor()
+    # A coluna 'plano' agora armazena uma string de módulos separados por vírgula
     c.execute('''CREATE TABLE IF NOT EXISTS usuarios (
             username TEXT PRIMARY KEY, senha TEXT, escritorio TEXT, email_oab TEXT, creditos INTEGER DEFAULT 10, plano TEXT DEFAULT 'base')''')
-    try: 
+    
+    # --- MIGRACAO CORRIGIDA (SYNTAX ERROR FIX) ---
+    try:
         c.execute("ALTER TABLE usuarios ADD COLUMN creditos INTEGER DEFAULT 10")
-    except: 
+    except:
         pass
-    try: 
+        
+    try:
         c.execute("ALTER TABLE usuarios ADD COLUMN plano TEXT DEFAULT 'base'")
-    except: 
+    except:
         pass
+    # ---------------------------------------------
+
     c.execute('''CREATE TABLE IF NOT EXISTS documentos (
             id INTEGER PRIMARY KEY AUTOINCREMENT, escritorio TEXT, data_criacao TEXT, cliente TEXT, area TEXT, tipo TEXT, conteudo TEXT)''')
     c.execute('SELECT count(*) FROM usuarios')
@@ -189,9 +234,12 @@ def run_query(query, params=(), return_data=False):
 init_db()
 
 # ==========================================================
-# 3. LÓGICA DE MÓDULOS
+# 3. LÓGICA DE MÓDULOS (SEGMENTAÇÃO)
 # ==========================================================
+# Módulos: 'base', 'litigio', 'calculo', 'hightech'
+
 def verificar_acesso(modulo_necessario):
+    """Verifica se o usuário possui o módulo específico na sua string de plano."""
     modulos_usuario = st.session_state.get('plano_atual', 'base').split(',')
     if modulo_necessario == 'base': return True
     return modulo_necessario in modulos_usuario
@@ -279,11 +327,21 @@ col_logo, col_menu = st.columns([1, 4])
 with col_logo: st.markdown("""<div class='header-logo'><h1 class='tech-header'>LEGALHUB<span>ELITE</span></h1></div>""", unsafe_allow_html=True)
 
 with col_menu:
-    mapa_nav = {"Dashboard": "📊 Dashboard", "Redator IA": "✍️ Redator Jurídico", "Perícia & Calc": "🧮 Calculadoras & Perícia", "Audiência": "🏛️ Estratégia de Audiência", "Gestão Casos": "📂 Gestão de Casos", "Monitor Prazos": "🚦 Monitor de Prazos", "Assinatura": "💎 Meus Planos"}
+    mapa_nav = {
+        "Dashboard": "📊 Dashboard",
+        "Redator IA": "✍️ Redator Jurídico", 
+        "Perícia & Calc": "🧮 Calculadoras & Perícia",
+        "Audiência": "🏛️ Estratégia de Audiência",
+        "Gestão Casos": "📂 Gestão de Casos",
+        "Monitor Prazos": "🚦 Monitor de Prazos",
+        "Assinatura": "💎 Meus Planos"
+    }
     opcoes_menu = list(mapa_nav.keys())
     idx_radio = 0
     if st.session_state.navegacao_override:
-        try: idx_radio = opcoes_menu.index([k for k, v in mapa_nav.items() if v == st.session_state.navegacao_override][0])
+        try:
+            key_override = [k for k, v in mapa_nav.items() if v == st.session_state.navegacao_override][0]
+            idx_radio = opcoes_menu.index(key_override)
         except: idx_radio = 0
         st.session_state.navegacao_override = None
     escolha_menu = st.radio("Menu Navegação", options=opcoes_menu, index=idx_radio, horizontal=True, label_visibility="collapsed")
@@ -322,7 +380,7 @@ with st.sidebar:
 # LÓGICA DAS TELAS
 # ==========================================================
 
-# 1. DASHBOARD
+# 1. DASHBOARD (CORE - LIBERADO)
 if menu_opcao == "📊 Dashboard":
     img_base64 = get_base64_of_bin_file("diagrama-ia.png")
     if img_base64: st.markdown(f"""<div style="display: flex; justify-content: center;"><img src="data:image/png;base64,{img_base64}" class="floating-logo" style="width: 200px;"></div>""", unsafe_allow_html=True)
@@ -339,15 +397,15 @@ if menu_opcao == "📊 Dashboard":
     r1c1, r1c2, r1c3 = st.columns(3)
     with r1c1:
         with st.container(border=True):
-            st.markdown("#### ✍️ REDATOR"); st.caption("Crie petições e contratos.")
+            st.markdown("#### ✍️ REDATOR (Core)"); st.caption("Crie petições e contratos.")
             if st.button("ABRIR", key="d_redator"): st.session_state.navegacao_override = "✍️ Redator Jurídico"; st.rerun()
     with r1c2:
         with st.container(border=True):
-            st.markdown("#### 🧮 PERÍCIA"); st.caption("Cálculos Trabalhistas e Cíveis.")
+            st.markdown("#### 🧮 PERÍCIA (Módulo)"); st.caption("Cálculos Trabalhistas e Cíveis.")
             if st.button("ABRIR", key="d_pericia"): st.session_state.navegacao_override = "🧮 Calculadoras & Perícia"; st.rerun()
     with r1c3:
         with st.container(border=True):
-            st.markdown("#### 🏛️ AUDIÊNCIA"); st.caption("Estratégia e Perguntas.")
+            st.markdown("#### 🏛️ AUDIÊNCIA (Módulo)"); st.caption("Estratégia e Perguntas.")
             if st.button("ABRIR", key="d_aud"): st.session_state.navegacao_override = "🏛️ Estratégia de Audiência"; st.rerun()
 
     st.write("")
@@ -371,7 +429,7 @@ if menu_opcao == "📊 Dashboard":
             <div style='background: rgba(245, 158, 11, 0.1); border-left: 3px solid #F59E0B; padding: 10px; border-radius: 4px;'><strong style='color: #F59E0B; font-family: Rajdhani;'>⚖️ LIVE JURISPRUDENCE</strong><br><span style='font-size: 0.8rem; color: #E2E8F0;'>Sincronia STF/STJ.</span></div>
             """, unsafe_allow_html=True)
 
-# 2. REDATOR JURÍDICO (ADAPTATIVO)
+# 2. REDATOR JURÍDICO (ADAPTATIVO COM CRAWLER OFICIAL E UPLOAD)
 elif menu_opcao == "✍️ Redator Jurídico":
     st.markdown("<h2 class='tech-header'>✍️ REDATOR IA AVANÇADO</h2>", unsafe_allow_html=True)
     if "fatos_recuperados" not in st.session_state: st.session_state.fatos_recuperados = ""
@@ -384,7 +442,7 @@ elif menu_opcao == "✍️ Redator Jurídico":
         with st.container(border=True):
             st.markdown("##### ⚙️ ESTRUTURA")
             # Seleção de Área (Determina os tipos de peça)
-            area = st.selectbox("Área de Atuação", ["Trabalhista", "Cível", "Criminal", "Família", "Previdenciário", "Tributário"])
+            area = st.selectbox("Área de Atuação", ["Criminal", "Trabalhista", "Cível", "Família", "Previdenciário", "Tributário"])
             
             # Tipos de Peça Dinâmicos
             opcoes_pecas = []
@@ -398,9 +456,19 @@ elif menu_opcao == "✍️ Redator Jurídico":
             tipo = st.selectbox("Tipo de Peça", opcoes_pecas)
             tom = st.selectbox("Tom de Voz", ["Técnico e Formal", "Combativo e Incisivo", "Conciliador", "Acadêmico"])
             
+            # --- TRAVA DE PLANO PARA BUSCA AVANÇADA ---
             tem_litigio = verificar_acesso("litigio")
-            web = st.checkbox("🔍 Jurisprudência Web (Módulo Litígio)", value=tem_litigio, disabled=not tem_litigio)
-            if not tem_litigio: st.caption("🔒 Adicione o módulo Litígio para ativar.")
+            
+            label_busca = "🔍 Buscar Jurisprudência (Plano Básico - Genérico)"
+            if area == "Criminal":
+                label_busca = "⚖️ Buscar Acórdãos STF/STJ/TJ (Anti-Alucinação)"
+            elif area == "Trabalhista":
+                label_busca = "⚖️ Buscar OJ/Súmulas TST/CSJT (Anti-Alucinação)"
+                
+            web = st.checkbox(label_busca, value=tem_litigio, disabled=not tem_litigio)
+            if not tem_litigio: 
+                st.caption("🔒 Upgrade para Módulo Litígio para ativar buscas oficiais.")
+            # ------------------------------------------
             
             st.markdown("---")
             st.markdown("##### 👤 CLIENTE")
@@ -411,6 +479,9 @@ elif menu_opcao == "✍️ Redator Jurídico":
     with col_input:
         with st.container(border=True):
             st.markdown("##### 📝 DADOS E FATOS")
+            # --- NOVO BOTÃO DE UPLOAD AQUI ---
+            upload_peticao = st.file_uploader("Anexar Petições/Documentos (PDF) para Contexto", type="pdf")
+            # ---------------------------------
             fatos = st.text_area("Descreva os fatos:", height=200, value=st.session_state.fatos_recuperados)
             legislacao_extra = st.text_input("Legislação/Súmula (Opcional):")
             formato = st.radio("Formato:", ["Texto Corrido", "Tópicos"], horizontal=True)
@@ -418,20 +489,48 @@ elif menu_opcao == "✍️ Redator Jurídico":
     st.write("")
     if st.button("✨ GERAR MINUTA COMPLETA (1 CRÉDITO)", use_container_width=True):
         if creditos_atuais > 0 and fatos and cli_final:
-            with st.spinner(f"Redigindo {tipo} na área {area}..."):
-                jur = buscar_jurisprudencia_real(f"{area} {tipo} {fatos}") if web else "Padrão."
+            with st.spinner(f"Redigindo {tipo} na área {area} (Consultando bases oficiais)..."):
+                
+                # --- EXTRAÇÃO DO PDF BASE ---
+                contexto_pdf = ""
+                if upload_peticao:
+                    contexto_pdf = f"\n\n[CONTEXTO DO ARQUIVO ANEXADO]:\n{extrair_texto_pdf(upload_peticao)}"
+
+                # --- BUSCA INTELIGENTE (CRAWLER) ---
+                if web and tem_litigio:
+                    jur_contexto = buscar_jurisprudencia_especializada(f"{tipo} {fatos}", area)
+                    aviso_jur = "O sistema consultou as bases oficiais (STF/STJ/TST) para embasar esta peça."
+                else:
+                    jur_contexto = "Não houve busca externa. Use seu conhecimento interno."
+                    aviso_jur = "Busca externa desativada (Plano Básico)."
+                
                 prompt = f"""
                 Atue como Advogado Especialista em Direito {area}.
                 Redija uma {tipo} completa e robusta.
                 Tom: {tom}. Cliente: {cli_final}.
-                Fatos: {fatos}. Lei Extra: {legislacao_extra}. Juris: {jur}.
+                Fatos: {fatos}. Lei Extra: {legislacao_extra}. 
+                
+                {contexto_pdf}
+                
+                [IMPORTANTE - JURISPRUDÊNCIA REAL ENCONTRADA]:
+                {jur_contexto}
+                
+                Instrução de Segurança: Use ESTRITAMENTE a jurisprudência fornecida acima se ela for pertinente. 
+                Se não houver jurisprudência no contexto, não invente julgados. Cite apenas a lei seca.
+                
+                Formato: {formato}.
                 Estruture de acordo com o CPC/CPP/CLT conforme a área.
                 """
+                
                 try:
                     res = genai.GenerativeModel(mod_escolhido).generate_content(prompt).text
                     run_query("UPDATE usuarios SET creditos = creditos - 1 WHERE username = ?", (st.session_state.usuario_atual,))
                     run_query("INSERT INTO documentos (escritorio, data_criacao, cliente, area, tipo, conteudo) VALUES (?, ?, ?, ?, ?, ?)", (st.session_state.escritorio_atual, datetime.now().strftime("%d/%m/%Y"), cli_final, area, tipo, fatos + "||" + res))
+                    
                     st.markdown("### 📄 MINUTA GERADA:")
+                    if web: st.info(aviso_jur)
+                    if upload_peticao: st.success("Documento base analisado e utilizado no contexto.")
+                    
                     with st.container(border=True): st.markdown(res)
                     st.download_button("📥 BAIXAR DOCX", gerar_word(res), f"{tipo}_{cli_final}.docx", use_container_width=True)
                     st.success("Salvo no cofre.")
@@ -585,7 +684,7 @@ elif menu_opcao == "📂 Gestão de Casos":
                 with st.expander(f"{row['tipo']} - {row['data_criacao']}"):
                     st.write(row['conteudo'][:300] + "...")
                     c_d, c_e = st.columns([4, 1])
-                    with c_d: st.download_button("BAIXAR DOCX", gerar_word(row['conteudo']), f"{row['tipo']}.docx", key=f"dl_{idx}")
+                    with c_d: st.download_button("📥 BAIXAR DOCX", gerar_word(row['conteudo']), f"{row['tipo']}.docx", key=f"dl_{idx}")
                     with c_e:
                         if st.button("🗑️", key=f"del_{idx}"): run_query("DELETE FROM documentos WHERE id = ?", (row['id'],)); st.rerun()
     else: st.info("Nenhum documento encontrado.")
