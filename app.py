@@ -63,7 +63,7 @@ def local_css():
         div[data-testid="stMetricValue"] { color: var(--neon-blue) !important; text-shadow: 0 0 10px rgba(0, 243, 255, 0.5); }
         .tech-header { background: linear-gradient(90deg, #FFFFFF 0%, var(--neon-blue) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 700; }
 
-        /* PLAN CARDS (SPECIALIZATION) */
+        /* PLAN CARDS */
         .plan-card {
             background: rgba(15, 23, 42, 0.8);
             border: 1px solid rgba(255, 255, 255, 0.1);
@@ -106,12 +106,6 @@ def local_css():
         div[data-testid="metric-container"], div[data-testid="stExpander"], .folder-card { background: var(--bg-card); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 0px; backdrop-filter: blur(12px); }
         .stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div>div, .stNumberInput>div>div>input { background-color: rgba(0, 0, 0, 0.3) !important; border: 1px solid #334155 !important; color: #FFF !important; border-radius: 0px; }
         
-        div[role="radiogroup"] { display: flex; justify-content: space-between; background: rgba(10, 15, 30, 0.8); padding: 10px; border-radius: 8px; border-bottom: 1px solid rgba(0, 243, 255, 0.3); }
-        div[role="radiogroup"] label { background: transparent !important; border: none !important; margin: 0 !important; padding: 5px 15px !important; color: #94A3B8 !important; }
-        div[role="radiogroup"] label:hover { color: #FFF !important; text-shadow: 0 0 5px #00F3FF; }
-        div[role="radiogroup"] label[data-checked="true"] { color: #00F3FF !important; border-bottom: 2px solid #00F3FF !important; background: rgba(0, 243, 255, 0.1) !important; }
-        div[role="radiogroup"] div[data-testid="stMarkdownContainer"] p { font-size: 1rem !important; }
-
         #MainMenu {visibility: hidden;} footer {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
@@ -128,7 +122,6 @@ def get_base64_of_bin_file(bin_file):
         return base64.b64encode(data).decode()
     except FileNotFoundError: return None
 
-# --- FUNÇÕES AUXILIARES ---
 def gerar_word(texto):
     """Gera um arquivo Word a partir de um texto."""
     doc = Document()
@@ -166,24 +159,17 @@ def buscar_intimacoes_email(user, pwd, server):
         return found, None
     except Exception as e: return [], str(e)
 
-# --- BUSCA JURÍDICA INTELIGENTE (RAG ESPECIALIZADO) ---
+# --- BUSCA JURÍDICA INTELIGENTE (RAG) ---
 def buscar_jurisprudencia_oficial(tema, area):
-    """Realiza busca nos sites oficiais dependendo da área do plano."""
     sites = ""
-    if area == "Criminal":
-        sites = "site:stf.jus.br OR site:stj.jus.br OR site:conjur.com.br"
-    elif area == "Trabalhista":
-        sites = "site:tst.jus.br OR site:csjt.jus.br OR site:trtsp.jus.br"
-    elif area == "Civil" or area == "Família":
-        sites = "site:stj.jus.br OR site:tjsp.jus.br OR site:ibdfam.org.br"
-    else:
-        sites = "site:jusbrasil.com.br"
-
+    if area == "Criminal": sites = "site:stf.jus.br OR site:stj.jus.br OR site:conjur.com.br"
+    elif area == "Trabalhista": sites = "site:tst.jus.br OR site:csjt.jus.br OR site:trtsp.jus.br"
+    elif area == "Civil" or area == "Família": sites = "site:stj.jus.br OR site:tjsp.jus.br OR site:ibdfam.org.br"
+    else: sites = "site:jusbrasil.com.br"
     query = f"{tema} {sites}"
     try:
         res = DDGS().text(query, region="br-pt", max_results=4)
-        if res:
-            return "\n".join([f"- {r['body']} (Fonte: {r['href']})" for r in res])
+        if res: return "\n".join([f"- {r['body']} (Fonte: {r['href']})" for r in res])
         return "Nenhuma jurisprudência específica localizada nas bases oficiais."
     except: return "Erro de conexão com bases jurídicas."
 
@@ -227,6 +213,9 @@ init_db()
 # 3. LÓGICA DE PERMISSÕES POR ESPECIALIDADE
 # ==========================================================
 def verificar_permissao(area_necessaria):
+    """
+    Verifica se o plano do usuário cobre a área solicitada.
+    """
     plano_atual = st.session_state.get('plano_atual', 'starter')
     if plano_atual == 'full': return True
     if plano_atual == area_necessaria: return True
@@ -424,8 +413,21 @@ elif menu_opcao == "✍️ Redator Jurídico":
     with col_config:
         with st.container(border=True):
             st.markdown("##### ⚙️ ESTRUTURA")
-            area = st.selectbox("Área de Atuação", ["Criminal", "Trabalhista", "Cível", "Família"])
+            # Seleção de Área (Determina os tipos de peça)
+            # Se for plano específico, trava na área. Se for full, libera.
+            opcoes_areas = ["Criminal", "Trabalhista", "Cível", "Família"]
+            plano = st.session_state.plano_atual
             
+            if plano == "criminal": index_area = 0 # Criminal
+            elif plano == "trabalhista": index_area = 1 # Trabalhista
+            elif plano == "civil": index_area = 2 # Cível (assume Cível como padrão para civil/família)
+            else: index_area = 0
+            
+            # Se for starter ou full, deixa escolher. Se for específico, força a escolha ou sugere.
+            # Para melhor UX, vamos deixar selecionar, mas a "mágica" só acontece se tiver o plano.
+            area = st.selectbox("Área de Atuação", opcoes_areas, index=index_area)
+            
+            # Tipos de Peça Dinâmicos
             opcoes_pecas = []
             if area == "Trabalhista": opcoes_pecas = ["Reclamação Trabalhista", "Contestação", "Recurso Ordinário"]
             elif area == "Cível": opcoes_pecas = ["Petição Inicial", "Contestação", "Apelação"]
@@ -436,6 +438,7 @@ elif menu_opcao == "✍️ Redator Jurídico":
             tipo = st.selectbox("Tipo de Peça", opcoes_pecas)
             tom = st.selectbox("Tom de Voz", ["Técnico", "Combativo", "Conciliador"])
             
+            # --- VERIFICAÇÃO DE PLANO PARA BUSCA DE JURISPRUDÊNCIA ---
             permissao_area = False
             if area == "Criminal" and verificar_permissao("criminal"): permissao_area = True
             elif area == "Trabalhista" and verificar_permissao("trabalhista"): permissao_area = True
@@ -448,7 +451,8 @@ elif menu_opcao == "✍️ Redator Jurídico":
             elif area == "Trabalhista": label_busca = "⚖️ Buscar Súmulas TST (Anti-Alucinação)"
             
             web = st.checkbox(label_busca, value=permissao_area, disabled=not permissao_area)
-            if not permissao_area: st.caption(f"🔒 Necessário Plano {area.upper()} ou FULL para busca oficial.")
+            if not permissao_area: 
+                st.caption(f"🔒 Necessário Plano {area.upper()} ou FULL para busca oficial.")
             
             st.markdown("---")
             st.markdown("##### 👤 CLIENTE")
@@ -459,6 +463,7 @@ elif menu_opcao == "✍️ Redator Jurídico":
     with col_input:
         with st.container(border=True):
             st.markdown("##### 📝 DADOS E FATOS")
+            # Upload disponível para todos, mas a análise profunda depende do plano (via prompt)
             upload_peticao = st.file_uploader("Anexar Documento Base (PDF)", type="pdf")
             fatos = st.text_area("Descreva os fatos:", height=200, value=st.session_state.fatos_recuperados)
             legislacao_extra = st.text_input("Legislação Específica:")
@@ -468,6 +473,7 @@ elif menu_opcao == "✍️ Redator Jurídico":
     if st.button("✨ GERAR MINUTA COMPLETA (1 CRÉDITO)", use_container_width=True):
         if creditos_atuais > 0 and fatos and cli_final:
             with st.spinner(f"Redigindo {tipo}... Consultando bases oficiais: {'SIM' if web else 'NÃO'}"):
+                
                 contexto_pdf = ""
                 if upload_peticao:
                     contexto_pdf = f"\n\n[CONTEXTO DO ARQUIVO ANEXADO]:\n{extrair_texto_pdf(upload_peticao)}"
@@ -486,7 +492,11 @@ elif menu_opcao == "✍️ Redator Jurídico":
                 Tom: {tom}. Cliente: {cli_final}.
                 Fatos: {fatos}. Lei Extra: {legislacao_extra}. 
                 {contexto_pdf}
-                [JURISPRUDÊNCIA OFICIAL ENCONTRADA]: {jur_contexto}
+                
+                [JURISPRUDÊNCIA OFICIAL ENCONTRADA]:
+                {jur_contexto}
+                
+                IMPORTANTE: Use os julgados acima se pertinentes. Evite alucinar jurisprudência inexistente.
                 Formato: {formato}.
                 """
                 
@@ -494,18 +504,37 @@ elif menu_opcao == "✍️ Redator Jurídico":
                     res = genai.GenerativeModel(mod_escolhido).generate_content(prompt).text
                     run_query("UPDATE usuarios SET creditos = creditos - 1 WHERE username = ?", (st.session_state.usuario_atual,))
                     run_query("INSERT INTO documentos (escritorio, data_criacao, cliente, area, tipo, conteudo) VALUES (?, ?, ?, ?, ?, ?)", (st.session_state.escritorio_atual, datetime.now().strftime("%d/%m/%Y"), cli_final, area, tipo, fatos + "||" + res))
+                    
                     st.markdown("### 📄 MINUTA GERADA:")
                     if web: st.success(aviso_jur)
+                    
                     with st.container(border=True): st.markdown(res)
                     st.download_button("📥 BAIXAR DOCX", gerar_word(res), f"{tipo}_{cli_final}.docx", use_container_width=True)
                     st.success("Salvo no cofre.")
                 except Exception as e: st.error(f"Erro: {str(e)}")
         else: st.error("Créditos insuficientes.")
 
-# 3. CALCULADORA
+# 3. CALCULADORA (AUTOMÁTICA PELO PLANO)
 elif menu_opcao == "🧮 Calculadoras & Perícia":
     st.markdown("<h2 class='tech-header'>🧮 CÁLCULOS ESPECIALIZADOS</h2>", unsafe_allow_html=True)
-    area_calc = st.selectbox("Selecione a Especialidade:", ["Trabalhista", "Cível", "Criminal", "Família"])
+    
+    # Detecção Automática do Plano para evitar menu desnecessário
+    plano_atual = st.session_state.plano_atual
+    
+    # Se for FULL ou STARTER, mostra todas as opções. Se for específico, já trava na opção certa.
+    opcoes_calc = ["Trabalhista", "Cível", "Criminal", "Família"]
+    index_calc = 0
+    
+    if plano_atual == "criminal": 
+        opcoes_calc = ["Criminal"]
+    elif plano_atual == "trabalhista":
+        opcoes_calc = ["Trabalhista"]
+    elif plano_atual == "civil":
+        opcoes_calc = ["Cível", "Família"]
+    
+    area_calc = st.selectbox("Selecione a Especialidade:", opcoes_calc)
+    
+    # Verifica permissão da área para liberar a calculadora (dupla checagem de segurança)
     liberado = False
     if area_calc == "Trabalhista" and verificar_permissao("trabalhista"): liberado = True
     elif area_calc == "Criminal" and verificar_permissao("criminal"): liberado = True
@@ -540,12 +569,24 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
                 st.markdown("#### 👨‍👩‍👧 Pensão Alimentícia")
                 renda = st.number_input("Renda Líquida", min_value=0.0)
                 if st.button("CALCULAR"): st.success(f"30% Sugerido: R$ {renda * 0.30:,.2f}")
-    else: tela_bloqueio(area_calc, "149")
+    else:
+        # Mostra o bloqueio da área que ele tentou acessar (ou a padrão)
+        tela_bloqueio(area_calc, "149")
 
-# 4. AUDIENCIA
+# 4. AUDIENCIA (BLOQUEIO POR ÁREA)
 elif menu_opcao == "🏛️ Estratégia de Audiência":
     st.markdown("<h2 class='tech-header'>🏛️ ESTRATEGISTA DE AUDIÊNCIA</h2>", unsafe_allow_html=True)
-    area_aud = st.selectbox("Área da Audiência:", ["Trabalhista", "Criminal", "Cível"])
+    
+    # Detecção Automática do Plano
+    plano_atual = st.session_state.plano_atual
+    opcoes_aud = ["Trabalhista", "Criminal", "Cível"]
+    
+    if plano_atual == "criminal": opcoes_aud = ["Criminal"]
+    elif plano_atual == "trabalhista": opcoes_aud = ["Trabalhista"]
+    elif plano_atual == "civil": opcoes_aud = ["Cível"]
+    
+    area_aud = st.selectbox("Área da Audiência:", opcoes_aud)
+    
     liberado = False
     if area_aud == "Trabalhista" and verificar_permissao("trabalhista"): liberado = True
     elif area_aud == "Criminal" and verificar_permissao("criminal"): liberado = True
@@ -558,6 +599,7 @@ elif menu_opcao == "🏛️ Estratégia de Audiência":
         with c2: perfil_juiz = st.selectbox("Perfil Juiz", ["Padrão", "Rígido", "Conciliador"])
         detalhes = st.text_area("Resumo do Caso:")
         upload_autos = st.file_uploader("Autos (PDF) - Opcional", type="pdf")
+        
         if st.button("🔮 SIMULAR"):
             if detalhes:
                 with st.spinner("Simulando..."):
@@ -568,9 +610,10 @@ elif menu_opcao == "🏛️ Estratégia de Audiência":
                     st.download_button("BAIXAR ROTEIRO", gerar_word(res), "Roteiro_Audiencia.docx")
     else: tela_bloqueio(area_aud, "149")
 
-# 5. GESTÃO DE CASOS
+# 5. GESTÃO DE CASOS (LIBERADO)
 elif menu_opcao == "📂 Gestão de Casos":
     st.markdown("<h2 class='tech-header'>📂 COFRE DIGITAL</h2>", unsafe_allow_html=True)
+    # ... Lógica padrão de gestão de casos (mantida do anterior para economizar espaço visual, é igual)
     if "pasta_aberta" not in st.session_state: st.session_state.pasta_aberta = None
     df_docs = run_query("SELECT * FROM documentos WHERE escritorio = ?", (st.session_state.escritorio_atual,), return_data=True)
     if not df_docs.empty:
@@ -587,49 +630,59 @@ elif menu_opcao == "📂 Gestão de Casos":
             st.markdown(f"### Arquivos de: {st.session_state.pasta_aberta}")
             with st.expander("➕ ADICIONAR DOCUMENTO", expanded=False):
                 c_add1, c_add2 = st.columns(2)
-                novo_tipo = c_add1.text_input("Nome:")
+                novo_tipo = c_add1.text_input("Nome do Documento (Ex: Procuração):")
                 nova_area = c_add2.selectbox("Categoria:", ["Provas", "Andamento", "Anotações"])
-                tab_up, tab_txt = st.tabs(["📤 Upload PDF", "✍️ Nota"])
+                tab_up, tab_txt = st.tabs(["📤 Upload PDF", "✍️ Nota de Texto"])
                 conteudo_novo = ""
                 with tab_up: arquivo_novo = st.file_uploader("Arquivo PDF", key="novo_up")
-                with tab_txt: texto_novo = st.text_area("Texto:", key="nova_nota")
-                if st.button("💾 SALVAR"):
+                with tab_txt: texto_novo = st.text_area("Texto da Nota:", key="nova_nota")
+                
+                if st.button("💾 SALVAR DOCUMENTO"):
                     if novo_tipo:
-                        if arquivo_novo: conteudo_novo = f"[PDF] {extrair_texto_pdf(arquivo_novo)}"
+                        if arquivo_novo: conteudo_novo = f"[ARQUIVO EXTERNO] {extrair_texto_pdf(arquivo_novo)}"
                         elif texto_novo: conteudo_novo = texto_novo
-                        else: conteudo_novo = "Item vazio."
+                        else: conteudo_novo = "Item adicionado sem conteúdo."
+                        
                         run_query("INSERT INTO documentos (escritorio, data_criacao, cliente, area, tipo, conteudo) VALUES (?, ?, ?, ?, ?, ?)", 
                                  (st.session_state.escritorio_atual, datetime.now().strftime("%d/%m/%Y"), st.session_state.pasta_aberta, nova_area, novo_tipo, conteudo_novo))
-                        st.success("Salvo!"); time.sleep(1); st.rerun()
+                        st.success("Adicionado com sucesso!")
+                        time.sleep(1)
+                        st.rerun()
+
             st.divider()
             docs_cli = df_docs[df_docs['cliente'] == st.session_state.pasta_aberta]
             for idx, row in docs_cli.iterrows():
                 with st.expander(f"{row['tipo']} - {row['data_criacao']}"):
-                    st.write(row['conteudo'][:300] + "...")
+                    texto_display = row['conteudo'][:300] + "..." if len(row['conteudo']) > 300 else row['conteudo']
+                    st.write(texto_display)
                     c_d, c_e = st.columns([4, 1])
-                    with c_d: st.download_button("📥 BAIXAR DOCX", gerar_word(row['conteudo']), f"{row['tipo']}.docx", key=f"dl_{idx}")
+                    with c_d:
+                        st.download_button("📥 BAIXAR DOCX", gerar_word(row['conteudo']), f"{row['tipo']}.docx", key=f"dl_{idx}")
                     with c_e:
-                        if st.button("🗑️", key=f"del_{idx}"): run_query("DELETE FROM documentos WHERE id = ?", (row['id'],)); st.rerun()
+                        if st.button("🗑️ EXCLUIR", key=f"del_{idx}"):
+                            run_query("DELETE FROM documentos WHERE id = ?", (row['id'],))
+                            st.rerun()
     else: st.info("Nenhum documento encontrado.")
 
-# 6. MONITOR
+# 6. MONITOR (CORRIGIDO PARA QUALQUER PLANO PAGO)
 elif menu_opcao == "🚦 Monitor de Prazos":
     if st.session_state.plano_atual != 'starter':
-        st.markdown("<h2 class='tech-header'>🚦 RADAR DE PRAZOS</h2>", unsafe_allow_html=True)
+        st.markdown("<h2 class='tech-header'>🚦 RADAR DE PRAZOS INTELIGENTE</h2>", unsafe_allow_html=True)
         m1, m2, m3 = st.columns(3)
-        m1.metric("E-mails", "0"); m2.metric("Prazos", "0"); m3.metric("IMAP", "Off")
+        m1.metric("E-mails Lidos", "0"); m2.metric("Prazos Fatais", "0"); m3.metric("Status IMAP", "Desconectado")
         st.write("")
         with st.container(border=True):
+            st.markdown("##### 📡 PARÂMETROS DE VARREDURA")
             c_mail, c_pass, c_host = st.columns(3)
             email_leitura = c_mail.text_input("E-mail OAB")
             senha_leitura = c_pass.text_input("Senha App", type="password")
             servidor_imap = c_host.text_input("Servidor", value="imap.gmail.com")
-            if st.button("INICIAR VARREDURA"):
+            if st.button("INICIAR VARREDURA PROFUNDA"):
                 if email_leitura and senha_leitura:
                     with st.spinner("Analisando metadados..."):
                         msgs, err = buscar_intimacoes_email(email_leitura, senha_leitura, servidor_imap)
                         if err: st.error(err)
-                        elif not msgs: st.success("Nada novo.")
+                        elif not msgs: st.success("Nenhuma intimação.")
                         else:
                             for m in msgs:
                                 with st.expander(f"⚠️ {m['assunto']}"):
@@ -640,10 +693,11 @@ elif menu_opcao == "🚦 Monitor de Prazos":
                 else: st.error("Preencha credenciais.")
     else: tela_bloqueio("QUALQUER PLANO PAGO", "149")
 
-# 8. PLANOS
+# 8. PLANOS (UPGRADE POR ESPECIALIDADE)
 elif menu_opcao == "💎 Planos & Upgrade":
     st.markdown("<h2 class='tech-header' style='text-align:center;'>ESCOLHA SUA ESPECIALIDADE</h2>", unsafe_allow_html=True)
     st.write("")
+    
     col1, col2, col3, col4 = st.columns(4)
     
     def render_plan_card(titulo, preco, desc, slug, css_class):
@@ -656,21 +710,34 @@ elif menu_opcao == "💎 Planos & Upgrade":
             </div>
         </div>
         """, unsafe_allow_html=True)
+        
         btn_label = "SELECIONADO" if st.session_state.plano_atual == slug else "ASSINAR AGORA"
         if st.button(btn_label, key=f"btn_{slug}", disabled=(st.session_state.plano_atual == slug), use_container_width=True):
             run_query("UPDATE usuarios SET plano = ? WHERE username = ?", (slug, st.session_state.usuario_atual))
             st.session_state.plano_atual = slug
-            st.toast(f"Plano {titulo} ativado!")
-            time.sleep(1); st.rerun()
+            st.toast(f"Plano {titulo} ativado com sucesso!")
+            time.sleep(1)
+            st.rerun()
 
     with col1:
-        render_plan_card("Criminalista Elite", "149", "✅ Busca STF/STJ<br>✅ Dosimetria da Pena<br>✅ Simulador de Júri<br>✅ Redator de HC", "criminal", "plan-crim")
+        render_plan_card("Criminalista Elite", "149", 
+                         "✅ Busca STF/STJ<br>✅ Dosimetria da Pena<br>✅ Simulador de Júri<br>✅ Redator de HC", 
+                         "criminal", "plan-crim")
+        
     with col2:
-        render_plan_card("Trabalhista Expert", "149", "✅ Busca TST/CSJT<br>✅ Cálculos Rescisórios<br>✅ Instrução Trabalhista<br>✅ Redator CLT", "trabalhista", "plan-trab")
+        render_plan_card("Trabalhista Expert", "149", 
+                         "✅ Busca TST/CSJT<br>✅ Cálculos Rescisórios<br>✅ Instrução Trabalhista<br>✅ Redator CLT", 
+                         "trabalhista", "plan-trab")
+
     with col3:
-        render_plan_card("Civil & Família", "149", "✅ Busca TJs<br>✅ Cálculos Pensão/Atualização<br>✅ Contratos & Divórcio<br>✅ Gestão Patrimonial", "civil", "plan-civ")
+        render_plan_card("Civil & Família", "149", 
+                         "✅ Busca TJs<br>✅ Cálculos Pensão/Atualização<br>✅ Contratos & Divórcio<br>✅ Gestão Patrimonial", 
+                         "civil", "plan-civ")
+
     with col4:
-        render_plan_card("Full Service", "297", "💎 <strong>Acesso a TUDO</strong><br>💎 Todas as áreas<br>💎 Prioridade de Suporte<br>💎 + Créditos IA", "full", "plan-full")
+        render_plan_card("Full Service", "297", 
+                         "💎 <strong>Acesso a TUDO</strong><br>💎 Todas as áreas<br>💎 Prioridade de Suporte<br>💎 + Créditos IA", 
+                         "full", "plan-full")
 
 st.markdown("---")
 st.markdown("<center style='color: #64748b; font-size: 0.8rem; font-family: Rajdhani;'>🔒 LEGALHUB ELITE v5.5 | ENCRYPTED SESSION</center>", unsafe_allow_html=True)
