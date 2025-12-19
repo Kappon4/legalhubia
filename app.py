@@ -228,11 +228,39 @@ if api_key:
                     except Exception as e: st.error(f"Erro: {e}")
 
     with tab8: # Audiencia
-        st.header("🏛️ Audiência")
-        papel = st.selectbox("Papel", ["Autor", "Réu"])
-        fatos_aud = st.text_area("Fatos")
-        if st.button("Gerar Roteiro"):
-            st.write(genai.GenerativeModel(modelo_escolhido).generate_content(f"Gere roteiro de audiência para {papel}. Fatos: {fatos_aud}").text)
+        st.header("🏛️ Preparador de Audiência")
+        st.markdown("Gere um roteiro estratégico de perguntas e riscos para sua audiência.")
+        
+        col_aud1, col_aud2 = st.columns(2)
+        with col_aud1:
+            meu_papel = st.selectbox("Você representa:", ["Autor / Reclamante", "Réu / Reclamado"])
+            tipo_aud = st.selectbox("Tipo de Audiência:", ["Instrução e Julgamento", "Conciliação", "Inicial (Trabalhista)", "UNA"])
+        with col_aud2:
+            fatos_caso = st.text_area("Resumo dos Fatos / Pontos Controvertidos:", height=150, placeholder="Ex: O reclamante alega horas extras não pagas, mas batia ponto britânico...")
+            
+        if st.button("🎭 Gerar Roteiro de Audiência"):
+            if fatos_caso:
+                with st.spinner("Simulando cenário e gerando perguntas..."):
+                    prompt_aud = f"""
+                    Aja como um advogado especialista experiente.
+                    Vou realizar uma audiência de {tipo_aud}.
+                    Eu represento o: {meu_papel}.
+                    Fatos do caso: "{fatos_caso}".
+
+                    GERE UM ROTEIRO ESTRATÉGICO COM:
+                    1. 🎯 **Perguntas para a Parte Contrária:** (Focadas em extrair contradições ou confissões).
+                    2. 🛡️ **Perguntas para Minhas Testemunhas:** (Para reforçar minha tese).
+                    3. ⚠️ **Pontos Fracos / Riscos:** (Onde o outro advogado vai tentar me atacar e como me defender).
+                    4. 🤝 **Estratégia de Acordo:** (Vale a pena? Qual seria um valor teto/piso sugerido com base nos riscos?).
+
+                    Use linguagem direta e prática para leitura rápida na mesa de audiência.
+                    """
+                    try:
+                        res_aud = genai.GenerativeModel(modelo_escolhido).generate_content(prompt_aud).text
+                        st.markdown(res_aud)
+                        st.download_button("Baixar Roteiro (Word)", gerar_word(res_aud), "roteiro_audiencia.docx")
+                    except Exception as e:
+                        st.error(f"Erro ao gerar roteiro: {e}")
 
     # --- ABA 9: MONITOR DE PRAZOS (A NOVA FUNCIONALIDADE!) ---
     with tab9:
@@ -322,3 +350,4 @@ if api_key:
                         st.error(f"Erro ao salvar: {e}")
 
 else: st.warning("Insira uma chave de API para começar.")
+
