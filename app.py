@@ -9,7 +9,7 @@ import time
 import tempfile
 import os
 import pandas as pd
-import sqlite3 # O NOVO MOTOR DO SISTEMA
+import sqlite3
 import imaplib
 import email
 from email.header import decode_header
@@ -29,7 +29,7 @@ def init_db():
     conn = sqlite3.connect('legalhub.db')
     c = conn.cursor()
     
-    # Tabela de Usuários (Simulando escritórios diferentes)
+    # Tabela de Usuários
     c.execute('''
         CREATE TABLE IF NOT EXISTS usuarios (
             username TEXT PRIMARY KEY,
@@ -39,7 +39,7 @@ def init_db():
         )
     ''')
     
-    # Tabela de Processos/Documentos (Onde salvamos tudo)
+    # Tabela de Documentos
     c.execute('''
         CREATE TABLE IF NOT EXISTS documentos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -52,12 +52,14 @@ def init_db():
         )
     ''')
     
-    # --- DADOS DE TESTE (Para você ver funcionando) ---
-    # Verifica se já tem usuários, se não, cria os de teste
+    # --- DADOS INICIAIS ---
     c.execute('SELECT count(*) FROM usuarios')
     if c.fetchone()[0] == 0:
+        # Cria usuários de teste originais
         c.execute("INSERT INTO usuarios VALUES ('advogado1', '123', 'Escritório Alpha', 'lucas@alpha.adv.br')")
         c.execute("INSERT INTO usuarios VALUES ('advogado2', '123', 'Escritório Beta', 'joao@beta.adv.br')")
+        # Cria o ADMIN (Necessário para cadastrar novos escritórios pelo site)
+        c.execute("INSERT INTO usuarios VALUES ('admin', 'admin', 'LegalHub Master', 'suporte@legalhub.com')")
         conn.commit()
     
     conn.close()
@@ -70,7 +72,6 @@ def run_query(query, params=(), return_data=False):
         c.execute(query, params)
         if return_data:
             data = c.fetchall()
-            # Pega nomes das colunas para criar DataFrame bonito
             col_names = [description[0] for description in c.description]
             conn.close()
             return pd.DataFrame(data, columns=col_names)
@@ -86,7 +87,7 @@ def run_query(query, params=(), return_data=False):
 # Inicializa o banco ao abrir o app
 init_db()
 
-# --- 3. SISTEMA DE LOGIN (AGORA MULTI-USUÁRIO) ---
+# --- 3. SISTEMA DE LOGIN ---
 if "logado" not in st.session_state: st.session_state.logado = False
 if "usuario_atual" not in st.session_state: st.session_state.usuario_atual = ""
 if "escritorio_atual" not in st.session_state: st.session_state.escritorio_atual = ""
@@ -95,13 +96,12 @@ def login_screen():
     c1, c2, c3 = st.columns([1,1,1])
     with c2:
         st.title("⚖️ LegalHub Login")
-        st.info("Teste SaaS: Use 'advogado1' e '123'")
+        st.info("Teste: 'advogado1' / '123' | Admin: 'admin' / 'admin'")
         
         username = st.text_input("Usuário")
         password = st.text_input("Senha", type="password")
         
         if st.button("Entrar no Sistema"):
-            # Verifica no banco de dados
             users = run_query("SELECT * FROM usuarios WHERE username = ? AND senha = ?", (username, password), return_data=True)
             
             if not users.empty:
@@ -114,13 +114,13 @@ def login_screen():
 
 if not st.session_state.logado:
     login_screen()
-    st.stop() # Para o código aqui se não estiver logado
+    st.stop()
 
 # ==========================================================
-# DAQUI PRA BAIXO, SÓ CARREGA SE ESTIVER LOGADO
+# ÁREA LOGADA
 # ==========================================================
 
-# 4. FUNÇÕES AUXILIARES (E-mail, PDF, etc)
+# 4. FUNÇÕES AUXILIARES
 def buscar_jurisprudencia_real(tema):
     try:
         res = DDGS().text(f"{tema} (site:stf.jus.br OR site:stj.jus.br OR site:jusbrasil.com.br)", region="br-pt", max_results=4)
@@ -140,25 +140,6 @@ def extrair_texto_pdf(arquivo):
     try: return "".join([p.extract_text() for p in PdfReader(arquivo).pages])
     except: return ""
 
-def criar_ics_calendario(processo, data_fatal, descricao):
-    dt_inicio = data_fatal.strftime('%Y%m%d')
-    dt_fim = (data_fatal + timedelta(days=1)).strftime('%Y%m%d')
-    return f"""BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//LegalHub//Monitor//PT
-BEGIN:VEVENT
-SUMMARY:🚨 PRAZO: {processo}
-DTSTART;VALUE=DATE:{dt_inicio}
-DTEND;VALUE=DATE:{dt_fim}
-DESCRIPTION:{descricao}
-BEGIN:VALARM
-TRIGGER:-P1D
-ACTION:DISPLAY
-DESCRIPTION:Lembrete Prazo
-END:VALARM
-END:VEVENT
-END:VCALENDAR"""
-
 # --- BARRA LATERAL ---
 st.sidebar.header(f"🏢 {st.session_state.escritorio_atual}")
 st.sidebar.caption(f"Usuário: {st.session_state.usuario_atual}")
@@ -171,6 +152,32 @@ if st.sidebar.button("Sair (Logout)"):
 
 st.sidebar.divider()
 
+# --- [NOVO] PAINEL DE ADMINISTRAÇÃO (Integrado do seu código) ---
+# Só aparece se o usuário for 'admin'
+if st.session_state.usuario_atual == 'admin':
+    with st.sidebar.expander("👑 Cadastrar Novo Escritório"):
+        st.markdown("**Novo Contrato**")
+        novo_user = st.text_input("Login (Novo Usuário)")
+        novo_pass = st.text_input("Senha Provisória", type="password")
+        novo_banca = st.text_input("Nome do Escritório")
+        novo_email = st.text_input("E-mail OAB")
+        
+        if st.button("💾 Cadastrar Cliente"):
+            if novo_user and novo_pass and novo_banca:
+                try:
+                    sql = "INSERT INTO usuarios (username, senha, escritorio, email_oab) VALUES (?, ?, ?, ?)"
+                    res = run_query(sql, (novo_user, novo_pass, novo_banca, novo_email))
+                    if res:
+                        st.success(f"✅ Sucesso! Escritório '{novo_banca}' criado.")
+                except sqlite3.IntegrityError:
+                    st.error("Erro: Esse login já existe.")
+                except Exception as e:
+                    st.error(f"Erro: {e}")
+            else:
+                st.warning("Preencha todos os campos.")
+    st.sidebar.divider()
+# -------------------------------------------------------------
+
 # Seleção de Chave API
 uso_manual = st.sidebar.checkbox("Usar chave manual", value=False)
 if uso_manual:
@@ -181,7 +188,7 @@ elif "GOOGLE_API_KEY" in st.secrets:
 else:
     api_key = st.sidebar.text_input("API Key:", type="password")
 
-# Configuração E-mail (Leitura)
+# Configuração E-mail
 st.sidebar.markdown("📧 **E-mail OAB (Leitura)**")
 email_leitura = st.sidebar.text_input("E-mail:")
 senha_leitura = st.sidebar.text_input("Senha App:", type="password")
@@ -214,21 +221,18 @@ def buscar_intimacoes_email(user, pwd, server):
 if api_key:
     genai.configure(api_key=api_key)
     
-    # Memória de Sessão
     if "fatos_recuperados" not in st.session_state: st.session_state.fatos_recuperados = ""
     if "cliente_recuperado" not in st.session_state: st.session_state.cliente_recuperado = ""
 
-    # Modelo
     try:
         mods = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
         mod_escolhido = st.sidebar.selectbox("Modelo:", mods) if mods else "models/gemini-1.5-flash"
     except: mod_escolhido = "models/gemini-1.5-flash"
 
-    # ABAS
     st.title("⚖️ LegalHub IA")
     tabs = st.tabs(["✍️ Redator", "📂 PDF", "🎙️ Áudio", "⚖️ Comparar", "💬 Chat", "📂 Pastas (SaaS)", "📅 Calc", "🏛️ Audiência", "🚦 Monitor"])
 
-    # --- ABA 1: REDATOR (SALVA NO SQLITE) ---
+    # --- ABA 1: REDATOR ---
     with tabs[0]:
         st.header("Gerador de Peças")
         if st.button("🔄 Limpar"):
@@ -254,18 +258,14 @@ if api_key:
                         res = genai.GenerativeModel(mod_escolhido).generate_content(prompt).text
                         st.markdown(res)
                         st.download_button("Word", gerar_word(res), "minuta.docx")
-                        
                         if cli:
-                            # --- AQUI É O PULO DO GATO DO SAAS ---
-                            # Salvamos com o ID do escritório atual
                             conteudo_salvar = fatos + "||" + res[:500]
                             sql = "INSERT INTO documentos (escritorio, data_criacao, cliente, area, tipo, conteudo) VALUES (?, ?, ?, ?, ?, ?)"
                             run_query(sql, (st.session_state.escritorio_atual, datetime.now().strftime("%d/%m/%Y"), cli, area, tipo, conteudo_salvar))
                             st.success(f"Salvo no banco de dados do {st.session_state.escritorio_atual}!")
-                            
                     except Exception as e: st.error(str(e))
 
-    # --- ABA 2 a 5 (Ferramentas Padrão) ---
+    # --- ABA 2 a 5 ---
     with tabs[1]:
         st.header("Ler PDF")
         up = st.file_uploader("PDF", type="pdf")
@@ -303,19 +303,13 @@ if api_key:
             st.chat_message("assistant").write(res)
             st.session_state.hist.append({"role":"assistant", "content":res})
 
-    # --- ABA 6: PASTAS (LÊ DO SQLITE ISOLADO) ---
+    # --- ABA 6: PASTAS SAAS ---
     with tabs[5]:
         st.header(f"📂 Arquivos: {st.session_state.escritorio_atual}")
-        
         if st.button("Atualizar Lista"): st.rerun()
-        
-        # --- FILTRO SAAS: Só busca dados do escritório logado ---
         df = run_query("SELECT * FROM documentos WHERE escritorio = ?", (st.session_state.escritorio_atual,), return_data=True)
-        
         if not df.empty:
-            st.dataframe(df.drop(columns=['conteudo']), use_container_width=True) # Esconde o texto longo da tabela
-            
-            # Recuperar
+            st.dataframe(df.drop(columns=['conteudo']), use_container_width=True)
             doc_id = st.selectbox("ID para abrir:", df['id'].tolist())
             if st.button("Abrir Documento"):
                 row = df[df['id'] == doc_id].iloc[0]
@@ -341,10 +335,9 @@ if api_key:
         if st.button("Gerar"):
             st.write(genai.GenerativeModel(mod_escolhido).generate_content(f"Roteiro {pap}: {fat}").text)
 
-    # --- ABA 9: MONITOR (SALVA NO SQLITE) ---
+    # --- ABA 9: MONITOR ---
     with tabs[8]:
         st.header("🚦 Monitor")
-        
         if st.button("🔄 Ler E-mail OAB"):
             if not email_leitura or not senha_leitura:
                 st.error("Configure E-mail na barra lateral")
