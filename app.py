@@ -23,7 +23,7 @@ import base64
 from google.api_core.exceptions import ResourceExhausted, NotFound, InvalidArgument
 
 # ==========================================================
-# 1. CONFIGURAÇÃO VISUAL
+# 1. CONFIGURAÇÃO VISUAL - TEMA CYBER FUTURE
 # ==========================================================
 st.set_page_config(
     page_title="LegalHub Elite | AI System", 
@@ -69,7 +69,7 @@ def local_css():
         .elite-card { border: 1px solid var(--neon-gold); background: rgba(255, 215, 0, 0.05); }
         .elite-card .price-amount { color: var(--neon-gold); text-shadow: 0 0 10px rgba(255,215,0,0.5); }
 
-        /* TELA DE BLOQUEIO (LOCK SCREEN) */
+        /* TELA DE BLOQUEIO */
         .lock-screen {
             border: 1px solid var(--neon-red);
             background: rgba(255, 0, 85, 0.05);
@@ -92,11 +92,9 @@ def local_css():
         .stButton>button { background: transparent; color: var(--neon-blue); border: 1px solid var(--neon-blue); border-radius: 0px; padding: 0.6rem 1.2rem; font-family: 'Rajdhani'; font-weight: 700; }
         .stButton>button:hover { background: var(--neon-blue); color: #000; box-shadow: 0 0 20px rgba(0, 243, 255, 0.6); }
         
-        /* Inputs & Containers */
         div[data-testid="metric-container"], div[data-testid="stExpander"], .folder-card { background: var(--bg-card); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 0px; backdrop-filter: blur(12px); }
         .stTextInput>div>div>input, .stTextArea>div>div>textarea { background-color: rgba(0, 0, 0, 0.3) !important; border: 1px solid #334155 !important; color: #FFF !important; border-radius: 0px; }
         
-        /* Menu Horizontal */
         div[role="radiogroup"] { display: flex; justify-content: space-between; background: rgba(10, 15, 30, 0.8); padding: 10px; border-radius: 8px; border-bottom: 1px solid rgba(0, 243, 255, 0.3); }
         div[role="radiogroup"] label { background: transparent !important; border: none !important; margin: 0 !important; padding: 5px 15px !important; color: #94A3B8 !important; }
         div[role="radiogroup"] label:hover { color: #FFF !important; text-shadow: 0 0 5px #00F3FF; }
@@ -123,15 +121,25 @@ def get_base64_of_bin_file(bin_file):
 def init_db():
     conn = sqlite3.connect('legalhub.db')
     c = conn.cursor()
+    # Tabela Usuarios (Adicionado coluna 'plano')
     c.execute('''CREATE TABLE IF NOT EXISTS usuarios (
             username TEXT PRIMARY KEY, senha TEXT, escritorio TEXT, email_oab TEXT, creditos INTEGER DEFAULT 10, plano TEXT DEFAULT 'Starter')''')
-    # Migrações
-    try: c.execute("ALTER TABLE usuarios ADD COLUMN creditos INTEGER DEFAULT 10"); except: pass
-    try: c.execute("ALTER TABLE usuarios ADD COLUMN plano TEXT DEFAULT 'Starter'"); except: pass
+    
+    # --- CORREÇÃO DA SINTAXE DE ERRO (TRY/EXCEPT MULTILINHAS) ---
+    try:
+        c.execute("ALTER TABLE usuarios ADD COLUMN creditos INTEGER DEFAULT 10")
+    except:
+        pass
+        
+    try:
+        c.execute("ALTER TABLE usuarios ADD COLUMN plano TEXT DEFAULT 'Starter'")
+    except:
+        pass
     
     c.execute('''CREATE TABLE IF NOT EXISTS documentos (
             id INTEGER PRIMARY KEY AUTOINCREMENT, escritorio TEXT, data_criacao TEXT, cliente TEXT, area TEXT, tipo TEXT, conteudo TEXT)''')
     
+    # Usuários Padrão
     c.execute('SELECT count(*) FROM usuarios')
     if c.fetchone()[0] == 0:
         c.execute("INSERT OR IGNORE INTO usuarios VALUES ('advogado1', '123', 'Escritório Alpha', 'lucas@alpha.adv.br', 10, 'Starter')")
@@ -163,18 +171,15 @@ init_db()
 # ==========================================================
 # 3. LÓGICA DE ACESSO E PLANOS
 # ==========================================================
-# Hierarquia dos planos: Starter < Pro < Elite
 NIVEIS_PLANO = {"Starter": 1, "Pro": 2, "Elite": 3}
 
 def verificar_acesso(plano_minimo):
-    """Verifica se o usuário tem o plano necessário. Retorna True se permitido."""
     plano_usuario = st.session_state.get('plano_atual', 'Starter')
     nivel_usuario = NIVEIS_PLANO.get(plano_usuario, 1)
     nivel_necessario = NIVEIS_PLANO.get(plano_minimo, 1)
     return nivel_usuario >= nivel_necessario
 
 def tela_bloqueio(plano_necessario):
-    """Exibe a tela de bloqueio futurista."""
     st.markdown(f"""
     <div class='lock-screen'>
         <div class='lock-icon'>🔒</div>
@@ -325,7 +330,6 @@ with st.sidebar:
 
 # 1. DASHBOARD
 if menu_opcao == "📊 Dashboard":
-    # (Dashboard é liberado para todos)
     img_base64 = get_base64_of_bin_file("diagrama-ia.png")
     if img_base64: st.markdown(f"""<div style="display: flex; justify-content: center;"><img src="data:image/png;base64,{img_base64}" class="floating-logo" style="width: 200px;"></div>""", unsafe_allow_html=True)
     
@@ -341,7 +345,6 @@ if menu_opcao == "📊 Dashboard":
     st.subheader("🛠️ ACESSO RÁPIDO")
     r1c1, r1c2, r1c3 = st.columns(3)
     
-    # Acesso rápido também checa permissão para redirecionar ou alertar
     with r1c1:
         with st.container(border=True):
             st.markdown("#### ✍️ REDATOR")
@@ -359,7 +362,6 @@ if menu_opcao == "📊 Dashboard":
 elif menu_opcao == "✍️ Redator Jurídico":
     st.markdown("<h2 class='tech-header'>✍️ REDATOR IA</h2>", unsafe_allow_html=True)
     
-    # Lógica de Redator... (Código original mantido simplificado)
     if "fatos_recuperados" not in st.session_state: st.session_state.fatos_recuperados = ""
     col_config, col_input = st.columns([1, 2])
     with col_config:
@@ -384,7 +386,6 @@ elif menu_opcao == "✍️ Redator Jurídico":
                     run_query("UPDATE usuarios SET creditos = creditos - 1 WHERE username = ?", (st.session_state.usuario_atual,))
                     run_query("INSERT INTO documentos (escritorio, data_criacao, cliente, area, tipo, conteudo) VALUES (?, ?, ?, ?, ?, ?)", (st.session_state.escritorio_atual, datetime.now().strftime("%d/%m/%Y"), cli, area, tipo, fatos + "||" + res))
                     st.markdown(res)
-                    # Função gerar_word simplificada para o exemplo
                     buf = BytesIO(); Document().save(buf); buf.seek(0)
                     st.download_button("BAIXAR DOCX", buf, "minuta.docx")
                     st.rerun()
@@ -395,7 +396,6 @@ elif menu_opcao == "✍️ Redator Jurídico":
 elif menu_opcao == "🧮 Calculadoras & Perícia":
     if verificar_acesso("Pro"):
         st.markdown("<h2 class='tech-header'>🧮 LABORATÓRIO DE PERÍCIA</h2>", unsafe_allow_html=True)
-        # Conteúdo da Perícia
         tipo_calc = st.selectbox("Cálculo", ["Trabalhista", "Cível", "Revisional"])
         dados = st.text_area("Dados Financeiros")
         if st.button("CALCULAR"):
@@ -407,7 +407,6 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
 elif menu_opcao == "🏛️ Estratégia de Audiência":
     if verificar_acesso("Elite"):
         st.markdown("<h2 class='tech-header'>🏛️ SIMULADOR DE AUDIÊNCIA</h2>", unsafe_allow_html=True)
-        # Conteúdo Audiência
         obs = st.text_area("Caso")
         if st.button("SIMULAR"):
             st.info("Simulação de audiência ativa.")
