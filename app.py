@@ -299,37 +299,67 @@ if menu_opcao == "📊 Dashboard":
     r1c2.container(border=True).markdown("#### 🧮 Perícia\nCálculos Trabalhistas e Cíveis.")
     r1c3.container(border=True).markdown("#### 🏛️ Audiência\nEstratégia e Perguntas.")
 
-# 2. REDATOR
+# 2. REDATOR (ATUALIZADO COM SELETOR DE CLIENTE)
 elif menu_opcao == "✍️ Redator Jurídico":
     st.markdown("<h2 class='highlight-gold'>✍️ Redator de Peças</h2>", unsafe_allow_html=True)
     if "fatos_recuperados" not in st.session_state: st.session_state.fatos_recuperados = ""
     if "cliente_recuperado" not in st.session_state: st.session_state.cliente_recuperado = ""
 
+    # Busca clientes existentes no banco para este escritório
+    df_clientes = run_query("SELECT DISTINCT cliente FROM documentos WHERE escritorio = ?", (st.session_state.escritorio_atual,), return_data=True)
+    lista_clientes = df_clientes['cliente'].tolist() if not df_clientes.empty else []
+
     c1, c2 = st.columns([1, 2])
     with c1:
-        tipo = st.selectbox("Peça", ["Inicial", "Contestação", "Recurso", "Contrato"])
-        area = st.selectbox("Área", ["Cível", "Trabalhista", "Criminal", "Família"])
+        st.markdown("### Configuração")
+        tipo = st.selectbox("Tipo de Peça", ["Inicial", "Contestação", "Recurso Inominado", "Apelação", "Contrato", "Parecer"])
+        area = st.selectbox("Área", ["Cível", "Trabalhista", "Criminal", "Família", "Tributário"])
         web = st.checkbox("Jurisprudência?", value=True)
-        cli = st.text_input("Cliente", value=st.session_state.cliente_recuperado)
+        
+        # --- SELETOR DE CLIENTE INTELIGENTE ---
+        st.markdown("### 👤 Cliente")
+        modo_cliente = st.radio("Opção:", ["Selecionar Existente", "Novo Cadastro"], horizontal=True, label_visibility="collapsed")
+        
+        cli_final = ""
+        if modo_cliente == "Selecionar Existente":
+            if lista_clientes:
+                # Se veio de um arquivo aberto ("cliente_recuperado"), tenta selecionar ele
+                idx = 0
+                if st.session_state.cliente_recuperado in lista_clientes:
+                    idx = lista_clientes.index(st.session_state.cliente_recuperado)
+                
+                cli_final = st.selectbox("Selecione:", lista_clientes, index=idx)
+            else:
+                st.warning("Nenhum cliente cadastrado. Cadastre o primeiro abaixo.")
+                cli_final = st.text_input("Nome do Novo Cliente:")
+        else:
+            cli_final = st.text_input("Nome do Novo Cliente:")
+        # ----------------------------------------
+
     with c2:
-        fatos = st.text_area("Fatos:", height=300, value=st.session_state.fatos_recuperados)
+        st.markdown("### Fatos e Dados")
+        fatos = st.text_area("Descreva o caso:", height=300, value=st.session_state.fatos_recuperados)
     
     if st.button("✨ GERAR MINUTA (1 CRÉDITO)"):
-        if creditos_atuais > 0 and fatos:
+        if creditos_atuais > 0 and fatos and cli_final:
             with st.spinner("Redigindo..."):
                 jur = buscar_jurisprudencia_real(f"{area} {tipo} {fatos}") if web else ""
                 prompt = f"Advogado {area}. Peça: {tipo}. Fatos: {fatos}. Jurisp: {jur}. Formal."
                 try:
                     res = genai.GenerativeModel(mod_escolhido).generate_content(prompt).text
                     run_query("UPDATE usuarios SET creditos = creditos - 1 WHERE username = ?", (st.session_state.usuario_atual,))
-                    if cli:
-                        run_query("INSERT INTO documentos (escritorio, data_criacao, cliente, area, tipo, conteudo) VALUES (?, ?, ?, ?, ?, ?)", 
-                                 (st.session_state.escritorio_atual, datetime.now().strftime("%d/%m/%Y"), cli, area, tipo, fatos + "||" + res[:500]))
+                    
+                    # Salva usando o nome do cliente selecionado (agrupando na pasta certa)
+                    run_query("INSERT INTO documentos (escritorio, data_criacao, cliente, area, tipo, conteudo) VALUES (?, ?, ?, ?, ?, ?)", 
+                                (st.session_state.escritorio_atual, datetime.now().strftime("%d/%m/%Y"), cli_final, area, tipo, fatos + "||" + res[:500]))
+                    
                     st.markdown(res)
                     st.download_button("Word", gerar_word(res), "Minuta.docx")
+                    st.success(f"Salvo na pasta de: {cli_final}")
+                    time.sleep(2)
                     st.rerun()
                 except Exception as e: st.error(str(e))
-        else: st.error("Sem créditos ou dados.")
+        else: st.error("Verifique créditos e campos obrigatórios.")
 
 # 3. CALCULADORA
 elif menu_opcao == "🧮 Calculadoras & Perícia":
@@ -375,25 +405,19 @@ elif menu_opcao == "🏛️ Estratégia de Audiência":
                 except: st.error("Erro na IA")
 
 # ==========================================================
-# 5. GESTÃO DE CASOS (ATUALIZADA: ADD ITENS)
+# 5. GESTÃO DE CASOS
 # ==========================================================
 elif menu_opcao == "📂 Gestão de Casos":
     st.markdown("<h2 class='highlight-gold'>📂 Arquivo Digital</h2>", unsafe_allow_html=True)
     
-    # Estado da Pasta Selecionada
     if "pasta_aberta" not in st.session_state: st.session_state.pasta_aberta = None
-
-    # Busca todos os documentos do escritório
     df_docs = run_query("SELECT * FROM documentos WHERE escritorio = ?", (st.session_state.escritorio_atual,), return_data=True)
 
     if not df_docs.empty:
-        # --- MODO 1: VISÃO DE PASTAS (CLIENTES) ---
+        # VISÃO DE PASTAS
         if st.session_state.pasta_aberta is None:
             st.info("Selecione uma pasta para ver os arquivos.")
-            
-            # Pega lista única de clientes
             clientes_unicos = df_docs['cliente'].unique()
-            
             cols = st.columns(4) 
             for i, cliente in enumerate(clientes_unicos):
                 with cols[i % 4]:
@@ -406,7 +430,7 @@ elif menu_opcao == "📂 Gestão de Casos":
                             st.session_state.pasta_aberta = cliente
                             st.rerun()
 
-        # --- MODO 2: DENTRO DA PASTA (ARQUIVOS + ADD NOVO) ---
+        # DENTRO DA PASTA
         else:
             col_back, col_title = st.columns([1, 10])
             with col_back:
@@ -416,61 +440,37 @@ elif menu_opcao == "📂 Gestão de Casos":
             with col_title:
                 st.markdown(f"### 📂 Pasta: {st.session_state.pasta_aberta}")
 
-            # --- PAINEL PARA ADICIONAR NOVO ITEM ---
+            # ADD ITEM
             with st.expander("➕ Adicionar Novo Documento ou Nota", expanded=False):
-                st.markdown("Adicione arquivos externos ou notas manuais para esta pasta.")
                 c_add1, c_add2 = st.columns(2)
                 novo_tipo = c_add1.text_input("Nome do Item (Ex: RG, Procuração):")
                 nova_area = c_add2.selectbox("Categoria:", ["Documentos Pessoais", "Provas", "Andamento", "Anotações", "Financeiro"])
                 
                 tab_up, tab_txt = st.tabs(["📤 Upload Arquivo", "✍️ Nota de Texto"])
-                
                 conteudo_novo = ""
-                with tab_up:
-                    arquivo_novo = st.file_uploader("Arquivo (PDF)", key="novo_up")
-                with tab_txt:
-                    texto_novo = st.text_area("Conteúdo da Nota:", key="nova_nota")
+                with tab_up: arquivo_novo = st.file_uploader("Arquivo (PDF)", key="novo_up")
+                with tab_txt: texto_novo = st.text_area("Conteúdo da Nota:", key="nova_nota")
 
                 if st.button("💾 Salvar na Pasta"):
                     if novo_tipo:
-                        # Define o conteúdo
-                        if arquivo_novo:
-                            conteudo_novo = f"[ARQUIVO EXTERNO] {extrair_texto_pdf(arquivo_novo)}"
-                        elif texto_novo:
-                            conteudo_novo = texto_novo
-                        else:
-                            conteudo_novo = "Item adicionado sem conteúdo."
-
-                        # Salva no banco
+                        if arquivo_novo: conteudo_novo = f"[ARQUIVO EXTERNO] {extrair_texto_pdf(arquivo_novo)}"
+                        elif texto_novo: conteudo_novo = texto_novo
+                        else: conteudo_novo = "Item adicionado sem conteúdo."
                         run_query("INSERT INTO documentos (escritorio, data_criacao, cliente, area, tipo, conteudo) VALUES (?, ?, ?, ?, ?, ?)", 
                                  (st.session_state.escritorio_atual, datetime.now().strftime("%d/%m/%Y"), st.session_state.pasta_aberta, nova_area, novo_tipo, conteudo_novo))
-                        st.success("Item adicionado com sucesso!")
+                        st.success("Adicionado!")
                         time.sleep(1)
                         st.rerun()
-                    else:
-                        st.warning("Dê um nome para o item.")
             
             st.divider()
-
-            # --- LISTA DE ARQUIVOS ---
             arquivos_cliente = df_docs[df_docs['cliente'] == st.session_state.pasta_aberta]
-
             for index, row in arquivos_cliente.iterrows():
-                # Ícone muda conforme categoria
                 icone = "📝" if row['area'] == "Anotações" else "📄"
-                
                 with st.expander(f"{icone} {row['tipo']} ({row['data_criacao']}) - {row['area']}"):
                     texto_view = row['conteudo'].split("||")[-1] if "||" in row['conteudo'] else row['conteudo']
                     st.markdown(texto_view)
-                    st.download_button(
-                        label="📥 Baixar",
-                        data=gerar_word(texto_view),
-                        file_name=f"{row['tipo']}.docx",
-                        key=f"down_{row['id']}"
-                    )
-
-    else:
-        st.warning("📭 Nenhum arquivo encontrado.")
+                    st.download_button("📥 Baixar", gerar_word(texto_view), f"{row['tipo']}.docx", key=f"down_{row['id']}")
+    else: st.warning("📭 Nenhum arquivo encontrado.")
 
 # 6. MONITOR
 elif menu_opcao == "🚦 Monitor de Prazos":
@@ -508,4 +508,4 @@ elif menu_opcao == "🔧 Ferramentas Extras":
         if p1 and p2 and st.button("Comparar"): st.write(genai.GenerativeModel(mod_escolhido).generate_content(f"Dif: {extrair_texto_pdf(p1)} vs {extrair_texto_pdf(p2)}").text)
 
 st.markdown("---")
-st.markdown("<center style='color: #555;'>🔒 LegalHub Enterprise v4.5 | Full GED System</center>", unsafe_allow_html=True)
+st.markdown("<center style='color: #555;'>🔒 LegalHub Enterprise v5.0 | Client Selector</center>", unsafe_allow_html=True)
