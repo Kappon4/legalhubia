@@ -23,7 +23,7 @@ import base64
 from google.api_core.exceptions import ResourceExhausted, NotFound, InvalidArgument
 
 # ==========================================================
-# 1. CONFIGURAÇÃO VISUAL
+# 1. CONFIGURAÇÃO VISUAL - TEMA CYBER FUTURE
 # ==========================================================
 st.set_page_config(
     page_title="LegalHub Elite | AI System", 
@@ -62,7 +62,7 @@ def local_css():
         
         .tech-header { background: linear-gradient(90deg, #FFFFFF 0%, var(--neon-blue) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 700; }
 
-        /* MODULE CARDS (NOVO) */
+        /* MODULE CARDS */
         .module-card {
             background: rgba(15, 23, 42, 0.9);
             border: 1px solid rgba(255, 255, 255, 0.1);
@@ -152,16 +152,26 @@ def buscar_intimacoes_email(user, pwd, server):
 def init_db():
     conn = sqlite3.connect('legalhub.db')
     c = conn.cursor()
-    # A coluna 'plano' agora armazena uma string de módulos separados por vírgula. Ex: "base,litigio,calculo"
+    # A coluna 'plano' agora armazena uma string de módulos separados por vírgula
     c.execute('''CREATE TABLE IF NOT EXISTS usuarios (
             username TEXT PRIMARY KEY, senha TEXT, escritorio TEXT, email_oab TEXT, creditos INTEGER DEFAULT 10, plano TEXT DEFAULT 'base')''')
-    try: c.execute("ALTER TABLE usuarios ADD COLUMN creditos INTEGER DEFAULT 10"); except: pass
-    try: c.execute("ALTER TABLE usuarios ADD COLUMN plano TEXT DEFAULT 'base'"); except: pass
+    
+    # --- MIGRACAO CORRIGIDA (SYNTAX ERROR FIX) ---
+    try:
+        c.execute("ALTER TABLE usuarios ADD COLUMN creditos INTEGER DEFAULT 10")
+    except:
+        pass
+        
+    try:
+        c.execute("ALTER TABLE usuarios ADD COLUMN plano TEXT DEFAULT 'base'")
+    except:
+        pass
+    # ---------------------------------------------
+
     c.execute('''CREATE TABLE IF NOT EXISTS documentos (
             id INTEGER PRIMARY KEY AUTOINCREMENT, escritorio TEXT, data_criacao TEXT, cliente TEXT, area TEXT, tipo TEXT, conteudo TEXT)''')
     c.execute('SELECT count(*) FROM usuarios')
     if c.fetchone()[0] == 0:
-        # Usuários padrão com diferentes módulos
         c.execute("INSERT OR IGNORE INTO usuarios VALUES ('advogado1', '123', 'Escritório Alpha', 'lucas@alpha.adv.br', 10, 'base')")
         c.execute("INSERT OR IGNORE INTO usuarios VALUES ('advogado2', '123', 'Escritório Beta', 'joao@beta.adv.br', 50, 'base,litigio')")
         c.execute("INSERT OR IGNORE INTO usuarios VALUES ('admin', 'admin', 'LegalHub Master', 'suporte@legalhub.com', 9999, 'base,litigio,calculo,hightech')")
@@ -186,20 +196,12 @@ init_db()
 # ==========================================================
 # 3. LÓGICA DE MÓDULOS (SEGMENTAÇÃO)
 # ==========================================================
-# Módulos disponíveis:
-# 'base' -> Dashboard, Gestão de Casos, Redator Básico
-# 'litigio' -> Audiência (com upload), Prazos, Jurisprudência Web
-# 'calculo' -> Perícia, Calculadoras
-# 'hightech' -> Ferramentas Extras (Chat PDF, etc)
+# Módulos: 'base', 'litigio', 'calculo', 'hightech'
 
 def verificar_acesso(modulo_necessario):
     """Verifica se o usuário possui o módulo específico na sua string de plano."""
     modulos_usuario = st.session_state.get('plano_atual', 'base').split(',')
-    
-    # O módulo 'base' todo mundo tem
-    if modulo_necessario == 'base':
-        return True
-    
+    if modulo_necessario == 'base': return True
     return modulo_necessario in modulos_usuario
 
 def tela_bloqueio(nome_modulo, preco_sugerido):
@@ -285,7 +287,6 @@ col_logo, col_menu = st.columns([1, 4])
 with col_logo: st.markdown("""<div class='header-logo'><h1 class='tech-header'>LEGALHUB<span>ELITE</span></h1></div>""", unsafe_allow_html=True)
 
 with col_menu:
-    # Mapeamento do Menu
     mapa_nav = {
         "Dashboard": "📊 Dashboard",
         "Redator IA": "✍️ Redator Jurídico", 
@@ -312,9 +313,8 @@ with st.sidebar:
     img_base64 = get_base64_of_bin_file("diagrama-ia.png")
     if img_base64: st.markdown(f'<img src="data:image/png;base64,{img_base64}" style="width:100%; margin-bottom: 20px;">', unsafe_allow_html=True)
     st.markdown("<h2 class='tech-header' style='font-size:1.5rem;'>CONFIGURAÇÕES</h2>", unsafe_allow_html=True)
-    st.markdown(f"<div style='font-size:0.8rem; color:#E2E8F0;'>User: {st.session_state.usuario_atual}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size:0.8rem; color:#E2E8F0;'>User: {st.session_state.usuario_atual}<br>Banca: {st.session_state.escritorio_atual}</div>", unsafe_allow_html=True)
     
-    # Exibe quais módulos estão ativos
     modulos_ativos = st.session_state.plano_atual.replace("base", "Core").replace("litigio", "Litígio").replace("calculo", "Cálculos").replace("hightech", "Tech")
     st.info(f"Módulos: {modulos_ativos}")
 
@@ -389,7 +389,7 @@ if menu_opcao == "📊 Dashboard":
             <div style='background: rgba(245, 158, 11, 0.1); border-left: 3px solid #F59E0B; padding: 10px; border-radius: 4px;'><strong style='color: #F59E0B; font-family: Rajdhani;'>⚖️ LIVE JURISPRUDENCE</strong><br><span style='font-size: 0.8rem; color: #E2E8F0;'>Sincronia STF/STJ.</span></div>
             """, unsafe_allow_html=True)
 
-# 2. REDATOR JURÍDICO (CORE - LIBERADO, MAS RECURSOS AVANÇADOS TRAVADOS)
+# 2. REDATOR JURÍDICO (CORE - LIBERADO)
 elif menu_opcao == "✍️ Redator Jurídico":
     st.markdown("<h2 class='tech-header'>✍️ REDATOR IA (CORE)</h2>", unsafe_allow_html=True)
     if "fatos_recuperados" not in st.session_state: st.session_state.fatos_recuperados = ""
@@ -405,7 +405,6 @@ elif menu_opcao == "✍️ Redator Jurídico":
             area = st.selectbox("Área", ["Cível", "Trabalhista", "Criminal", "Família", "Tributário"])
             tom = st.selectbox("Tom de Voz", ["Formal", "Combativo", "Conciliador"])
             
-            # Recurso do Módulo LITIGIO
             tem_litigio = verificar_acesso("litigio")
             web = st.checkbox("🔍 Jurisprudência Web (Módulo Litígio)", value=tem_litigio, disabled=not tem_litigio)
             if not tem_litigio: st.caption("🔒 Adicione o módulo Litígio para ativar.")
@@ -589,7 +588,6 @@ elif menu_opcao == "💎 Meus Planos":
     st.markdown("<h2 class='tech-header' style='text-align:center;'>MONTE SEU PLANO</h2>", unsafe_allow_html=True)
     st.write("")
     
-    # Recupera módulos atuais
     meus_modulos = st.session_state.plano_atual.split(',')
     
     c1, c2 = st.columns([2, 1])
