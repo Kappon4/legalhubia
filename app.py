@@ -23,7 +23,7 @@ import base64
 from google.api_core.exceptions import ResourceExhausted, NotFound, InvalidArgument
 
 # ==========================================================
-# 1. CONFIGURAÇÃO VISUAL - TEMA CYBER FUTURE
+# 1. CONFIGURAÇÃO VISUAL
 # ==========================================================
 st.set_page_config(
     page_title="LegalHub Elite | AI System", 
@@ -43,8 +43,9 @@ def local_css():
             --bg-card: rgba(15, 23, 42, 0.6);
             --text-main: #FFFFFF;
             --neon-blue: #00F3FF;
+            --neon-green: #10B981;
             --neon-red: #FF0055;
-            --neon-gold: #FFD700;
+            --border-glow: 1px solid rgba(0, 243, 255, 0.2);
         }
 
         .stApp {
@@ -58,16 +59,21 @@ def local_css():
 
         h1, h2, h3, h4, h5, h6 { color: #FFFFFF !important; font-family: 'Rajdhani', sans-serif; text-transform: uppercase; letter-spacing: 1.5px; }
         p, .stCaption, label, .stMarkdown { color: #E2E8F0 !important; font-family: 'Inter', sans-serif; }
-        div[data-testid="stMetricValue"] { color: var(--neon-blue) !important; text-shadow: 0 0 10px rgba(0, 243, 255, 0.5); }
+        
         .tech-header { background: linear-gradient(90deg, #FFFFFF 0%, var(--neon-blue) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 700; }
 
-        /* CARDS & CONTAINERS */
-        .price-card { background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 20px; text-align: center; transition: all 0.3s ease; }
-        .price-card:hover { transform: translateY(-5px); border-color: var(--neon-blue); box-shadow: 0 0 20px rgba(0, 243, 255, 0.2); }
-        .price-title { font-family: 'Rajdhani'; font-size: 1.5rem; font-weight: bold; color: #FFF; margin-bottom: 10px; }
-        .price-amount { font-size: 2.5rem; font-weight: 800; color: var(--neon-blue); margin: 15px 0; }
-        .elite-card { border: 1px solid var(--neon-gold); background: rgba(255, 215, 0, 0.05); }
-        .elite-card .price-amount { color: var(--neon-gold); text-shadow: 0 0 10px rgba(255,215,0,0.5); }
+        /* MODULE CARDS (NOVO) */
+        .module-card {
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            transition: all 0.3s ease;
+        }
+        .module-active { border: 1px solid var(--neon-green); box-shadow: 0 0 15px rgba(16, 185, 129, 0.2); }
+        .module-title { font-family: 'Rajdhani'; font-size: 1.2rem; font-weight: bold; color: #FFF; }
+        .module-price { float: right; color: var(--neon-blue); font-weight: bold; }
 
         /* LOCK SCREEN */
         .lock-screen { border: 1px solid var(--neon-red); background: rgba(255, 0, 85, 0.05); border-radius: 10px; padding: 40px; text-align: center; margin-top: 50px; }
@@ -109,9 +115,7 @@ def get_base64_of_bin_file(bin_file):
         return base64.b64encode(data).decode()
     except FileNotFoundError: return None
 
-# --- FUNÇÕES AUXILIARES ---
 def gerar_word(texto):
-    """Gera um arquivo Word a partir de um texto."""
     doc = Document()
     for p in texto.split('\n'):
         if p.strip(): doc.add_paragraph(p)
@@ -121,12 +125,10 @@ def gerar_word(texto):
     return buf
 
 def extrair_texto_pdf(arquivo):
-    """Extrai texto de um PDF."""
     try: return "".join([p.extract_text() for p in PdfReader(arquivo).pages])
     except: return ""
 
 def buscar_intimacoes_email(user, pwd, server):
-    """Busca emails via IMAP."""
     try:
         mail = imaplib.IMAP4_SSL(server)
         mail.login(user, pwd)
@@ -146,28 +148,23 @@ def buscar_intimacoes_email(user, pwd, server):
                         found.append({"assunto": subj, "corpo": str(msg)[:2000]})
         return found, None
     except Exception as e: return [], str(e)
-# ----------------------------------------------
 
 def init_db():
     conn = sqlite3.connect('legalhub.db')
     c = conn.cursor()
+    # A coluna 'plano' agora armazena uma string de módulos separados por vírgula. Ex: "base,litigio,calculo"
     c.execute('''CREATE TABLE IF NOT EXISTS usuarios (
-            username TEXT PRIMARY KEY, senha TEXT, escritorio TEXT, email_oab TEXT, creditos INTEGER DEFAULT 10, plano TEXT DEFAULT 'Starter')''')
-    try: 
-        c.execute("ALTER TABLE usuarios ADD COLUMN creditos INTEGER DEFAULT 10")
-    except: 
-        pass
-    try: 
-        c.execute("ALTER TABLE usuarios ADD COLUMN plano TEXT DEFAULT 'Starter'")
-    except: 
-        pass
+            username TEXT PRIMARY KEY, senha TEXT, escritorio TEXT, email_oab TEXT, creditos INTEGER DEFAULT 10, plano TEXT DEFAULT 'base')''')
+    try: c.execute("ALTER TABLE usuarios ADD COLUMN creditos INTEGER DEFAULT 10"); except: pass
+    try: c.execute("ALTER TABLE usuarios ADD COLUMN plano TEXT DEFAULT 'base'"); except: pass
     c.execute('''CREATE TABLE IF NOT EXISTS documentos (
             id INTEGER PRIMARY KEY AUTOINCREMENT, escritorio TEXT, data_criacao TEXT, cliente TEXT, area TEXT, tipo TEXT, conteudo TEXT)''')
     c.execute('SELECT count(*) FROM usuarios')
     if c.fetchone()[0] == 0:
-        c.execute("INSERT OR IGNORE INTO usuarios VALUES ('advogado1', '123', 'Escritório Alpha', 'lucas@alpha.adv.br', 10, 'Starter')")
-        c.execute("INSERT OR IGNORE INTO usuarios VALUES ('advogado2', '123', 'Escritório Beta', 'joao@beta.adv.br', 5, 'Pro')")
-        c.execute("INSERT OR IGNORE INTO usuarios VALUES ('admin', 'admin', 'LegalHub Master', 'suporte@legalhub.com', 9999, 'Elite')")
+        # Usuários padrão com diferentes módulos
+        c.execute("INSERT OR IGNORE INTO usuarios VALUES ('advogado1', '123', 'Escritório Alpha', 'lucas@alpha.adv.br', 10, 'base')")
+        c.execute("INSERT OR IGNORE INTO usuarios VALUES ('advogado2', '123', 'Escritório Beta', 'joao@beta.adv.br', 50, 'base,litigio')")
+        c.execute("INSERT OR IGNORE INTO usuarios VALUES ('admin', 'admin', 'LegalHub Master', 'suporte@legalhub.com', 9999, 'base,litigio,calculo,hightech')")
         conn.commit()
     conn.close()
 
@@ -187,22 +184,35 @@ def run_query(query, params=(), return_data=False):
 init_db()
 
 # ==========================================================
-# 3. LÓGICA DE ACESSO E PLANOS
+# 3. LÓGICA DE MÓDULOS (SEGMENTAÇÃO)
 # ==========================================================
-NIVEIS_PLANO = {"Starter": 1, "Pro": 2, "Elite": 3}
+# Módulos disponíveis:
+# 'base' -> Dashboard, Gestão de Casos, Redator Básico
+# 'litigio' -> Audiência (com upload), Prazos, Jurisprudência Web
+# 'calculo' -> Perícia, Calculadoras
+# 'hightech' -> Ferramentas Extras (Chat PDF, etc)
 
-def verificar_acesso(plano_minimo):
-    plano_usuario = st.session_state.get('plano_atual', 'Starter')
-    return NIVEIS_PLANO.get(plano_usuario, 1) >= NIVEIS_PLANO.get(plano_minimo, 1)
+def verificar_acesso(modulo_necessario):
+    """Verifica se o usuário possui o módulo específico na sua string de plano."""
+    modulos_usuario = st.session_state.get('plano_atual', 'base').split(',')
+    
+    # O módulo 'base' todo mundo tem
+    if modulo_necessario == 'base':
+        return True
+    
+    return modulo_necessario in modulos_usuario
 
-def tela_bloqueio(plano_necessario):
+def tela_bloqueio(nome_modulo, preco_sugerido):
     st.markdown(f"""
-    <div class='lock-screen'><div class='lock-icon'>🔒</div><div class='lock-title'>ACCESS DENIED</div>
-    <p class='lock-desc'>Recurso exclusivo para membros <strong>{plano_necessario.upper()}</strong>.</p></div>
+    <div class='lock-screen'><div class='lock-icon'>🔒</div>
+    <div class='lock-title'>MÓDULO {nome_modulo.upper()} BLOQUEADO</div>
+    <p class='lock-desc'>Adicione este segmento ao seu plano para liberar esta funcionalidade.</p>
+    </div>
     """, unsafe_allow_html=True)
     c1,c2,c3 = st.columns([1,2,1])
     with c2: 
-        if st.button("🚀 FAZER UPGRADE", use_container_width=True): st.session_state.navegacao_override = "💎 Planos Premium"; st.rerun()
+        if st.button(f"➕ ADICIONAR POR R$ {preco_sugerido}/mês", use_container_width=True): 
+            st.session_state.navegacao_override = "💎 Meus Planos"; st.rerun()
 
 # ==========================================================
 # 4. CONTROLE DE SESSÃO & LOGIN
@@ -210,7 +220,7 @@ def tela_bloqueio(plano_necessario):
 if "logado" not in st.session_state: st.session_state.logado = False
 if "usuario_atual" not in st.session_state: st.session_state.usuario_atual = ""
 if "escritorio_atual" not in st.session_state: st.session_state.escritorio_atual = ""
-if "plano_atual" not in st.session_state: st.session_state.plano_atual = "Starter"
+if "plano_atual" not in st.session_state: st.session_state.plano_atual = "base"
 
 if not st.session_state.logado:
     if "user" in st.query_params:
@@ -275,7 +285,16 @@ col_logo, col_menu = st.columns([1, 4])
 with col_logo: st.markdown("""<div class='header-logo'><h1 class='tech-header'>LEGALHUB<span>ELITE</span></h1></div>""", unsafe_allow_html=True)
 
 with col_menu:
-    mapa_nav = {"Dashboard": "📊 Dashboard", "Redator IA": "✍️ Redator Jurídico", "Perícia & Calc": "🧮 Calculadoras & Perícia", "Audiência": "🏛️ Estratégia de Audiência", "Gestão Casos": "📂 Gestão de Casos", "Monitor Prazos": "🚦 Monitor de Prazos", "Assinatura": "💎 Planos Premium"}
+    # Mapeamento do Menu
+    mapa_nav = {
+        "Dashboard": "📊 Dashboard",
+        "Redator IA": "✍️ Redator Jurídico", 
+        "Perícia & Calc": "🧮 Calculadoras & Perícia",
+        "Audiência": "🏛️ Estratégia de Audiência",
+        "Gestão Casos": "📂 Gestão de Casos",
+        "Monitor Prazos": "🚦 Monitor de Prazos",
+        "Assinatura": "💎 Meus Planos"
+    }
     opcoes_menu = list(mapa_nav.keys())
     idx_radio = 0
     if st.session_state.navegacao_override:
@@ -293,11 +312,11 @@ with st.sidebar:
     img_base64 = get_base64_of_bin_file("diagrama-ia.png")
     if img_base64: st.markdown(f'<img src="data:image/png;base64,{img_base64}" style="width:100%; margin-bottom: 20px;">', unsafe_allow_html=True)
     st.markdown("<h2 class='tech-header' style='font-size:1.5rem;'>CONFIGURAÇÕES</h2>", unsafe_allow_html=True)
-    st.markdown(f"<div style='font-size:0.8rem; color:#E2E8F0;'>User: {st.session_state.usuario_atual}<br>Banca: {st.session_state.escritorio_atual}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size:0.8rem; color:#E2E8F0;'>User: {st.session_state.usuario_atual}</div>", unsafe_allow_html=True)
     
-    plano_cor = "#FFD700" if st.session_state.plano_atual == "Elite" else "#00F3FF"
-    if st.session_state.plano_atual == "Starter": plano_cor = "#FFFFFF"
-    st.markdown(f"<div style='border:1px solid {plano_cor}; padding:5px; border-radius:5px; text-align:center; color:{plano_cor}; margin:10px 0;'>PLANO: {st.session_state.plano_atual.upper()}</div>", unsafe_allow_html=True)
+    # Exibe quais módulos estão ativos
+    modulos_ativos = st.session_state.plano_atual.replace("base", "Core").replace("litigio", "Litígio").replace("calculo", "Cálculos").replace("hightech", "Tech")
+    st.info(f"Módulos: {modulos_ativos}")
 
     if "GOOGLE_API_KEY" not in st.secrets:
         st.text_input("🔑 API Key:", type="password", key="sidebar_api_key")
@@ -321,7 +340,7 @@ with st.sidebar:
 # LÓGICA DAS TELAS
 # ==========================================================
 
-# 1. DASHBOARD
+# 1. DASHBOARD (CORE - LIBERADO)
 if menu_opcao == "📊 Dashboard":
     img_base64 = get_base64_of_bin_file("diagrama-ia.png")
     if img_base64: st.markdown(f"""<div style="display: flex; justify-content: center;"><img src="data:image/png;base64,{img_base64}" class="floating-logo" style="width: 200px;"></div>""", unsafe_allow_html=True)
@@ -331,22 +350,22 @@ if menu_opcao == "📊 Dashboard":
     docs_feitos = run_query("SELECT count(*) FROM documentos WHERE escritorio = ?", (st.session_state.escritorio_atual,), return_data=True).iloc[0][0]
     c1.metric("DOCS GERADOS", docs_feitos)
     c2.metric("SALDO CRÉDITOS", creditos_atuais)
-    c3.metric("STATUS CONTA", st.session_state.plano_atual.upper())
+    c3.metric("STATUS", "Ativo")
     
     st.write("")
     st.subheader("🛠️ ACESSO RÁPIDO")
     r1c1, r1c2, r1c3 = st.columns(3)
     with r1c1:
         with st.container(border=True):
-            st.markdown("#### ✍️ REDATOR"); st.caption("Crie petições e contratos.")
+            st.markdown("#### ✍️ REDATOR (Core)"); st.caption("Crie petições e contratos.")
             if st.button("ABRIR", key="d_redator"): st.session_state.navegacao_override = "✍️ Redator Jurídico"; st.rerun()
     with r1c2:
         with st.container(border=True):
-            st.markdown("#### 🧮 PERÍCIA"); st.caption("Cálculos Trabalhistas e Cíveis.")
+            st.markdown("#### 🧮 PERÍCIA (Módulo)"); st.caption("Cálculos Trabalhistas e Cíveis.")
             if st.button("ABRIR", key="d_pericia"): st.session_state.navegacao_override = "🧮 Calculadoras & Perícia"; st.rerun()
     with r1c3:
         with st.container(border=True):
-            st.markdown("#### 🏛️ AUDIÊNCIA"); st.caption("Estratégia e Perguntas.")
+            st.markdown("#### 🏛️ AUDIÊNCIA (Módulo)"); st.caption("Estratégia e Perguntas.")
             if st.button("ABRIR", key="d_aud"): st.session_state.navegacao_override = "🏛️ Estratégia de Audiência"; st.rerun()
 
     st.write("")
@@ -370,9 +389,9 @@ if menu_opcao == "📊 Dashboard":
             <div style='background: rgba(245, 158, 11, 0.1); border-left: 3px solid #F59E0B; padding: 10px; border-radius: 4px;'><strong style='color: #F59E0B; font-family: Rajdhani;'>⚖️ LIVE JURISPRUDENCE</strong><br><span style='font-size: 0.8rem; color: #E2E8F0;'>Sincronia STF/STJ.</span></div>
             """, unsafe_allow_html=True)
 
-# 2. REDATOR JURÍDICO (SEM UPLOAD - REMOVIDO)
+# 2. REDATOR JURÍDICO (CORE - LIBERADO, MAS RECURSOS AVANÇADOS TRAVADOS)
 elif menu_opcao == "✍️ Redator Jurídico":
-    st.markdown("<h2 class='tech-header'>✍️ REDATOR IA AVANÇADO</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 class='tech-header'>✍️ REDATOR IA (CORE)</h2>", unsafe_allow_html=True)
     if "fatos_recuperados" not in st.session_state: st.session_state.fatos_recuperados = ""
     
     df_clientes = run_query("SELECT DISTINCT cliente FROM documentos WHERE escritorio = ?", (st.session_state.escritorio_atual,), return_data=True)
@@ -381,13 +400,16 @@ elif menu_opcao == "✍️ Redator Jurídico":
     col_config, col_input = st.columns([1, 2])
     with col_config:
         with st.container(border=True):
-            st.markdown("##### ⚙️ ESTRUTURA DA PEÇA")
-            tipo = st.selectbox("Tipo de Peça", ["Petição Inicial", "Contestação", "Réplica", "Recurso Inominado", "Apelação", "Contrato", "Parecer Jurídico", "Mandado de Segurança"])
-            area = st.selectbox("Área", ["Cível", "Trabalhista", "Criminal", "Família", "Tributário", "Previdenciário", "Consumidor"])
-            tom = st.selectbox("Tom de Voz", ["Formal e Técnico", "Combativo e Incisivo", "Conciliador", "Acadêmico"])
-            web_disabled = not verificar_acesso("Pro")
-            web = st.checkbox("🔍 Buscar Jurisprudência Atualizada (Web)", value=not web_disabled, disabled=web_disabled)
-            if web_disabled: st.caption("🔒 Upgrade para PRO para liberar.")
+            st.markdown("##### ⚙️ ESTRUTURA")
+            tipo = st.selectbox("Tipo de Peça", ["Petição Inicial", "Contestação", "Réplica", "Recurso Inominado", "Contrato", "Parecer"])
+            area = st.selectbox("Área", ["Cível", "Trabalhista", "Criminal", "Família", "Tributário"])
+            tom = st.selectbox("Tom de Voz", ["Formal", "Combativo", "Conciliador"])
+            
+            # Recurso do Módulo LITIGIO
+            tem_litigio = verificar_acesso("litigio")
+            web = st.checkbox("🔍 Jurisprudência Web (Módulo Litígio)", value=tem_litigio, disabled=not tem_litigio)
+            if not tem_litigio: st.caption("🔒 Adicione o módulo Litígio para ativar.")
+            
             st.markdown("---")
             st.markdown("##### 👤 CLIENTE")
             modo_cliente = st.radio("Seleção:", ["Existente", "Novo"], horizontal=True, label_visibility="collapsed")
@@ -397,26 +419,20 @@ elif menu_opcao == "✍️ Redator Jurídico":
     with col_input:
         with st.container(border=True):
             st.markdown("##### 📝 DADOS E FATOS")
-            # --- UPLOAD REMOVIDO DESTA ABA ---
             fatos = st.text_area("Descreva os fatos detalhadamente:", height=200, value=st.session_state.fatos_recuperados)
-            legislacao_extra = st.text_input("Citar Legislação/Súmula Específica (Opcional):", placeholder="Ex: Súmula 331 do TST")
-            formato = st.radio("Formato de Saída:", ["Texto Corrido", "Tópicos Estruturados"], horizontal=True)
+            legislacao_extra = st.text_input("Legislação/Súmula Específica:", placeholder="Ex: Súmula 331 do TST")
+            formato = st.radio("Formato de Saída:", ["Texto Corrido", "Tópicos"], horizontal=True)
     
     st.write("")
     if st.button("✨ GERAR MINUTA COMPLETA (1 CRÉDITO)", use_container_width=True):
         if creditos_atuais > 0 and fatos and cli_final:
-            with st.spinner("Analisando caso, buscando teses e redigindo..."):
-                jur = buscar_jurisprudencia_real(f"{area} {tipo} {fatos}") if web else "Jurisprudência padrão aplicada."
+            with st.spinner("Analisando caso e redigindo..."):
+                jur = buscar_jurisprudencia_real(f"{area} {tipo} {fatos}") if web else "Jurisprudência padrão aplicada (Sem Web Search)."
                 prompt = f"""
-                Atue como Advogado Sênior especialista em {area}.
-                Escreva uma {tipo} completa.
-                Tom: {tom}.
-                Cliente: {cli_final}.
-                Fatos: {fatos}.
-                Legislação Obrigatória: {legislacao_extra}.
-                Jurisprudência encontrada para usar: {jur}.
-                Formato: {formato}.
-                Estruture com: Endereçamento, Qualificação, Fatos, Direito (com teses robustas), Pedidos e Fechamento.
+                Atue como Advogado Sênior. Escreva uma {tipo} completa.
+                Tom: {tom}. Cliente: {cli_final}. Fatos: {fatos}.
+                Lei: {legislacao_extra}. Juris: {jur}. Formato: {formato}.
+                Estruture com: Endereçamento, Fatos, Direito, Pedidos.
                 """
                 try:
                     res = genai.GenerativeModel(mod_escolhido).generate_content(prompt).text
@@ -429,81 +445,60 @@ elif menu_opcao == "✍️ Redator Jurídico":
                 except Exception as e: st.error(f"Erro: {str(e)}")
         else: st.error("Créditos insuficientes ou dados faltantes.")
 
-# 3. CALCULADORA
+# 3. CALCULADORA (MÓDULO CALCULO)
 elif menu_opcao == "🧮 Calculadoras & Perícia":
-    if verificar_acesso("Pro"):
+    if verificar_acesso("calculo"):
         st.markdown("<h2 class='tech-header'>🧮 LABORATÓRIO DE PERÍCIA</h2>", unsafe_allow_html=True)
-        tab_calc1, tab_calc2 = st.tabs(["⚡ Cálculo Rápido", "📑 Laudo Pericial Completo"])
+        tab_calc1, tab_calc2 = st.tabs(["⚡ Cálculo Rápido", "📑 Laudo Pericial"])
         with tab_calc1:
             c1, c2 = st.columns(2)
             with c1:
-                tipo_calc = st.selectbox("Tipo de Cálculo", ["Atualização Monetária", "Rescisão Trabalhista", "Pensão Alimentícia", "Aluguel (IGPM/IPCA)"])
-                valor = st.number_input("Valor Original (R$)", min_value=0.0)
+                tipo_calc = st.selectbox("Tipo de Cálculo", ["Atualização Monetária", "Rescisão Trabalhista", "Pensão", "Aluguel"])
+                valor = st.number_input("Valor (R$)", min_value=0.0)
             with c2:
-                indice = st.selectbox("Índice de Correção", ["INPC", "IPCA-E", "IGP-M", "TR"])
-                juros = st.selectbox("Juros de Mora", ["1% a.m. Simples", "1% a.m. Composto", "SELIC", "Sem Juros"])
+                indice = st.selectbox("Índice", ["INPC", "IPCA-E", "IGP-M", "TR"])
+                juros = st.selectbox("Juros", ["1% a.m.", "SELIC", "Sem Juros"])
                 dt_inicio = st.date_input("Data Inicial")
             if st.button("CALCULAR AGORA"):
                 st.info("Cálculo processado pela IA...")
                 valor_final = valor * 1.5 
-                st.metric("VALOR ATUALIZADO (ESTIMADO)", f"R$ {valor_final:,.2f}")
+                st.metric("VALOR ESTIMADO", f"R$ {valor_final:,.2f}")
         with tab_calc2:
-            upload = st.file_uploader("Anexar Contrato/Sentença (PDF)", type="pdf")
-            quesitos = st.text_area("Quesitos para o Assistente Técnico:")
-            if st.button("GERAR LAUDO TÉCNICO"):
+            upload = st.file_uploader("Anexar Documento (PDF)", type="pdf")
+            quesitos = st.text_area("Quesitos:")
+            if st.button("GERAR LAUDO"):
                 if upload:
-                    with st.spinner("Analisando PDF e calculando..."):
+                    with st.spinner("Analisando..."):
                         txt = extrair_texto_pdf(upload)
                         res = genai.GenerativeModel(mod_escolhido).generate_content(f"Perito Contábil. Analise: {txt}. Quesitos: {quesitos}.").text
                         st.markdown(res)
                         st.download_button("BAIXAR LAUDO", gerar_word(res), "Laudo.docx")
-    else: tela_bloqueio("Pro")
+    else: tela_bloqueio("CALCULISTA", "97")
 
-# 4. AUDIENCIA (COM UPLOAD DE PDF - MOVIDO PARA CÁ)
+# 4. AUDIENCIA (MÓDULO LITIGIO)
 elif menu_opcao == "🏛️ Estratégia de Audiência":
-    if verificar_acesso("Elite"):
+    if verificar_acesso("litigio"):
         st.markdown("<h2 class='tech-header'>🏛️ ESTRATEGISTA DE AUDIÊNCIA</h2>", unsafe_allow_html=True)
         c1, c2, c3 = st.columns(3)
-        with c1: area = st.selectbox("Rito/Área", ["Trabalhista (Ordinário)", "Trabalhista (Sumaríssimo)", "Cível (Comum)", "Juizado Especial"])
-        with c2: papel = st.selectbox("Papel", ["Advogado do Autor", "Advogado do Réu"])
-        with c3: perfil_juiz = st.selectbox("Perfil do Juiz (IA Adaptativa)", ["Padrão", "Legalista Rígido", "Conciliador/Mediador", "Pró-Reclamante", "Pró-Empresa"])
-        
+        with c1: area = st.selectbox("Área", ["Trabalhista", "Cível"])
+        with c2: papel = st.selectbox("Papel", ["Autor", "Réu"])
+        with c3: perfil_juiz = st.selectbox("Perfil Juiz", ["Padrão", "Rígido", "Conciliador"])
         col_txt, col_up = st.columns([2, 1])
-        with col_txt: 
-            detalhes = st.text_area("Resumo do Caso / Pontos Controversos:", height=150)
-        with col_up: 
-            # --- NOVO LOCAL DO UPLOAD ---
-            upload_autos = st.file_uploader("Anexar Autos/Peças (PDF) para Contexto", type="pdf")
-            # ----------------------------
-            testemunhas = st.text_area("Lista de Testemunhas (Opcional):")
+        with col_txt: detalhes = st.text_area("Resumo do Caso:")
+        with col_up: upload_autos = st.file_uploader("Anexar Autos (PDF)", type="pdf")
         
         if st.button("🔮 SIMULAR CENÁRIOS"):
             if detalhes:
-                with st.spinner(f"Simulando audiência com juiz perfil '{perfil_juiz}'..."):
-                    # Extrai contexto se houver upload
-                    contexto_pdf = ""
-                    if upload_autos:
-                        contexto_pdf = f"\n\n[CONTEXTO DOS AUTOS - DOCUMENTOS ANEXADOS]:\n{extrair_texto_pdf(upload_autos)}"
-
-                    prompt = f"""
-                    Aja como um estrategista jurídico sênior.
-                    Caso: {detalhes}. Área: {area}. Meu lado: {papel}.
-                    {contexto_pdf}
-                    Perfil do Juiz: {perfil_juiz}. Testemunhas: {testemunhas}.
-                    
-                    Gere uma estratégia dividida em 3 seções:
-                    1. Perguntas Cruzadas: O que perguntar para a outra parte e testemunhas para expor contradições.
-                    2. Análise de Risco: O que o juiz {perfil_juiz} provavelmente vai focar.
-                    3. Alegações Finais Orais: Um roteiro curto e impactante.
-                    """
+                with st.spinner(f"Simulando..."):
+                    contexto_pdf = f"\n[DOC]: {extrair_texto_pdf(upload_autos)}" if upload_autos else ""
+                    prompt = f"Estrategista. Caso: {detalhes} {contexto_pdf}. Juiz: {perfil_juiz}. Gere perguntas cruzadas e análise de risco."
                     res = genai.GenerativeModel(mod_escolhido).generate_content(prompt).text
-                    
-                    tab1, tab2, tab3 = st.tabs(["⚔️ Perguntas Cruzadas", "⚠️ Análise de Risco", "🗣️ Alegações Finais"])
+                    tab1, tab2 = st.tabs(["Perguntas Cruzadas", "Análise de Risco"])
                     with tab1: st.markdown(res)
-                    with tab3: st.download_button("BAIXAR ROTEIRO", gerar_word(res), "Roteiro_Audiencia.docx")
-    else: tela_bloqueio("Elite")
+                    with tab2: st.download_button("BAIXAR ROTEIRO", gerar_word(res), "Roteiro_Audiencia.docx")
+    else: tela_bloqueio("LITÍGIO (CONTENCIOSO)", "97")
 
-# 5. GESTÃO DE CASOS (MANTIDO)
+# 5. GESTÃO DE CASOS (CORE - LIBERADO)
 elif menu_opcao == "📂 Gestão de Casos":
     st.markdown("<h2 class='tech-header'>📂 COFRE DIGITAL</h2>", unsafe_allow_html=True)
     if "pasta_aberta" not in st.session_state: st.session_state.pasta_aberta = None
@@ -520,87 +515,149 @@ elif menu_opcao == "📂 Gestão de Casos":
         else:
             if st.button("⬅ VOLTAR"): st.session_state.pasta_aberta = None; st.rerun()
             st.markdown(f"### Arquivos de: {st.session_state.pasta_aberta}")
-            
-            with st.expander("➕ ADICIONAR NOVO DOCUMENTO", expanded=False):
+            with st.expander("➕ ADICIONAR DOCUMENTO", expanded=False):
                 c_add1, c_add2 = st.columns(2)
-                novo_tipo = c_add1.text_input("Nome do Documento (Ex: Procuração):")
-                nova_area = c_add2.selectbox("Categoria:", ["Documentos Pessoais", "Provas", "Andamento", "Anotações", "Financeiro"])
-                tab_up, tab_txt = st.tabs(["📤 Upload PDF", "✍️ Nota de Texto"])
+                novo_tipo = c_add1.text_input("Nome:")
+                nova_area = c_add2.selectbox("Categoria:", ["Provas", "Andamento", "Anotações"])
+                tab_up, tab_txt = st.tabs(["📤 Upload PDF", "✍️ Nota"])
                 conteudo_novo = ""
                 with tab_up: arquivo_novo = st.file_uploader("Arquivo PDF", key="novo_up")
-                with tab_txt: texto_novo = st.text_area("Texto da Nota:", key="nova_nota")
-                
-                if st.button("💾 SALVAR DOCUMENTO"):
+                with tab_txt: texto_novo = st.text_area("Texto:", key="nova_nota")
+                if st.button("💾 SALVAR"):
                     if novo_tipo:
-                        if arquivo_novo: conteudo_novo = f"[ARQUIVO EXTERNO] {extrair_texto_pdf(arquivo_novo)}"
+                        if arquivo_novo: conteudo_novo = f"[PDF] {extrair_texto_pdf(arquivo_novo)}"
                         elif texto_novo: conteudo_novo = texto_novo
-                        else: conteudo_novo = "Item adicionado sem conteúdo."
-                        
+                        else: conteudo_novo = "Item vazio."
                         run_query("INSERT INTO documentos (escritorio, data_criacao, cliente, area, tipo, conteudo) VALUES (?, ?, ?, ?, ?, ?)", 
                                  (st.session_state.escritorio_atual, datetime.now().strftime("%d/%m/%Y"), st.session_state.pasta_aberta, nova_area, novo_tipo, conteudo_novo))
-                        st.success("Adicionado com sucesso!")
-                        time.sleep(1)
-                        st.rerun()
-
+                        st.success("Salvo!"); time.sleep(1); st.rerun()
             st.divider()
             docs_cli = df_docs[df_docs['cliente'] == st.session_state.pasta_aberta]
             for idx, row in docs_cli.iterrows():
                 with st.expander(f"{row['tipo']} - {row['data_criacao']}"):
-                    st.write(row['conteudo'][:300] + "..." if len(row['conteudo']) > 300 else row['conteudo'])
+                    st.write(row['conteudo'][:300] + "...")
                     c_d, c_e = st.columns([4, 1])
-                    with c_d:
-                        st.download_button("📥 BAIXAR DOCX", gerar_word(row['conteudo']), f"{row['tipo']}.docx", key=f"dl_{idx}")
+                    with c_d: st.download_button("BAIXAR DOCX", gerar_word(row['conteudo']), f"{row['tipo']}.docx", key=f"dl_{idx}")
                     with c_e:
-                        if st.button("🗑️ EXCLUIR", key=f"del_{idx}"):
-                            run_query("DELETE FROM documentos WHERE id = ?", (row['id'],))
-                            st.rerun()
+                        if st.button("🗑️", key=f"del_{idx}"):
+                            run_query("DELETE FROM documentos WHERE id = ?", (row['id'],)); st.rerun()
     else: st.info("Nenhum documento encontrado.")
 
-# 6. MONITOR
+# 6. MONITOR (MÓDULO LITIGIO)
 elif menu_opcao == "🚦 Monitor de Prazos":
-    if verificar_acesso("Elite"):
-        st.markdown("<h2 class='tech-header'>🚦 RADAR DE PRAZOS INTELIGENTE</h2>", unsafe_allow_html=True)
+    if verificar_acesso("litigio"):
+        st.markdown("<h2 class='tech-header'>🚦 RADAR DE PRAZOS</h2>", unsafe_allow_html=True)
         m1, m2, m3 = st.columns(3)
-        m1.metric("E-mails Lidos", "0"); m2.metric("Prazos Fatais", "0"); m3.metric("Status IMAP", "Desconectado")
+        m1.metric("E-mails", "0"); m2.metric("Prazos", "0"); m3.metric("IMAP", "Off")
         st.write("")
         with st.container(border=True):
-            st.markdown("##### 📡 PARÂMETROS DE VARREDURA")
+            st.markdown("##### 📡 PARÂMETROS")
             c_mail, c_pass, c_host = st.columns(3)
             email_leitura = c_mail.text_input("E-mail OAB")
             senha_leitura = c_pass.text_input("Senha App", type="password")
             servidor_imap = c_host.text_input("Servidor", value="imap.gmail.com")
-            if st.button("INICIAR VARREDURA PROFUNDA"):
+            if st.button("INICIAR VARREDURA"):
                 if email_leitura and senha_leitura:
-                    with st.spinner("Analisando metadados..."):
+                    with st.spinner("Analisando..."):
                         msgs, err = buscar_intimacoes_email(email_leitura, senha_leitura, servidor_imap)
                         if err: st.error(err)
-                        elif not msgs: st.success("Nenhuma intimação.")
+                        elif not msgs: st.success("Nada novo.")
                         else:
                             for m in msgs:
                                 with st.expander(f"⚠️ {m['assunto']}"):
                                     st.write(m['corpo'])
-                                    if st.button("ANALISAR PRAZO (IA)", key=m['assunto']):
+                                    if st.button("ANALISAR (IA)", key=m['assunto']):
                                         res = genai.GenerativeModel(mod_escolhido).generate_content(f"Extraia prazos: {m['corpo']}").text
                                         st.warning(res)
-                else: st.error("Preencha as credenciais.")
-    else: tela_bloqueio("Elite")
+                else: st.error("Preencha credenciais.")
+    else: tela_bloqueio("LITÍGIO (CONTENCIOSO)", "97")
 
-# 8. PLANOS
-elif menu_opcao == "💎 Planos Premium":
-    st.markdown("<h2 class='tech-header' style='text-align:center;'>UPGRADE YOUR SYSTEM</h2>", unsafe_allow_html=True)
-    st.write(""); c1, c2, c3 = st.columns(3)
+# 7. FERRAMENTAS EXTRAS (MÓDULO HIGHTECH)
+elif menu_opcao == "🔧 Ferramentas Extras":
+    if verificar_acesso("hightech"):
+        st.markdown("<h2 class='tech-header'>🔧 TOOLKIT AVANÇADO</h2>", unsafe_allow_html=True)
+        tabs_ex = st.tabs(["🔎 Chat PDF", "⚖️ Comparador"])
+        with tabs_ex[0]:
+            up = st.file_uploader("PDF", key="pdf_chat")
+            q = st.text_input("Pergunta:")
+            if up and q and st.button("PERGUNTAR"):
+                st.write(genai.GenerativeModel(mod_escolhido).generate_content(f"Baseado no PDF: {extrair_texto_pdf(up)}. Responda: {q}").text)
+    else: tela_bloqueio("HIGH TECH", "47")
+
+# 8. CONFIGURADOR DE PLANOS (MODULAR)
+elif menu_opcao == "💎 Meus Planos":
+    st.markdown("<h2 class='tech-header' style='text-align:center;'>MONTE SEU PLANO</h2>", unsafe_allow_html=True)
+    st.write("")
+    
+    # Recupera módulos atuais
+    meus_modulos = st.session_state.plano_atual.split(',')
+    
+    c1, c2 = st.columns([2, 1])
+    
     with c1:
-        st.markdown("""<div class='price-card'><div class='price-title'>STARTER</div><div class='price-amount'>GRÁTIS</div><div class='price-features'>✅ Redator Básico<br>✅ Gestão de Casos<br>❌ Sem Perícia<br>❌ Sem Audiência</div></div>""", unsafe_allow_html=True)
-        if st.button("SELECIONAR STARTER", key="p1"):
-            run_query("UPDATE usuarios SET plano = 'Starter' WHERE username = ?", (st.session_state.usuario_atual,)); st.session_state.plano_atual = "Starter"; st.rerun()
+        st.markdown("#### SELECIONE OS MÓDULOS")
+        
+        # Módulo Litígio
+        tem_litigio = 'litigio' in meus_modulos
+        st.markdown(f"""
+        <div class='module-card {"module-active" if tem_litigio else ""}'>
+            <span class='module-title'>⚖️ MÓDULO LITÍGIO (CONTENCIOSO)</span>
+            <span class='module-price'>R$ 97/mês</span>
+            <p style='color:#ccc; font-size:0.9rem;'>Libera: Monitor de Prazos, Estrategista de Audiência (com análise de autos) e Jurisprudência Web.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("REMOVER LITÍGIO" if tem_litigio else "ADICIONAR LITÍGIO", key="btn_litigio"):
+            if tem_litigio: meus_modulos.remove('litigio')
+            else: meus_modulos.append('litigio')
+            novo_plano = ",".join(meus_modulos)
+            run_query("UPDATE usuarios SET plano = ? WHERE username = ?", (novo_plano, st.session_state.usuario_atual))
+            st.session_state.plano_atual = novo_plano
+            st.rerun()
+
+        # Módulo Cálculo
+        tem_calculo = 'calculo' in meus_modulos
+        st.markdown(f"""
+        <div class='module-card {"module-active" if tem_calculo else ""}'>
+            <span class='module-title'>🧮 MÓDULO CALCULISTA</span>
+            <span class='module-price'>R$ 97/mês</span>
+            <p style='color:#ccc; font-size:0.9rem;'>Libera: Calculadoras Trabalhistas/Cíveis e Gerador de Laudos Periciais.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("REMOVER CÁLCULOS" if tem_calculo else "ADICIONAR CÁLCULOS", key="btn_calculo"):
+            if tem_calculo: meus_modulos.remove('calculo')
+            else: meus_modulos.append('calculo')
+            novo_plano = ",".join(meus_modulos)
+            run_query("UPDATE usuarios SET plano = ? WHERE username = ?", (novo_plano, st.session_state.usuario_atual))
+            st.session_state.plano_atual = novo_plano
+            st.rerun()
+
+        # Módulo Tech
+        tem_tech = 'hightech' in meus_modulos
+        st.markdown(f"""
+        <div class='module-card {"module-active" if tem_tech else ""}'>
+            <span class='module-title'>🚀 MÓDULO HIGH TECH</span>
+            <span class='module-price'>R$ 47/mês</span>
+            <p style='color:#ccc; font-size:0.9rem;'>Libera: Ferramentas Extras (Chat com PDF ilimitado, Comparador de Peças).</p>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("REMOVER TECH" if tem_tech else "ADICIONAR TECH", key="btn_tech"):
+            if tem_tech: meus_modulos.remove('hightech')
+            else: meus_modulos.append('hightech')
+            novo_plano = ",".join(meus_modulos)
+            run_query("UPDATE usuarios SET plano = ? WHERE username = ?", (novo_plano, st.session_state.usuario_atual))
+            st.session_state.plano_atual = novo_plano
+            st.rerun()
+
     with c2:
-        st.markdown("""<div class='price-card'><div class='price-title' style='color:#00F3FF'>PRO</div><div class='price-amount'>R$ 97</div><div class='price-features'>✅ Tudo do Starter<br>✅ <strong>Perícia & Cálculos</strong><br>✅ Ferramentas Extras<br>✅ Jurisprudência IA</div></div>""", unsafe_allow_html=True)
-        if st.button("ASSINAR PRO", key="p2"):
-            time.sleep(1); run_query("UPDATE usuarios SET plano = 'Pro', creditos = 100 WHERE username = ?", (st.session_state.usuario_atual,)); st.session_state.plano_atual = "Pro"; st.rerun()
-    with c3:
-        st.markdown("""<div class='price-card elite-card'><div class='price-title' style='color:#FFD700'>ELITE</div><div class='price-amount'>R$ 297</div><div class='price-features'>💎 <strong>Tudo Liberado</strong><br>💎 Simulador Audiência<br>💎 Monitor de Prazos<br>💎 Suporte Prioritário</div></div>""", unsafe_allow_html=True)
-        if st.button("ASSINAR ELITE", key="p3"):
-            time.sleep(1); run_query("UPDATE usuarios SET plano = 'Elite', creditos = 500 WHERE username = ?", (st.session_state.usuario_atual,)); st.session_state.plano_atual = "Elite"; st.rerun()
+        st.markdown("#### RESUMO DA ASSINATURA")
+        total = 0
+        if 'litigio' in meus_modulos: total += 97
+        if 'calculo' in meus_modulos: total += 97
+        if 'hightech' in meus_modulos: total += 47
+        
+        st.metric("Mensalidade Atual", f"R$ {total},00")
+        st.write("---")
+        st.info("O Plano Base (Core) é gratuito e inclui: Gestão de Casos, Dashboard e Redator (Básico).")
 
 st.markdown("---")
 st.markdown("<center style='color: #64748b; font-size: 0.8rem; font-family: Rajdhani;'>🔒 LEGALHUB ELITE v5.5 | ENCRYPTED SESSION</center>", unsafe_allow_html=True)
