@@ -453,12 +453,11 @@ with st.sidebar:
 
     st.markdown("---")
     
-    # Display de Créditos Moderno
     st.markdown("<h4 style='font-size:1rem; color:#94A3B8;'>CRÉDITOS</h4>", unsafe_allow_html=True)
     col_cred1, col_cred2 = st.columns([1, 3])
-    with col_cred1: st.markdown("<h3 style='color:#00F3FF; margin:0;'>💎</h3>", unsafe_allow_html=True)
+    with col_cred1: st.markdown("<h3 style='color:#0EA5E9; margin:0;'>💎</h3>", unsafe_allow_html=True)
     with col_cred2: 
-        st.markdown(f"<h3 style='margin:0; color:#FFFFFF; text-shadow: 0 0 10px #00F3FF;'>{creditos_atuais}</h3>", unsafe_allow_html=True)
+        st.markdown(f"<h3 style='margin:0; color:#FFFFFF; text-shadow: 0 0 10px #0EA5E9;'>{creditos_atuais}</h3>", unsafe_allow_html=True)
     st.progress(min(creditos_atuais/50, 1.0))
     
     st.write("")
@@ -466,7 +465,6 @@ with st.sidebar:
         st.session_state.logado = False
         st.rerun()
 
-    # --- ÁREA DE ADMINISTRAÇÃO ---
     if st.session_state.usuario_atual == 'admin':
         st.markdown("---")
         with st.expander("🛠️ ADMIN CONSOLE"):
@@ -538,7 +536,6 @@ if menu_opcao == "📊 Dashboard":
         # --- SEÇÃO DE SEGURANÇA E CONFIANÇA ---
         st.markdown("##### 🛡️ SECURITY & COMPLIANCE")
         with st.container(border=True):
-            # Item 1: LGPD
             st.markdown("""
             <div style='background: rgba(16, 185, 129, 0.1); border-left: 3px solid #10B981; padding: 10px; margin-bottom: 8px; border-radius: 4px;'>
                 <strong style='color: #10B981; font-family: Rajdhani; letter-spacing: 1px;'>✓ LGPD COMPLIANT</strong><br>
@@ -546,7 +543,6 @@ if menu_opcao == "📊 Dashboard":
             </div>
             """, unsafe_allow_html=True)
 
-            # Item 2: Criptografia
             st.markdown("""
             <div style='background: rgba(59, 130, 246, 0.1); border-left: 3px solid #3B82F6; padding: 10px; margin-bottom: 8px; border-radius: 4px;'>
                 <strong style='color: #3B82F6; font-family: Rajdhani; letter-spacing: 1px;'>🔒 E2E ENCRYPTION</strong><br>
@@ -554,7 +550,6 @@ if menu_opcao == "📊 Dashboard":
             </div>
             """, unsafe_allow_html=True)
 
-            # Item 3: Atualização Jurídica
             st.markdown("""
             <div style='background: rgba(245, 158, 11, 0.1); border-left: 3px solid #F59E0B; padding: 10px; border-radius: 4px;'>
                 <strong style='color: #F59E0B; font-family: Rajdhani; letter-spacing: 1px;'>⚖️ LIVE JURISPRUDENCE</strong><br>
@@ -565,7 +560,9 @@ if menu_opcao == "📊 Dashboard":
             st.markdown("---")
             st.markdown("<div style='text-align:center; font-size: 0.7rem; color: #64748b;'>Certificado Digital de Autenticidade V5.5</div>", unsafe_allow_html=True)
 
-    # CARDS DE FUNCIONALIDADES
+    # ==========================================================
+    # CARDS DE FUNCIONALIDADES (COM TEXTOS MELHORADOS)
+    # ==========================================================
     st.write("")
     st.subheader("🛠️ ACESSO RÁPIDO")
     
@@ -573,7 +570,7 @@ if menu_opcao == "📊 Dashboard":
     with r1c1:
         with st.container(border=True):
             st.markdown("#### ✍️ REDATOR")
-            st.caption("IA Generativa de Peças.")
+            st.caption("Geração automática de iniciais, defesas e contratos personalizados com fundamentação jurídica.")
             if st.button("INICIAR", key="btn_redator"):
                 st.session_state.navegacao_override = "✍️ Redator Jurídico"
                 st.rerun()
@@ -581,7 +578,7 @@ if menu_opcao == "📊 Dashboard":
     with r1c2:
         with st.container(border=True):
             st.markdown("#### 🧮 PERÍCIA")
-            st.caption("Cálculos Automatizados.")
+            st.caption("Execução de cálculos complexos (Trabalhista, Cível, Bancário) com geração imediata de laudos.")
             if st.button("CALCULAR", key="btn_pericia"):
                 st.session_state.navegacao_override = "🧮 Calculadoras & Perícia"
                 st.rerun()
@@ -589,7 +586,7 @@ if menu_opcao == "📊 Dashboard":
     with r1c3:
         with st.container(border=True):
             st.markdown("#### 🏛️ AUDIÊNCIA")
-            st.caption("Simulador Estratégico.")
+            st.caption("Simulação de cenários de audiência, previsão de perguntas do juízo e criação de roteiros de oitiva.")
             if st.button("SIMULAR", key="btn_aud"):
                 st.session_state.navegacao_override = "🏛️ Estratégia de Audiência"
                 st.rerun()
@@ -600,7 +597,7 @@ if menu_opcao == "📊 Dashboard":
     with r2c1:
         with st.container(border=True):
             st.markdown("#### ⚖️ JURISPRUDÊNCIA")
-            st.caption("Busca de Tribunais.")
+            st.caption("Busca inteligente em tribunais superiores (STF/STJ) para localização de precedentes favoráveis.")
             if st.button("PESQUISAR", key="btn_juris"):
                 st.session_state.navegacao_override = "✍️ Redator Jurídico"
                 st.rerun()
@@ -608,7 +605,7 @@ if menu_opcao == "📊 Dashboard":
     with r2c2:
         with st.container(border=True):
             st.markdown("#### 📄 CHAT PDF")
-            st.caption("Análise Documental.")
+            st.caption("Análise de autos em PDF, resumos automáticos e extração de dados cruciais através de chat interativo.")
             if st.button("ANALISAR", key="btn_pdf"):
                 st.session_state.navegacao_override = "🔧 Ferramentas Extras"
                 st.rerun()
@@ -616,7 +613,7 @@ if menu_opcao == "📊 Dashboard":
     with r2c3:
         with st.container(border=True):
             st.markdown("#### 📅 PRAZOS")
-            st.caption("Monitoramento Fatal.")
+            st.caption("Monitoramento ativo de intimações via e-mail, com identificação automática de datas fatais.")
             if st.button("MONITORAR", key="btn_prazo"):
                 st.session_state.navegacao_override = "🚦 Monitor de Prazos"
                 st.rerun()
