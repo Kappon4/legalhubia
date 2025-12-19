@@ -17,7 +17,7 @@ import smtplib
 import ssl
 from email.message import EmailMessage
 import plotly.express as px
-import base64  # Importação necessária para imagens locais
+import base64
 
 # --- IMPORTAÇÃO DE ERROS ---
 from google.api_core.exceptions import ResourceExhausted, NotFound, InvalidArgument
@@ -41,10 +41,10 @@ def local_css():
 
         /* --- VARIÁVEIS CYBER --- */
         :root {
-            --bg-dark: #050A14;
-            --bg-card: rgba(20, 30, 50, 0.6);
-            --text-main: #FFFFFF;
-            --neon-blue: #00F3FF;
+            --bg-dark: #020617;         /* Preto Azulado Profundo */
+            --bg-card: rgba(15, 23, 42, 0.6); /* Slate Escuro Transparente */
+            --text-main: #FFFFFF;       /* Branco Gelo */
+            --neon-blue: #00F3FF;       /* Azul Sky Brilhante */
             --neon-purple: #BC13FE;
             --border-glow: 1px solid rgba(0, 243, 255, 0.2);
             --neon-glow-strong: rgba(14, 165, 233, 0.5);
@@ -274,11 +274,27 @@ def run_query(query, params=(), return_data=False):
 init_db()
 
 # ==========================================================
-# 3. LOGIN (MODERNIZADO COM IMAGEM FLUTUANTE)
+# 3. CONTROLE DE SESSÃO & LOGIN (ATUALIZADO COM PERSISTÊNCIA F5)
 # ==========================================================
+
+# Inicializa variaveis de sessão
 if "logado" not in st.session_state: st.session_state.logado = False
 if "usuario_atual" not in st.session_state: st.session_state.usuario_atual = ""
 if "escritorio_atual" not in st.session_state: st.session_state.escritorio_atual = ""
+
+# --- LÓGICA DE PERSISTÊNCIA (ANTI-F5) ---
+# Se não estiver logado na memória RAM, verifica a URL
+if not st.session_state.logado:
+    if "user" in st.query_params:
+        user_url = st.query_params["user"]
+        # Verifica no banco se esse usuário é válido (Segurança básica)
+        users = run_query("SELECT * FROM usuarios WHERE username = ?", (user_url,), return_data=True)
+        if not users.empty:
+            # Restaura a sessão
+            st.session_state.logado = True
+            st.session_state.usuario_atual = user_url
+            st.session_state.escritorio_atual = users.iloc[0]['escritorio']
+            st.rerun() # Recarrega para aplicar o login
 
 def login_screen():
     col1, col2, col3 = st.columns([1, 1.2, 1])
@@ -320,6 +336,10 @@ def login_screen():
                     st.session_state.logado = True
                     st.session_state.usuario_atual = username
                     st.session_state.escritorio_atual = users.iloc[0]['escritorio']
+                    
+                    # --- ATUALIZAÇÃO: SALVA NA URL PARA PERSISTIR NO F5 ---
+                    st.query_params["user"] = username
+                    
                     st.rerun()
                 else: st.error("Acesso Negado.")
             
@@ -461,8 +481,11 @@ with st.sidebar:
     st.progress(min(creditos_atuais/50, 1.0))
     
     st.write("")
+    
+    # --- LOGOUT ATUALIZADO (LIMPA URL) ---
     if st.button("LOGOUT / SAIR"):
         st.session_state.logado = False
+        st.query_params.clear() # Limpa o parametro de URL para não logar de novo
         st.rerun()
 
     if st.session_state.usuario_atual == 'admin':
