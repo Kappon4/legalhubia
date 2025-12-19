@@ -91,15 +91,41 @@ def extrair_texto_pdf(arquivo):
     try: return "".join([p.extract_text() for p in PdfReader(arquivo).pages])
     except: return ""
 
+# --- NOVA FUNÇÃO: GERADOR DE ARQUIVO DE AGENDA (.ICS) ---
+def criar_ics_calendario(processo, data_fatal, descricao):
+    # Formata datas para o padrão universal de calendário (YYYYMMDD)
+    dt_inicio = data_fatal.strftime('%Y%m%d')
+    # Evento de dia inteiro termina no dia seguinte
+    dt_fim = (data_fatal + timedelta(days=1)).strftime('%Y%m%d')
+    
+    # Conteúdo do arquivo .ics (Padrão Outlook/Google/Apple)
+    ics_content = f"""BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//LegalHub//Monitor Prazos//PT
+BEGIN:VEVENT
+SUMMARY:🚨 PRAZO FATAL: Proc. {processo}
+DTSTART;VALUE=DATE:{dt_inicio}
+DTEND;VALUE=DATE:{dt_fim}
+DESCRIPTION:{descricao}
+STATUS:CONFIRMED
+BEGIN:VALARM
+TRIGGER:-P1D
+DESCRIPTION:Lembrete LegalHub - Prazo Vence Amanhã
+ACTION:DISPLAY
+END:VALARM
+END:VEVENT
+END:VCALENDAR"""
+    return ics_content
+
 # 4. LÓGICA PRINCIPAL
 if api_key:
     genai.configure(api_key=api_key)
     
-    # --- MEMÓRIA DE EDIÇÃO (NOVO!) ---
+    # MEMÓRIA
     if "fatos_recuperados" not in st.session_state: st.session_state.fatos_recuperados = ""
     if "cliente_recuperado" not in st.session_state: st.session_state.cliente_recuperado = ""
 
-    # --- DETECÇÃO REAL DE MODELOS (MANTIDO COMO VOCÊ GOSTA) ---
+    # DETECÇÃO DE MODELOS
     st.sidebar.divider()
     try:
         modelos_reais = []
@@ -115,7 +141,7 @@ if api_key:
                     break
             modelo_escolhido = st.sidebar.selectbox("Modelo:", modelos_reais, index=index_flash)
         else:
-            st.sidebar.error("Sem modelos disponíveis.")
+            st.sidebar.error("Sem modelos.")
             modelo_escolhido = "models/gemini-1.5-flash" 
     except Exception as e:
         st.sidebar.error(f"Erro Google: {e}")
@@ -126,12 +152,10 @@ if api_key:
         "✍️ Redator", "📂 PDF", "🎙️ Áudio", "⚖️ Comparar", "💬 Chat", "📂 Pastas", "📅 Calc", "🏛️ Audiência", "🚦 Monitor"
     ])
     
-    # --- ABA 1: REDATOR (ATUALIZADA COM MEMÓRIA) ---
+    # --- ABA 1: REDATOR ---
     with tab1:
         st.header("Gerador de Peças")
-        
-        # Botão para limpar a tela
-        if st.button("🔄 Limpar Campos / Novo Caso"):
+        if st.button("🔄 Novo Caso"):
             st.session_state.fatos_recuperados = ""
             st.session_state.cliente_recuperado = ""
             st.rerun()
@@ -142,7 +166,6 @@ if api_key:
             area = st.selectbox("Área", ["Cível", "Trabalhista", "Criminal", "Família", "Tributário"])
             web = st.checkbox("Buscar Jurisprudência?", value=True)
         with c2:
-            # Campos conectados à memória da sessão
             cliente = st.text_input("Cliente:", value=st.session_state.cliente_recuperado)
             fatos = st.text_area("Fatos / Texto:", height=150, value=st.session_state.fatos_recuperados)
         
@@ -159,23 +182,16 @@ if api_key:
                         if cliente:
                             s = conectar_planilha()
                             if s: 
-                                # Salva o conteúdo completo para poder recuperar depois
                                 conteudo_backup = fatos + " || " + res[:500] 
-                                s.append_row([
-                                    datetime.now().strftime("%d/%m/%Y"), 
-                                    cliente, 
-                                    area, 
-                                    tipo, 
-                                    conteudo_backup # Salva aqui para recuperar
-                                ]) 
-                                st.success("Salvo na Pasta do Cliente!")
+                                s.append_row([datetime.now().strftime("%d/%m/%Y"), cliente, area, tipo, conteudo_backup]) 
+                                st.success("Salvo na Pasta!")
                     except Exception as e: st.error(f"Erro: {e}")
 
-    # --- ABA 2 a 5 (MANTIDAS) ---
+    # --- ABA 2 a 5 (PADRÃO) ---
     with tab2: 
-        st.header("Análise de Processos (PDF)")
+        st.header("Análise PDF")
         up = st.file_uploader("Subir PDF", type="pdf")
-        if up and st.button("Resumir PDF"): 
+        if up and st.button("Resumir"): 
              with st.spinner("Lendo..."):
                 st.write(genai.GenerativeModel(modelo_escolhido).generate_content(f"Resuma: {extrair_texto_pdf(up)[:30000]}").text)
 
@@ -216,122 +232,75 @@ if api_key:
             st.chat_message("assistant").write(res)
             st.session_state.hist.append({"role":"assistant", "content":res})
 
-    # --- ABA 6: PASTAS INTELIGENTES (ATUALIZADA) ---
+    # --- ABA 6: PASTAS (GED) ---
     with tab6:
-        st.header("📂 Pastas de Clientes (GED)")
-        
-        if st.button("🔄 Atualizar Lista"):
-            st.session_state.dados_planilha = None 
-
+        st.header("📂 Pastas de Clientes")
+        if st.button("🔄 Atualizar"): st.session_state.dados_planilha = None 
         s = conectar_planilha()
         if s:
             try:
                 dados = s.get_all_records()
                 df = pd.DataFrame(dados)
-                
-                if not df.empty:
-                    # Métricas
-                    c_d1, c_d2 = st.columns(2)
-                    c_d1.metric("Arquivos", len(df))
-                    lista_clientes = df["Cliente"].unique() if "Cliente" in df.columns else []
+                if not df.empty and "Cliente" in df.columns:
+                    lista = df["Cliente"].unique()
+                    cliente_sel = st.selectbox("Filtrar Cliente:", ["Todos"] + list(lista))
+                    df_show = df[df["Cliente"] == cliente_sel] if cliente_sel != "Todos" else df
+                    st.dataframe(df_show, use_container_width=True)
                     
-                    # Filtros
-                    st.divider()
-                    st.subheader("🔍 Localizar Arquivo")
-                    
-                    if "Cliente" in df.columns:
-                        cliente_selecionado = st.selectbox("Filtrar por Cliente:", ["Todos"] + list(lista_clientes))
-                        
-                        if cliente_selecionado != "Todos":
-                            df_filtrado = df[df["Cliente"] == cliente_selecionado]
-                        else:
-                            df_filtrado = df
-                        
-                        st.dataframe(df_filtrado, use_container_width=True)
-                        
-                        # RECUPERAÇÃO DE TRABALHO
-                        st.info("Para editar um arquivo antigo, selecione o ID (número da linha) abaixo:")
-                        if not df_filtrado.empty:
-                            opcoes_docs = df_filtrado.index.tolist()
-                            doc_id = st.selectbox("ID do Documento:", opcoes_docs)
-                            
-                            if st.button(f"📂 Abrir Documento {doc_id} no Redator"):
-                                linha_dados = df.loc[doc_id]
-                                st.session_state.cliente_recuperado = linha_dados["Cliente"]
-                                
-                                # Tenta pegar o texto. Se salvamos na coluna 5 (índice 4 ou nome 'Resumo')
-                                colunas = list(df.columns)
-                                # Pega a última coluna onde salvamos o backup
-                                conteudo = str(linha_dados.iloc[-1]) 
-                                
-                                # Limpa o separador se existir
-                                if "||" in conteudo:
-                                    st.session_state.fatos_recuperados = conteudo.split("||")[0]
-                                else:
-                                    st.session_state.fatos_recuperados = conteudo
-                                
-                                st.success("Carregado! Vá para a aba '✍️ Redator'.")
-                    else:
-                        st.warning("Coluna 'Cliente' não encontrada na planilha.")
-            except Exception as e:
-                st.error(f"Erro na planilha: {e}")
+                    st.info("Recuperar documento:")
+                    if not df_show.empty:
+                        doc_id = st.selectbox("ID:", df_show.index.tolist())
+                        if st.button(f"📂 Abrir Doc {doc_id}"):
+                            linha = df.loc[doc_id]
+                            st.session_state.cliente_recuperado = linha["Cliente"]
+                            conteudo = str(linha.iloc[-1]) 
+                            st.session_state.fatos_recuperados = conteudo.split("||")[0] if "||" in conteudo else conteudo
+                            st.success("Carregado no Redator!")
+                else: st.warning("Planilha vazia ou sem coluna 'Cliente'.")
+            except Exception as e: st.error(f"Erro: {e}")
 
-    # --- ABA 7 E 8 (MANTIDAS) ---
+    # --- ABA 7 E 8 ---
     with tab7: 
-        st.header("📅 Calculadora de Prazos")
-        st.info("Sugestão IA. Confira feriados.")
-        c_p1, c_p2 = st.columns(2)
-        with c_p1: data_pub = st.date_input("Data Publicação", datetime.now())
-        with c_p2: esfera = st.selectbox("Esfera", ["Cível (CPC)", "Trabalhista", "Penal", "Juizado"])
-        texto_prazo = st.text_area("Texto Intimação:")
-
-        if st.button("Calcular"):
-            with st.spinner("Calculando..."):
-                prompt_prazo = f"Assistente jurídico. {esfera}. Data: {data_pub}. Texto: {texto_prazo}. Identifique prazo, úteis/corridos e data fatal."
-                try:
-                    st.markdown(genai.GenerativeModel(modelo_escolhido).generate_content(prompt_prazo).text)
-                except Exception as e: st.error(str(e))
+        st.header("📅 Calculadora")
+        c1, c2 = st.columns(2)
+        with c1: dt = st.date_input("Publicação", datetime.now())
+        with c2: esf = st.selectbox("Esfera", ["Cível", "Trabalhista", "Penal"])
+        txt = st.text_area("Texto")
+        if st.button("Calc"):
+            st.write(genai.GenerativeModel(modelo_escolhido).generate_content(f"Calc prazo {esf} data {dt}: {txt}").text)
 
     with tab8:
-        st.header("🏛️ Preparador de Audiência")
-        c_a1, c_a2 = st.columns(2)
-        with c_a1: 
-            papel = st.selectbox("Representa:", ["Autor", "Réu"])
-            tipo_aud = st.selectbox("Tipo:", ["Instrução", "Conciliação", "UNA"])
-        with c_a2: fatos_aud = st.text_area("Fatos:")
-        
-        if st.button("Gerar Roteiro"):
-            with st.spinner("Gerando..."):
-                prompt_aud = f"Roteiro audiência {tipo_aud} para {papel}. Fatos: {fatos_aud}. Perguntas, riscos e estratégia."
-                try:
-                    res_aud = genai.GenerativeModel(modelo_escolhido).generate_content(prompt_aud).text
-                    st.markdown(res_aud)
-                    st.download_button("Baixar", gerar_word(res_aud), "roteiro.docx")
-                except Exception as e: st.error(str(e))
+        st.header("🏛️ Audiência")
+        c1, c2 = st.columns(2)
+        with c1: papel = st.selectbox("Papel", ["Autor", "Réu"])
+        with c2: fatos = st.text_area("Fatos Caso")
+        if st.button("Roteiro"):
+            res = genai.GenerativeModel(modelo_escolhido).generate_content(f"Roteiro audiência para {papel}: {fatos}").text
+            st.markdown(res)
 
-    # --- ABA 9: MONITOR DE PRAZOS (MANTIDA) ---
+    # --- ABA 9: MONITOR (COM CALENDÁRIO!) ---
     with tab9:
-        st.header("🚦 Monitor de Movimentações e Prazos")
-        st.markdown("Cole a movimentação para análise.")
+        st.header("🚦 Monitor de Prazos & Agenda")
+        st.markdown("Cole a movimentação para análise e agendamento.")
 
-        col_mov1, col_mov2, col_mov3 = st.columns(3)
-        with col_mov1: n_processo = st.text_input("Nº Processo")
-        with col_mov2: data_mov = st.date_input("Data Mov.", datetime.now())
-        with col_mov3: tipo_prazo = st.selectbox("Contagem", ["Dias Úteis", "Corridos", "CLT"])
+        col1, col2, col3 = st.columns(3)
+        with col1: n_proc = st.text_input("Nº Processo")
+        with col2: data_mov = st.date_input("Data Mov.", datetime.now())
+        with col3: tipo_prazo = st.selectbox("Contagem", ["Dias Úteis", "Corridos", "CLT"])
 
         texto_movimentacao = st.text_area("Movimentação:", height=150)
 
         if "analise_prazo" not in st.session_state: st.session_state.analise_prazo = None
 
-        if st.button("🔍 Analisar"):
+        if st.button("🔍 Analisar Movimentação"):
             if texto_movimentacao:
                 with st.spinner("Analisando..."):
-                    prompt_monitor = f"""
+                    prompt = f"""
                     Analise movimentação jurídica. Base: {data_mov}. Tipo: {tipo_prazo}. Texto: "{texto_movimentacao}"
-                    SAÍDA: RESUMO, AÇÃO REQUERIDA, TEM PRAZO?, DIAS, DATA FATAL.
+                    SAÍDA: RESUMO, AÇÃO REQUERIDA, TEM PRAZO?, DIAS, DATA FATAL SUGERIDA.
                     """
                     try:
-                        res = genai.GenerativeModel(modelo_escolhido).generate_content(prompt_monitor).text
+                        res = genai.GenerativeModel(modelo_escolhido).generate_content(prompt).text
                         st.session_state.analise_prazo = res
                     except Exception as e: st.error(f"Erro: {e}")
 
@@ -340,20 +309,30 @@ if api_key:
             st.markdown(st.session_state.analise_prazo)
             
             st.divider()
-            st.subheader("⏱️ Contador")
-            c1, c2 = st.columns(2)
-            with c1: data_fatal_input = st.date_input("Data Fatal:", datetime.now() + timedelta(days=15))
-            with c2:
-                dias_restantes = (data_fatal_input - date.today()).days
-                if dias_restantes < 0: st.error(f"VENCIDO HÁ {abs(dias_restantes)} DIAS!")
-                elif dias_restantes <= 3: st.warning(f"Faltam {dias_restantes} dias.")
-                else: st.success(f"Faltam {dias_restantes} dias.")
+            st.subheader("⏱️ Ações")
+            c_a, c_b = st.columns(2)
+            with c_a: 
+                data_fatal_input = st.date_input("Data Fatal:", datetime.now() + timedelta(days=15))
+                # --- BOTÃO DE CALENDÁRIO AQUI ---
+                arquivo_ics = criar_ics_calendario(n_proc, data_fatal_input, texto_movimentacao[:200])
+                st.download_button(
+                    label="📅 Baixar Agendamento (Outlook/Google)",
+                    data=arquivo_ics,
+                    file_name=f"prazo_{n_proc}.ics",
+                    mime="text/calendar"
+                )
 
-            if st.button("💾 Salvar Monitoramento"):
-                s = conectar_planilha()
-                if s:
-                    conteudo = f"MOV: {texto_movimentacao[:30]} | FATAL: {data_fatal_input}"
-                    s.append_row([datetime.now().strftime("%d/%m"), n_processo, "Monitor", "Prazo", conteudo])
-                    st.toast("Salvo!", icon="💾")
+            with c_b:
+                dias = (data_fatal_input - date.today()).days
+                if dias < 0: st.error(f"VENCIDO HÁ {abs(dias)} DIAS!")
+                elif dias <= 3: st.warning(f"Faltam {dias} dias.")
+                else: st.success(f"Faltam {dias} dias.")
+                
+                if st.button("💾 Salvar na Planilha"):
+                    s = conectar_planilha()
+                    if s:
+                        conteudo = f"MOV: {texto_movimentacao[:30]}... | FATAL: {data_fatal_input}"
+                        s.append_row([datetime.now().strftime("%d/%m"), n_proc, "Monitor", "Prazo", conteudo])
+                        st.toast("Salvo!", icon="💾")
 
 else: st.warning("Insira uma chave de API para começar.")
