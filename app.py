@@ -40,12 +40,12 @@ def init_db():
         )
     ''')
     
-    # --- MIGRATION ---
+    # --- MIGRATION (ATUALIZAÇÃO DE BANCO ANTIGO) ---
     try:
         c.execute("ALTER TABLE usuarios ADD COLUMN creditos INTEGER DEFAULT 10")
     except:
         pass 
-    # -----------------
+    # -----------------------------------------------
 
     c.execute('''
         CREATE TABLE IF NOT EXISTS documentos (
@@ -59,7 +59,7 @@ def init_db():
         )
     ''')
     
-    # Usuários Padrão
+    # Usuários Padrão (Se banco estiver vazio)
     c.execute('SELECT count(*) FROM usuarios')
     if c.fetchone()[0] == 0:
         c.execute("INSERT OR IGNORE INTO usuarios VALUES ('advogado1', '123', 'Escritório Alpha', 'lucas@alpha.adv.br', 10)")
@@ -344,11 +344,9 @@ if api_key:
         else:
             st.info("Nenhum arquivo salvo ainda.")
 
-    # --- ABA 7: CALCULADORA COM UPLOAD PDF (NOVA) ---
+    # --- ABA 7: CALCULADORA COM UPLOAD PDF ---
     with tabs[6]:
         st.header("🧮 Calculadoras Jurídicas & Perícias")
-        st.markdown("Selecione o tipo de cálculo. Você pode anexar o contrato (PDF) para a IA extrair os dados automaticamente.")
-        
         col_calc1, col_calc2 = st.columns(2)
         with col_calc1:
             opcoes_calc = [
@@ -363,7 +361,6 @@ if api_key:
             dt_base = st.date_input("Data Base", datetime.now())
         
         with col_calc2:
-            # --- CAMPO DE UPLOAD ADICIONADO AQUI ---
             upload_calc = st.file_uploader("📂 Anexar Contrato/Documento (PDF)", type="pdf")
             if upload_calc: st.info("Arquivo anexado. A IA lerá o conteúdo.")
         
@@ -400,12 +397,58 @@ if api_key:
             else:
                 st.warning("Preencha os dados ou anexe um PDF.")
 
+    # --- ABA 8: PREPARADOR DE AUDIÊNCIA (ATUALIZADA) ---
     with tabs[7]:
-        st.header("Audiência")
-        pap = st.selectbox("Papel", ["Autor", "Réu"])
-        fat = st.text_area("Fatos")
-        if st.button("Gerar"):
-            st.write(genai.GenerativeModel(mod_escolhido).generate_content(f"Roteiro {pap}: {fat}").text)
+        st.header("🏛️ Preparador de Audiência Estratégico")
+        st.markdown("Análise completa do processo para gerar roteiro de perguntas e estratégia.")
+        
+        c_aud1, c_aud2 = st.columns(2)
+        with c_aud1:
+            area_direito = st.selectbox("Área do Direito", ["Trabalhista", "Cível", "Família", "Criminal", "Previdenciário"])
+            tipo_aud = st.selectbox("Tipo de Audiência", ["Instrução e Julgamento", "Conciliação", "Inicial", "UNA", "Justificação", "Custódia"])
+            papel_aud = st.selectbox("Seu Papel", ["Advogado do Autor/Reclamante", "Advogado do Réu/Reclamado"])
+        
+        with c_aud2:
+            upload_aud = st.file_uploader("📂 Anexar Peça/Processo (PDF)", type="pdf", key="pdf_aud")
+            if upload_aud: st.success("Processo anexado para análise da IA.")
+            
+        obs_aud = st.text_area("Notas Manuais / Estratégia Específica:", placeholder="Ex: A testemunha do reclamante mente sobre o horário...")
+
+        if st.button("🎭 Gerar Roteiro Estratégico"):
+            if obs_aud or upload_aud:
+                with st.spinner("Lendo processo e montando estratégia..."):
+                    # Extrai texto do PDF
+                    txt_pdf_aud = ""
+                    if upload_aud:
+                        txt_pdf_aud = f"\n\n--- CONTEÚDO DO PROCESSO (PDF) ---\n{extrair_texto_pdf(upload_aud)}"
+                    
+                    prompt_aud = f"""
+                    Aja como um Advogado Senior Especialista em Direito {area_direito}.
+                    Prepare um ROTEIRO DE AUDIÊNCIA DE {tipo_aud}.
+                    Eu atuo como: {papel_aud}.
+                    
+                    DADOS DO CASO:
+                    "{obs_aud}"
+                    {txt_pdf_aud}
+
+                    GERE UM ROTEIRO PRÁTICO CONTENDO:
+                    1. 📋 **Resumo do Caso:** (Pontos incontroversos e controversos).
+                    2. 🎯 **Perguntas para a Parte Contrária:** (Focadas em extrair contradições - Liste 5 perguntas chave).
+                    3. 🛡️ **Perguntas para Minhas Testemunhas:** (Para provar minha tese - Liste 5 perguntas).
+                    4. 💣 **Perguntas para Testemunhas da Outra Parte:** (Para descredibilizar ou achar falhas).
+                    5. ⚠️ **Análise de Risco:** (Pontos fracos da minha defesa/inicial).
+                    6. 🗣️ **Tópicos para Alegações Finais Orais:** (Resumo para falar na hora).
+
+                    Formatação: Use tópicos e negrito para leitura rápida durante a audiência.
+                    """
+                    try:
+                        res_aud = genai.GenerativeModel(mod_escolhido).generate_content(prompt_aud).text
+                        st.markdown(res_aud)
+                        st.download_button("Baixar Roteiro (DOCX)", gerar_word(res_aud), "roteiro_audiencia.docx")
+                    except Exception as e:
+                        st.error(f"Erro ao gerar roteiro: {e}")
+            else:
+                st.warning("Por favor, digite os fatos ou anexe um PDF do processo.")
 
     with tabs[8]:
         st.header("🚦 Monitor")
