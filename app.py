@@ -12,6 +12,9 @@ import tempfile
 import os
 import pandas as pd
 import plotly.express as px
+import imaplib
+import email
+from email.header import decode_header
 
 # --- IMPORTAÇÃO DE ERROS ---
 from google.api_core.exceptions import ResourceExhausted, NotFound, InvalidArgument, PermissionDenied
@@ -19,14 +22,69 @@ from google.api_core.exceptions import ResourceExhausted, NotFound, InvalidArgum
 # 1. CONFIGURAÇÃO VISUAL
 st.set_page_config(page_title="LegalHub IA", page_icon="⚖️", layout="wide")
 
+# --- FUNÇÃO DE LEITURA DE E-MAIL (IMAP) ---
+def buscar_intimacoes_email(email_user, senha_app, provedor="gmail"):
+    """
+    Conecta no e-mail, busca mensagens não lidas com termos jurídicos e retorna o texto.
+    """
+    imap_server = "imap.gmail.com" if provedor == "gmail" else "outlook.office365.com"
+    
+    try:
+        mail = imaplib.IMAP4_SSL(imap_server)
+        mail.login(email_user, senha_app)
+        mail.select("inbox")
+
+        # Busca e-mails NÃO LIDOS (UNSEEN)
+        status, messages = mail.search(None, '(UNSEEN)')
+        email_ids = messages[0].split()
+        
+        intimacoes_encontradas = []
+
+        # Pega apenas os últimos 5 para não travar o sistema
+        for e_id in email_ids[-5:]:
+            res, msg_data = mail.fetch(e_id, "(RFC822)")
+            for response_part in msg_data:
+                if isinstance(response_part, tuple):
+                    msg = email.message_from_bytes(response_part[1])
+                    
+                    # Decodifica o Assunto
+                    subject, encoding = decode_header(msg["Subject"])[0]
+                    if isinstance(subject, bytes):
+                        subject = subject.decode(encoding if encoding else "utf-8")
+                    
+                    # FILTRO: Só processa se parecer jurídico
+                    termos_chave = ["intimação", "processo", "movimentação", "push", "tribunal", "pje", "esaj", "projudi"]
+                    if any(termo in subject.lower() for termo in termos_chave):
+                        
+                        # Extrai o corpo do e-mail
+                        body = ""
+                        if msg.is_multipart():
+                            for part in msg.walk():
+                                content_type = part.get_content_type()
+                                content_disposition = str(part.get("Content-Disposition"))
+                                if content_type == "text/plain" and "attachment" not in content_disposition:
+                                    body = part.get_payload(decode=True).decode()
+                                    break # Pega só o texto puro
+                        else:
+                            body = msg.get_payload(decode=True).decode()
+                        
+                        intimacoes_encontradas.append({
+                            "assunto": subject,
+                            "corpo": body[:2000] # Limita caracteres para a IA
+                        })
+        
+        mail.close()
+        mail.logout()
+        return intimacoes_encontradas, None
+
+    except Exception as e:
+        return [], str(e)
+
 # --- 2. PAINEL LATERAL E DIAGNÓSTICO ---
 st.sidebar.header("Painel de Controle")
 
-# Diagnóstico de Versão
 versao_lib = genai.__version__
 st.sidebar.caption(f"Versão da Lib: {versao_lib}")
-if versao_lib < "0.7.0":
-    st.sidebar.error("⚠️ Lib desatualizada. Atualize o requirements.txt")
 
 # Seleção de Chave
 uso_manual = st.sidebar.checkbox("Usar chave manual", value=False)
@@ -36,9 +94,17 @@ if uso_manual:
     api_key = st.sidebar.text_input("Cole sua NOVA API Key:", type="password")
 elif "GOOGLE_API_KEY" in st.secrets:
     api_key = st.secrets["GOOGLE_API_KEY"]
-    st.sidebar.success("✅ Chave do Sistema")
+    st.sidebar.success("✅ Chave IA Conectada")
 else:
     api_key = st.sidebar.text_input("Cole sua API Key:", type="password")
+
+st.sidebar.divider()
+# --- CONFIGURAÇÃO DE E-MAIL PARA LEITURA ---
+st.sidebar.markdown("📧 **Ler E-mails do Tribunal**")
+st.sidebar.caption("Para ler automaticamente, configure abaixo:")
+email_leitura = st.sidebar.text_input("Seu E-mail (Gmail/Outlook):")
+senha_leitura = st.sidebar.text_input("Senha de App (Não a normal):", type="password", help="Gere uma Senha de App no Google/Microsoft para permitir o acesso.")
+provedor_email = st.sidebar.selectbox("Provedor:", ["gmail", "outlook"])
 
 if st.sidebar.button("Sair (Logout)"):
     st.session_state.logado = False
@@ -91,65 +157,29 @@ def extrair_texto_pdf(arquivo):
     try: return "".join([p.extract_text() for p in PdfReader(arquivo).pages])
     except: return ""
 
-# --- NOVA FUNÇÃO: GERADOR DE ARQUIVO DE AGENDA (.ICS) ---
-def criar_ics_calendario(processo, data_fatal, descricao):
-    # Formata datas para o padrão universal de calendário (YYYYMMDD)
-    dt_inicio = data_fatal.strftime('%Y%m%d')
-    # Evento de dia inteiro termina no dia seguinte
-    dt_fim = (data_fatal + timedelta(days=1)).strftime('%Y%m%d')
-    
-    # Conteúdo do arquivo .ics (Padrão Outlook/Google/Apple)
-    ics_content = f"""BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//LegalHub//Monitor Prazos//PT
-BEGIN:VEVENT
-SUMMARY:🚨 PRAZO FATAL: Proc. {processo}
-DTSTART;VALUE=DATE:{dt_inicio}
-DTEND;VALUE=DATE:{dt_fim}
-DESCRIPTION:{descricao}
-STATUS:CONFIRMED
-BEGIN:VALARM
-TRIGGER:-P1D
-DESCRIPTION:Lembrete LegalHub - Prazo Vence Amanhã
-ACTION:DISPLAY
-END:VALARM
-END:VEVENT
-END:VCALENDAR"""
-    return ics_content
-
 # 4. LÓGICA PRINCIPAL
 if api_key:
     genai.configure(api_key=api_key)
     
-    # MEMÓRIA
     if "fatos_recuperados" not in st.session_state: st.session_state.fatos_recuperados = ""
     if "cliente_recuperado" not in st.session_state: st.session_state.cliente_recuperado = ""
 
-    # DETECÇÃO DE MODELOS
     st.sidebar.divider()
     try:
         modelos_reais = []
         for m in genai.list_models():
             if 'generateContent' in m.supported_generation_methods:
                 modelos_reais.append(m.name)
-        
         if modelos_reais:
-            index_flash = 0
-            for i, nome in enumerate(modelos_reais):
-                if "flash" in nome and "1.5" in nome:
-                    index_flash = i
-                    break
-            modelo_escolhido = st.sidebar.selectbox("Modelo:", modelos_reais, index=index_flash)
+            modelo_escolhido = st.sidebar.selectbox("Modelo IA:", modelos_reais, index=0)
         else:
-            st.sidebar.error("Sem modelos.")
             modelo_escolhido = "models/gemini-1.5-flash" 
-    except Exception as e:
-        st.sidebar.error(f"Erro Google: {e}")
+    except:
         modelo_escolhido = "models/gemini-1.5-flash"
 
-    # --- DEFINIÇÃO DAS ABAS ---
+    # --- ABAS ---
     tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
-        "✍️ Redator", "📂 PDF", "🎙️ Áudio", "⚖️ Comparar", "💬 Chat", "📂 Pastas", "📅 Calc", "🏛️ Audiência", "🚦 Monitor"
+        "✍️ Redator", "📂 PDF", "🎙️ Áudio", "⚖️ Comparar", "💬 Chat", "📂 Pastas", "📅 Calc", "🏛️ Audiência", "🚦 Monitor (Auto)"
     ])
     
     # --- ABA 1: REDATOR ---
@@ -178,7 +208,6 @@ if api_key:
                         res = genai.GenerativeModel(modelo_escolhido).generate_content(prompt).text
                         st.markdown(res)
                         st.download_button("Baixar Word", gerar_word(res), "minuta.docx")
-                        
                         if cliente:
                             s = conectar_planilha()
                             if s: 
@@ -187,7 +216,7 @@ if api_key:
                                 st.success("Salvo na Pasta!")
                     except Exception as e: st.error(f"Erro: {e}")
 
-    # --- ABA 2 a 5 (PADRÃO) ---
+    # --- ABAS 2 a 8 MANTIDAS IGUAIS ---
     with tab2: 
         st.header("Análise PDF")
         up = st.file_uploader("Subir PDF", type="pdf")
@@ -232,7 +261,6 @@ if api_key:
             st.chat_message("assistant").write(res)
             st.session_state.hist.append({"role":"assistant", "content":res})
 
-    # --- ABA 6: PASTAS (GED) ---
     with tab6:
         st.header("📂 Pastas de Clientes")
         if st.button("🔄 Atualizar"): st.session_state.dados_planilha = None 
@@ -246,8 +274,6 @@ if api_key:
                     cliente_sel = st.selectbox("Filtrar Cliente:", ["Todos"] + list(lista))
                     df_show = df[df["Cliente"] == cliente_sel] if cliente_sel != "Todos" else df
                     st.dataframe(df_show, use_container_width=True)
-                    
-                    st.info("Recuperar documento:")
                     if not df_show.empty:
                         doc_id = st.selectbox("ID:", df_show.index.tolist())
                         if st.button(f"📂 Abrir Doc {doc_id}"):
@@ -256,10 +282,9 @@ if api_key:
                             conteudo = str(linha.iloc[-1]) 
                             st.session_state.fatos_recuperados = conteudo.split("||")[0] if "||" in conteudo else conteudo
                             st.success("Carregado no Redator!")
-                else: st.warning("Planilha vazia ou sem coluna 'Cliente'.")
+                else: st.warning("Planilha vazia.")
             except Exception as e: st.error(f"Erro: {e}")
 
-    # --- ABA 7 E 8 ---
     with tab7: 
         st.header("📅 Calculadora")
         c1, c2 = st.columns(2)
@@ -278,61 +303,69 @@ if api_key:
             res = genai.GenerativeModel(modelo_escolhido).generate_content(f"Roteiro audiência para {papel}: {fatos}").text
             st.markdown(res)
 
-    # --- ABA 9: MONITOR (COM CALENDÁRIO!) ---
+    # --- ABA 9: MONITOR AUTOMÁTICO VIA E-MAIL ---
     with tab9:
-        st.header("🚦 Monitor de Prazos & Agenda")
-        st.markdown("Cole a movimentação para análise e agendamento.")
+        st.header("🚦 Monitor de Movimentações (Integração E-mail)")
+        st.markdown("Busca automática de e-mails do Tribunal (Push/Intimações) na sua caixa de entrada.")
 
-        col1, col2, col3 = st.columns(3)
-        with col1: n_proc = st.text_input("Nº Processo")
-        with col2: data_mov = st.date_input("Data Mov.", datetime.now())
-        with col3: tipo_prazo = st.selectbox("Contagem", ["Dias Úteis", "Corridos", "CLT"])
+        # Botão de Sincronização
+        c_sync1, c_sync2 = st.columns([1, 3])
+        with c_sync1:
+            if st.button("🔄 Buscar Intimações no E-mail"):
+                if not email_leitura or not senha_leitura:
+                    st.error("Configure seu e-mail e SENHA DE APP na barra lateral primeiro.")
+                else:
+                    with st.spinner("Conectando ao e-mail e buscando mensagens do Tribunal..."):
+                        mensagens, erro = buscar_intimacoes_email(email_leitura, senha_leitura, provedor_email)
+                        
+                        if erro:
+                            st.error(f"Erro na conexão: {erro}")
+                            st.info("Dica: Use uma 'Senha de App' (não a senha normal) e ative o IMAP nas configurações do Gmail.")
+                        elif not mensagens:
+                            st.warning("Nenhum e-mail novo com termos 'Intimação' ou 'Processo' encontrado.")
+                        else:
+                            st.success(f"{len(mensagens)} movimentações encontradas!")
+                            
+                            # Processa cada e-mail encontrado
+                            for i, msg in enumerate(mensagens):
+                                st.divider()
+                                st.subheader(f"📧 E-mail {i+1}: {msg['assunto']}")
+                                with st.expander("Ver conteúdo do e-mail"):
+                                    st.write(msg['corpo'])
+                                
+                                # Análise Automática da IA
+                                if st.button(f"🤖 Analisar E-mail {i+1} e Calcular Prazo", key=f"btn_analise_{i}"):
+                                    prompt = f"""
+                                    Analise este e-mail jurídico recebido pelo advogado.
+                                    Assunto: {msg['assunto']}
+                                    Corpo: {msg['corpo'][:3000]}
+                                    
+                                    TAREFA:
+                                    1. Identifique o número do processo (se houver).
+                                    2. Resuma a movimentação.
+                                    3. Diga se há prazo fatal e calcule a data (baseado na data de hoje: {date.today()}).
+                                    
+                                    SAÍDA: RESUMO | AÇÃO | DATA FATAL.
+                                    """
+                                    res_ia = genai.GenerativeModel(modelo_escolhido).generate_content(prompt).text
+                                    st.info("Análise da IA:")
+                                    st.write(res_ia)
+                                    
+                                    # Opção de Salvar
+                                    if st.button(f"💾 Salvar E-mail {i+1} no Monitor", key=f"btn_save_{i}"):
+                                        s = conectar_planilha()
+                                        if s:
+                                            conteudo = f"EMAIL: {msg['assunto']} | IA: {res_ia[:200]}"
+                                            s.append_row([datetime.now().strftime("%d/%m"), "Auto-Email", "Monitor", "Prazo", conteudo])
+                                            st.toast("Movimentação salva!", icon="✅")
 
-        texto_movimentacao = st.text_area("Movimentação:", height=150)
-
-        if "analise_prazo" not in st.session_state: st.session_state.analise_prazo = None
-
-        if st.button("🔍 Analisar Movimentação"):
-            if texto_movimentacao:
-                with st.spinner("Analisando..."):
-                    prompt = f"""
-                    Analise movimentação jurídica. Base: {data_mov}. Tipo: {tipo_prazo}. Texto: "{texto_movimentacao}"
-                    SAÍDA: RESUMO, AÇÃO REQUERIDA, TEM PRAZO?, DIAS, DATA FATAL SUGERIDA.
-                    """
-                    try:
-                        res = genai.GenerativeModel(modelo_escolhido).generate_content(prompt).text
-                        st.session_state.analise_prazo = res
-                    except Exception as e: st.error(f"Erro: {e}")
-
-        if st.session_state.analise_prazo:
-            st.divider()
-            st.markdown(st.session_state.analise_prazo)
-            
-            st.divider()
-            st.subheader("⏱️ Ações")
-            c_a, c_b = st.columns(2)
-            with c_a: 
-                data_fatal_input = st.date_input("Data Fatal:", datetime.now() + timedelta(days=15))
-                # --- BOTÃO DE CALENDÁRIO AQUI ---
-                arquivo_ics = criar_ics_calendario(n_proc, data_fatal_input, texto_movimentacao[:200])
-                st.download_button(
-                    label="📅 Baixar Agendamento (Outlook/Google)",
-                    data=arquivo_ics,
-                    file_name=f"prazo_{n_proc}.ics",
-                    mime="text/calendar"
-                )
-
-            with c_b:
-                dias = (data_fatal_input - date.today()).days
-                if dias < 0: st.error(f"VENCIDO HÁ {abs(dias)} DIAS!")
-                elif dias <= 3: st.warning(f"Faltam {dias} dias.")
-                else: st.success(f"Faltam {dias} dias.")
-                
-                if st.button("💾 Salvar na Planilha"):
-                    s = conectar_planilha()
-                    if s:
-                        conteudo = f"MOV: {texto_movimentacao[:30]}... | FATAL: {data_fatal_input}"
-                        s.append_row([datetime.now().strftime("%d/%m"), n_proc, "Monitor", "Prazo", conteudo])
-                        st.toast("Salvo!", icon="💾")
+        st.divider()
+        st.caption("Ou insira manualmente abaixo:")
+        # (Opção manual mantida caso o e-mail falhe)
+        n_proc = st.text_input("Nº Processo (Manual)")
+        txt_mov = st.text_area("Texto Movimentação (Manual)")
+        if st.button("Analisar Manual"):
+            res = genai.GenerativeModel(modelo_escolhido).generate_content(f"Analise prazo: {txt_mov}").text
+            st.write(res)
 
 else: st.warning("Insira uma chave de API para começar.")
