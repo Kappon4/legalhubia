@@ -58,8 +58,8 @@ def local_css():
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 50%; /* Tamanho da logo no fundo */
-            height: 50%;
+            width: 60%; /* Tamanho da logo no fundo */
+            height: 60%;
             background-image: url("data:image/jpeg;base64,{bg_image_b64}");
             background-size: contain;
             background-repeat: no-repeat;
@@ -67,7 +67,7 @@ def local_css():
             opacity: 0.08; /* Opacidade bem baixa para não atrapalhar */
             z-index: 0; /* Fica atrás do conteúdo */
             pointer-events: none; /* Permite clicar através da imagem */
-            animation: float-logo 12s ease-in-out infinite;
+            animation: float-logo 15s ease-in-out infinite;
         }}
 
         @keyframes float-logo {{
@@ -158,7 +158,7 @@ def local_css():
 
 local_css()
 
-# --- FUNÇÕES AUXILIARES MOVIDAS PARA O TOPO ---
+# --- FUNÇÕES AUXILIARES ---
 def gerar_word(texto):
     """Gera um arquivo Word a partir de um texto."""
     doc = Document()
@@ -201,6 +201,8 @@ def verificar_permissao(area_necessaria):
     plano_atual = st.session_state.get('plano_atual', 'starter')
     if plano_atual == 'full': return True
     if plano_atual == area_necessaria: return True
+    # Bancário está dentro do pacote Civil
+    if area_necessaria == 'bancario' and plano_atual == 'civil': return True
     return False
 
 def tela_bloqueio(area_necessaria, preco):
@@ -324,7 +326,8 @@ else: api_key = st.text_input("🔑 API Key (Salve no sidebar):", type="password
 
 if api_key:
     genai.configure(api_key=api_key)
-    mod_escolhido = "models/gemini-1.5-flash"
+    # CORREÇÃO CRÍTICA DO MODELO (SEM PREFIXO 'models/')
+    mod_escolhido = "gemini-1.5-flash"
 
 df_user = run_query("SELECT creditos, plano FROM usuarios WHERE username = ?", (st.session_state.usuario_atual,), return_data=True)
 if not df_user.empty:
@@ -814,108 +817,15 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
 
             # --- TRABALHISTA (MANTIDO) ---
             elif area_calc == "Trabalhista":
-                # NOVAS ABAS DE CÁLCULO TRABALHISTA
-                tab_resc, tab_he, tab_adic = st.tabs(["📄 Rescisão Completa", "⏰ Horas Extras & Reflexos", "⚠️ Adicionais (Insal./Peric.)"])
-
-                with tab_resc:
-                    st.markdown("#### Cálculo de Rescisão de Contrato (CLT)")
-                    c1, c2 = st.columns(2)
-                    salario_base = c1.number_input("Último Salário (R$)", min_value=0.0, key="trab_sal")
-                    dt_admissao = c1.date_input("Data Admissão", value=date(2022, 1, 10), key="trab_adm")
-                    dt_demissao = c2.date_input("Data Demissão", value=date.today(), key="trab_dem")
-                    motivo_resc = c2.selectbox("Motivo", ["Dispensa Sem Justa Causa", "Pedido de Demissão", "Justa Causa", "Acordo (Culpa Recíproca)"], key="trab_mot")
-                    
-                    aviso_previo = st.radio("Aviso Prévio", ["Indenizado", "Trabalhado", "Não Cumprido"], horizontal=True, key="trab_avi")
-                    ferias_vencidas = st.checkbox("Possui Férias Vencidas?", value=False, key="trab_fer")
-
-                    if st.button("CALCULAR RESCISÃO", key="btn_trab"):
-                        # Lógica de Tempo de Casa
-                        anos_casa = (dt_demissao.year - dt_admissao.year)
-                        if dt_demissao.month < dt_admissao.month: anos_casa -= 1
-                        
-                        # Aviso Prévio Proporcional (Lei 12.506)
-                        dias_aviso = 30
-                        if anos_casa >= 1: dias_aviso += min(3 * anos_casa, 60) # Max 90 dias total
-
-                        val_aviso = 0
-                        if motivo_resc == "Dispensa Sem Justa Causa":
-                            if aviso_previo == "Indenizado": val_aviso = (salario_base / 30) * dias_aviso
-                            
-                        # Proporcionais (Simplificado para demonstração)
-                        meses_trab_ano = dt_demissao.month
-                        decimo_prop = (salario_base / 12) * meses_trab_ano
-                        ferias_prop = (salario_base / 12) * meses_trab_ano + ((salario_base/12 * meses_trab_ano)/3)
-                        
-                        val_ferias_venc = 0
-                        if ferias_vencidas: val_ferias_venc = salario_base + (salario_base/3)
-
-                        saldo_salario = (salario_base/30) * dt_demissao.day
-
-                        multa_40 = 0
-                        if motivo_resc == "Dispensa Sem Justa Causa":
-                            # Estimativa FGTS (8% mensal)
-                            total_fgts_estimado = salario_base * 0.08 * (anos_casa * 12 + meses_trab_ano)
-                            multa_40 = total_fgts_estimado * 0.40
-
-                        total_bruto = saldo_salario + val_aviso + decimo_prop + ferias_prop + val_ferias_venc + multa_40
-
-                        st.divider()
-                        col_res1, col_res2, col_res3 = st.columns(3)
-                        col_res1.metric("Saldo de Salário", f"R$ {saldo_salario:,.2f}")
-                        col_res1.metric("Aviso Prévio", f"R$ {val_aviso:,.2f}")
-                        col_res2.metric("13º Proporcional", f"R$ {decimo_prop:,.2f}")
-                        col_res2.metric("Férias (+1/3)", f"R$ {ferias_prop + val_ferias_venc:,.2f}")
-                        col_res3.metric("Multa 40% FGTS", f"R$ {multa_40:,.2f}")
-                        col_res3.metric("TOTAL ESTIMADO", f"R$ {total_bruto:,.2f}", delta="Bruto")
-
-                with tab_he:
-                    st.markdown("#### Cálculo de Horas Extras com Reflexos")
-                    c_he1, c_he2 = st.columns(2)
-                    salario_hora = c_he1.number_input("Salário Mensal", min_value=0.0, value=2500.0, key="he_sal")
-                    divisor = c_he1.number_input("Divisor (Mensalista)", value=220, key="he_div")
-                    qtd_horas = c_he2.number_input("Média de Horas Extras/Mês", value=10, key="he_qtd")
-                    adicional = c_he2.selectbox("Adicional", ["50%", "60%", "100%"], key="he_add")
-                    
-                    if st.button("CALCULAR H.E.", key="btn_he"):
-                        valor_hora = salario_hora / divisor
-                        perc = 1.5 if adicional == "50%" else (1.6 if adicional == "60%" else 2.0)
-                        valor_he_mensal = valor_hora * perc * qtd_horas
-                        
-                        # Reflexo DSR (Estimativa 1/6)
-                        reflexo_dsr = valor_he_mensal / 6 
-                        # Reflexo FGTS (8%)
-                        reflexo_fgts = (valor_he_mensal + reflexo_dsr) * 0.08
-                        
-                        total_he = valor_he_mensal + reflexo_dsr + reflexo_fgts
-                        
-                        st.success(f"Valor Mensal das H.E.: R$ {valor_he_mensal:,.2f}")
-                        st.info(f"Reflexo DSR: R$ {reflexo_dsr:,.2f} | Reflexo FGTS: R$ {reflexo_fgts:,.2f}")
-                        st.metric("Total Mensal Integrado", f"R$ {total_he:,.2f}")
-
-                with tab_adic:
-                    st.markdown("#### Adicionais de Insalubridade e Periculosidade")
-                    tipo_add = st.radio("Tipo", ["Insalubridade", "Periculosidade"], horizontal=True, key="add_tipo")
-                    salario_base_add = st.number_input("Salário Base para Cálculo", value=2500.0, key="add_sal")
-                    salario_minimo = 1509.00 # Base 2025 aprox
-                    
-                    grau = "N/A"
-                    if tipo_add == "Insalubridade":
-                        grau = st.selectbox("Grau", ["Mínimo (10%)", "Médio (20%)", "Máximo (40%)"], key="add_grau")
-                        base_calc_insal = st.radio("Base de Cálculo Insalubridade", ["Salário Mínimo", "Salário Base"], horizontal=True, key="add_base")
-                    else:
-                        st.write("Periculosidade é fixada em 30% sobre o Salário Base.")
-
-                    if st.button("CALCULAR ADICIONAL", key="btn_add"):
-                        valor_add = 0
-                        if tipo_add == "Periculosidade":
-                            valor_add = salario_base_add * 0.30
-                        else:
-                            base = salario_minimo if base_calc_insal == "Salário Mínimo" else salario_base_add
-                            perc_insal = 0.10 if "Mínimo" in grau else (0.20 if "Médio" in grau else 0.40)
-                            valor_add = base * perc_insal
-                        
-                        st.metric(f"Valor do Adicional ({tipo_add})", f"R$ {valor_add:,.2f}")
-                        st.caption("Lembre-se de pedir reflexos em 13º, Férias e FGTS na petição!")
+                st.markdown("#### 👷 Cálculo de Rescisão CLT")
+                c1, c2, c3 = st.columns(3)
+                salario = c1.number_input("Salário Base (R$)", min_value=0.0, key="trab_sal")
+                meses = c2.number_input("Meses Trabalhados", min_value=1, key="trab_mes")
+                motivo = c3.selectbox("Motivo", ["Sem Justa Causa", "Pedido de Demissão", "Justa Causa"], key="trab_mot")
+                if st.button("CALCULAR", key="btn_trab"):
+                    multa = (salario * 0.08 * meses) * 0.40 if motivo == "Sem Justa Causa" else 0
+                    total = salario + multa 
+                    st.success(f"Total Estimado: R$ {total:,.2f}")
 
             # --- CRIMINAL (MANTIDO) ---
             elif area_calc == "Criminal":
