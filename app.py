@@ -32,88 +32,8 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- CSS AVANÇADO ---
-def local_css():
-    st.markdown("""
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;500;700&family=Inter:wght@300;400;600&display=swap');
-
-        :root {
-            --bg-dark: #020617;
-            --bg-card: rgba(15, 23, 42, 0.6);
-            --text-main: #FFFFFF;
-            --neon-blue: #00F3FF;
-            --neon-red: #FF0055;
-            --neon-gold: #FFD700;
-            --neon-green: #10B981;
-            --neon-purple: #BC13FE;
-        }
-
-        .stApp {
-            background-color: var(--bg-dark);
-            background-image: 
-                radial-gradient(circle at 15% 50%, rgba(14, 165, 233, 0.08), transparent 25%),
-                radial-gradient(circle at 85% 30%, rgba(99, 102, 241, 0.08), transparent 25%);
-            font-family: 'Inter', sans-serif;
-            color: var(--text-main);
-        }
-
-        h1, h2, h3, h4, h5, h6 { color: #FFFFFF !important; font-family: 'Rajdhani', sans-serif; text-transform: uppercase; letter-spacing: 1.5px; }
-        p, .stCaption, label, .stMarkdown { color: #E2E8F0 !important; font-family: 'Inter', sans-serif; }
-        div[data-testid="stMetricValue"] { color: var(--neon-blue) !important; text-shadow: 0 0 10px rgba(0, 243, 255, 0.5); }
-        .tech-header { background: linear-gradient(90deg, #FFFFFF 0%, var(--neon-blue) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 700; }
-
-        /* PLAN CARDS */
-        .plan-card {
-            background: rgba(15, 23, 42, 0.8);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            padding: 20px;
-            text-align: center;
-            transition: all 0.3s ease;
-            position: relative;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-        }
-        .plan-card:hover { transform: translateY(-5px); border-color: var(--neon-blue); box-shadow: 0 0 20px rgba(0, 243, 255, 0.2); }
-        
-        .plan-header { font-family: 'Rajdhani'; font-size: 1.4rem; font-weight: bold; color: #FFF; margin-bottom: 5px; text-transform: uppercase; }
-        .plan-price { font-size: 2rem; font-weight: 800; color: var(--neon-blue); margin: 10px 0; }
-        .plan-features { text-align: left; font-size: 0.85rem; color: #CBD5E1; margin-bottom: 20px; line-height: 1.6; }
-        
-        .plan-crim { border-top: 4px solid var(--neon-red); }
-        .plan-trab { border-top: 4px solid var(--neon-blue); }
-        .plan-civ { border-top: 4px solid var(--neon-purple); }
-        .plan-full { border: 1px solid var(--neon-gold); background: rgba(255, 215, 0, 0.05); }
-
-        /* LOCK SCREEN */
-        .lock-screen { border: 1px solid var(--neon-red); background: rgba(255, 0, 85, 0.05); border-radius: 10px; padding: 40px; text-align: center; margin-top: 20px; }
-        .lock-icon { font-size: 3rem; margin-bottom: 10px; }
-        .lock-title { color: var(--neon-red) !important; font-family: 'Rajdhani'; font-size: 2rem; font-weight: bold; }
-
-        /* HEADER & ANIMATION */
-        .header-logo { display: flex; align-items: center; margin-right: 2rem; }
-        .header-logo h1 { font-size: 1.8rem; margin: 0; letter-spacing: 2px; }
-        .floating-logo { animation: float 6s ease-in-out infinite; display: block; margin: 0 auto 30px auto; width: 250px; }
-        @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-20px); } }
-        
-        section[data-testid="stSidebar"] { background-color: #020408; border-right: 1px solid rgba(0, 243, 255, 0.1); }
-        .stButton>button { background: transparent; color: var(--neon-blue); border: 1px solid var(--neon-blue); border-radius: 0px; padding: 0.6rem 1.2rem; font-family: 'Rajdhani'; font-weight: 700; }
-        .stButton>button:hover { background: var(--neon-blue); color: #000; box-shadow: 0 0 20px rgba(0, 243, 255, 0.6); }
-        
-        div[data-testid="metric-container"], div[data-testid="stExpander"], .folder-card { background: var(--bg-card); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 0px; backdrop-filter: blur(12px); }
-        .stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div>div, .stNumberInput>div>div>input { background-color: rgba(0, 0, 0, 0.3) !important; border: 1px solid #334155 !important; color: #FFF !important; border-radius: 0px; }
-        
-        #MainMenu {visibility: hidden;} footer {visibility: hidden;}
-    </style>
-    """, unsafe_allow_html=True)
-
-local_css()
-
 # ==========================================================
-# 2. FUNÇÕES GERAIS E BANCO DE DADOS (IMPORTANTE: NO TOPO)
+# 2. FUNÇÕES GERAIS E BANCO DE DADOS (NO TOPO PARA EVITAR ERROS)
 # ==========================================================
 def get_base64_of_bin_file(bin_file):
     try:
@@ -122,7 +42,6 @@ def get_base64_of_bin_file(bin_file):
         return base64.b64encode(data).decode()
     except FileNotFoundError: return None
 
-# --- FUNÇÕES AUXILIARES MOVIDAS PARA O TOPO ---
 def gerar_word(texto):
     """Gera um arquivo Word a partir de um texto."""
     doc = Document()
@@ -165,6 +84,8 @@ def verificar_permissao(area_necessaria):
     plano_atual = st.session_state.get('plano_atual', 'starter')
     if plano_atual == 'full': return True
     if plano_atual == area_necessaria: return True
+    # Bancário está dentro do pacote Civil
+    if area_necessaria == 'bancario' and plano_atual == 'civil': return True
     return False
 
 def tela_bloqueio(area_necessaria, preco):
@@ -195,7 +116,113 @@ def buscar_jurisprudencia_oficial(tema, area):
         if res: return "\n".join([f"- {r['body']} (Fonte: {r['href']})" for r in res])
         return "Nenhuma jurisprudência específica localizada nas bases oficiais."
     except: return "Erro de conexão com bases jurídicas."
-# -----------------------------------------------------------
+
+# --- CSS AVANÇADO COM BACKGROUND ---
+def local_css():
+    bg_image_b64 = get_base64_of_bin_file("unnamed.jpg")
+    bg_css = ""
+    if bg_image_b64:
+        bg_css = f"""
+        .stApp::before {{
+            content: "";
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60%;
+            height: 60%;
+            background-image: url("data:image/jpeg;base64,{bg_image_b64}");
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            opacity: 0.08;
+            z-index: 0;
+            pointer-events: none;
+            animation: float-logo 15s ease-in-out infinite;
+        }}
+        @keyframes float-logo {{
+            0%, 100% {{ transform: translate(-50%, -50%) translateY(0px); }}
+            50% {{ transform: translate(-50%, -50%) translateY(-20px); }}
+        }}
+        """
+
+    st.markdown(f"""
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;500;700&family=Inter:wght@300;400;600&display=swap');
+
+        :root {{
+            --bg-dark: #020617;
+            --bg-card: rgba(15, 23, 42, 0.6);
+            --text-main: #FFFFFF;
+            --neon-blue: #00F3FF;
+            --neon-red: #FF0055;
+            --neon-gold: #FFD700;
+            --neon-green: #10B981;
+            --neon-purple: #BC13FE;
+        }}
+
+        .stApp {{
+            background-color: var(--bg-dark);
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(14, 165, 233, 0.08), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(99, 102, 241, 0.08), transparent 25%);
+            font-family: 'Inter', sans-serif;
+            color: var(--text-main);
+        }}
+
+        {bg_css}
+
+        h1, h2, h3, h4, h5, h6 {{ color: #FFFFFF !important; font-family: 'Rajdhani', sans-serif; text-transform: uppercase; letter-spacing: 1.5px; z-index: 1; position: relative; }}
+        p, .stCaption, label, .stMarkdown {{ color: #E2E8F0 !important; font-family: 'Inter', sans-serif; z-index: 1; position: relative; }}
+        div[data-testid="stMetricValue"] {{ color: var(--neon-blue) !important; text-shadow: 0 0 10px rgba(0, 243, 255, 0.5); }}
+        .tech-header {{ background: linear-gradient(90deg, #FFFFFF 0%, var(--neon-blue) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 700; }}
+
+        .plan-card {{
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+            position: relative;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            z-index: 1;
+        }}
+        .plan-card:hover {{ transform: translateY(-5px); border-color: var(--neon-blue); box-shadow: 0 0 20px rgba(0, 243, 255, 0.2); }}
+        
+        .plan-header {{ font-family: 'Rajdhani'; font-size: 1.4rem; font-weight: bold; color: #FFF; margin-bottom: 5px; text-transform: uppercase; }}
+        .plan-price {{ font-size: 2rem; font-weight: 800; color: var(--neon-blue); margin: 10px 0; }}
+        .plan-features {{ text-align: left; font-size: 0.85rem; color: #CBD5E1; margin-bottom: 20px; line-height: 1.6; }}
+        
+        .plan-crim {{ border-top: 4px solid var(--neon-red); }}
+        .plan-trab {{ border-top: 4px solid var(--neon-blue); }}
+        .plan-civ {{ border-top: 4px solid var(--neon-purple); }}
+        .plan-full {{ border: 1px solid var(--neon-gold); background: rgba(255, 215, 0, 0.05); }}
+
+        .lock-screen {{ border: 1px solid var(--neon-red); background: rgba(255, 0, 85, 0.05); border-radius: 10px; padding: 40px; text-align: center; margin-top: 20px; z-index: 1; position: relative; }}
+        .lock-icon {{ font-size: 3rem; margin-bottom: 10px; }}
+        .lock-title {{ color: var(--neon-red) !important; font-family: 'Rajdhani'; font-size: 2rem; font-weight: bold; }}
+
+        .header-logo {{ display: flex; align-items: center; margin-right: 2rem; }}
+        .header-logo h1 {{ font-size: 1.8rem; margin: 0; letter-spacing: 2px; }}
+        .floating-logo {{ animation: float 6s ease-in-out infinite; display: block; margin: 0 auto 30px auto; width: 250px; z-index: 1; position: relative; }}
+        @keyframes float {{ 0%, 100% {{ transform: translateY(0px); }} 50% {{ transform: translateY(-20px); }} }}
+        
+        section[data-testid="stSidebar"] {{ background-color: #020408; border-right: 1px solid rgba(0, 243, 255, 0.1); z-index: 2; }}
+        .stButton>button {{ background: transparent; color: var(--neon-blue); border: 1px solid var(--neon-blue); border-radius: 0px; padding: 0.6rem 1.2rem; font-family: 'Rajdhani'; font-weight: 700; }}
+        .stButton>button:hover {{ background: var(--neon-blue); color: #000; box-shadow: 0 0 20px rgba(0, 243, 255, 0.6); }}
+        
+        div[data-testid="metric-container"], div[data-testid="stExpander"], .folder-card {{ background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 0px; backdrop-filter: blur(12px); z-index: 1; }}
+        .stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div>div, .stNumberInput>div>div>input {{ background-color: rgba(0, 0, 0, 0.3) !important; border: 1px solid #334155 !important; color: #FFF !important; border-radius: 0px; }}
+        
+        #MainMenu {{visibility: hidden;}} footer {{visibility: hidden;}}
+    </style>
+    """, unsafe_allow_html=True)
+
+local_css()
 
 def init_db():
     conn = sqlite3.connect('legalhub.db')
@@ -288,7 +315,8 @@ else: api_key = st.text_input("🔑 API Key (Salve no sidebar):", type="password
 
 if api_key:
     genai.configure(api_key=api_key)
-    mod_escolhido = "models/gemini-1.5-flash"
+    # CORREÇÃO DEFINITIVA: MODELO ESTÁVEL 'GEMINI-PRO'
+    mod_escolhido = "gemini-pro"
 
 df_user = run_query("SELECT creditos, plano FROM usuarios WHERE username = ?", (st.session_state.usuario_atual,), return_data=True)
 if not df_user.empty:
@@ -778,15 +806,108 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
 
             # --- TRABALHISTA (MANTIDO) ---
             elif area_calc == "Trabalhista":
-                st.markdown("#### 👷 Cálculo de Rescisão CLT")
-                c1, c2, c3 = st.columns(3)
-                salario = c1.number_input("Salário Base (R$)", min_value=0.0, key="trab_sal")
-                meses = c2.number_input("Meses Trabalhados", min_value=1, key="trab_mes")
-                motivo = c3.selectbox("Motivo", ["Sem Justa Causa", "Pedido de Demissão", "Justa Causa"], key="trab_mot")
-                if st.button("CALCULAR", key="btn_trab"):
-                    multa = (salario * 0.08 * meses) * 0.40 if motivo == "Sem Justa Causa" else 0
-                    total = salario + multa 
-                    st.success(f"Total Estimado: R$ {total:,.2f}")
+                # NOVAS ABAS DE CÁLCULO TRABALHISTA
+                tab_resc, tab_he, tab_adic = st.tabs(["📄 Rescisão Completa", "⏰ Horas Extras & Reflexos", "⚠️ Adicionais (Insal./Peric.)"])
+
+                with tab_resc:
+                    st.markdown("#### Cálculo de Rescisão de Contrato (CLT)")
+                    c1, c2 = st.columns(2)
+                    salario_base = c1.number_input("Último Salário (R$)", min_value=0.0, key="trab_sal")
+                    dt_admissao = c1.date_input("Data Admissão", value=date(2022, 1, 10), key="trab_adm")
+                    dt_demissao = c2.date_input("Data Demissão", value=date.today(), key="trab_dem")
+                    motivo_resc = c2.selectbox("Motivo", ["Dispensa Sem Justa Causa", "Pedido de Demissão", "Justa Causa", "Acordo (Culpa Recíproca)"], key="trab_mot")
+                    
+                    aviso_previo = st.radio("Aviso Prévio", ["Indenizado", "Trabalhado", "Não Cumprido"], horizontal=True, key="trab_avi")
+                    ferias_vencidas = st.checkbox("Possui Férias Vencidas?", value=False, key="trab_fer")
+
+                    if st.button("CALCULAR RESCISÃO", key="btn_trab"):
+                        # Lógica de Tempo de Casa
+                        anos_casa = (dt_demissao.year - dt_admissao.year)
+                        if dt_demissao.month < dt_admissao.month: anos_casa -= 1
+                        
+                        # Aviso Prévio Proporcional (Lei 12.506)
+                        dias_aviso = 30
+                        if anos_casa >= 1: dias_aviso += min(3 * anos_casa, 60) # Max 90 dias total
+
+                        val_aviso = 0
+                        if motivo_resc == "Dispensa Sem Justa Causa":
+                            if aviso_previo == "Indenizado": val_aviso = (salario_base / 30) * dias_aviso
+                            
+                        # Proporcionais (Simplificado para demonstração)
+                        meses_trab_ano = dt_demissao.month
+                        decimo_prop = (salario_base / 12) * meses_trab_ano
+                        ferias_prop = (salario_base / 12) * meses_trab_ano + ((salario_base/12 * meses_trab_ano)/3)
+                        
+                        val_ferias_venc = 0
+                        if ferias_vencidas: val_ferias_venc = salario_base + (salario_base/3)
+
+                        saldo_salario = (salario_base/30) * dt_demissao.day
+
+                        multa_40 = 0
+                        if motivo_resc == "Dispensa Sem Justa Causa":
+                            # Estimativa FGTS (8% mensal)
+                            total_fgts_estimado = salario_base * 0.08 * (anos_casa * 12 + meses_trab_ano)
+                            multa_40 = total_fgts_estimado * 0.40
+
+                        total_bruto = saldo_salario + val_aviso + decimo_prop + ferias_prop + val_ferias_venc + multa_40
+
+                        st.divider()
+                        col_res1, col_res2, col_res3 = st.columns(3)
+                        col_res1.metric("Saldo de Salário", f"R$ {saldo_salario:,.2f}")
+                        col_res1.metric("Aviso Prévio", f"R$ {val_aviso:,.2f}")
+                        col_res2.metric("13º Proporcional", f"R$ {decimo_prop:,.2f}")
+                        col_res2.metric("Férias (+1/3)", f"R$ {ferias_prop + val_ferias_venc:,.2f}")
+                        col_res3.metric("Multa 40% FGTS", f"R$ {multa_40:,.2f}")
+                        col_res3.metric("TOTAL ESTIMADO", f"R$ {total_bruto:,.2f}", delta="Bruto")
+
+                with tab_he:
+                    st.markdown("#### Cálculo de Horas Extras com Reflexos")
+                    c_he1, c_he2 = st.columns(2)
+                    salario_hora = c_he1.number_input("Salário Mensal", min_value=0.0, value=2500.0, key="he_sal")
+                    divisor = c_he1.number_input("Divisor (Mensalista)", value=220, key="he_div")
+                    qtd_horas = c_he2.number_input("Média de Horas Extras/Mês", value=10, key="he_qtd")
+                    adicional = c_he2.selectbox("Adicional", ["50%", "60%", "100%"], key="he_add")
+                    
+                    if st.button("CALCULAR H.E.", key="btn_he"):
+                        valor_hora = salario_hora / divisor
+                        perc = 1.5 if adicional == "50%" else (1.6 if adicional == "60%" else 2.0)
+                        valor_he_mensal = valor_hora * perc * qtd_horas
+                        
+                        # Reflexo DSR (Estimativa 1/6)
+                        reflexo_dsr = valor_he_mensal / 6 
+                        # Reflexo FGTS (8%)
+                        reflexo_fgts = (valor_he_mensal + reflexo_dsr) * 0.08
+                        
+                        total_he = valor_he_mensal + reflexo_dsr + reflexo_fgts
+                        
+                        st.success(f"Valor Mensal das H.E.: R$ {valor_he_mensal:,.2f}")
+                        st.info(f"Reflexo DSR: R$ {reflexo_dsr:,.2f} | Reflexo FGTS: R$ {reflexo_fgts:,.2f}")
+                        st.metric("Total Mensal Integrado", f"R$ {total_he:,.2f}")
+
+                with tab_adic:
+                    st.markdown("#### Adicionais de Insalubridade e Periculosidade")
+                    tipo_add = st.radio("Tipo", ["Insalubridade", "Periculosidade"], horizontal=True, key="add_tipo")
+                    salario_base_add = st.number_input("Salário Base para Cálculo", value=2500.0, key="add_sal")
+                    salario_minimo = 1509.00 # Base 2025 aprox
+                    
+                    grau = "N/A"
+                    if tipo_add == "Insalubridade":
+                        grau = st.selectbox("Grau", ["Mínimo (10%)", "Médio (20%)", "Máximo (40%)"], key="add_grau")
+                        base_calc_insal = st.radio("Base de Cálculo Insalubridade", ["Salário Mínimo", "Salário Base"], horizontal=True, key="add_base")
+                    else:
+                        st.write("Periculosidade é fixada em 30% sobre o Salário Base.")
+
+                    if st.button("CALCULAR ADICIONAL", key="btn_add"):
+                        valor_add = 0
+                        if tipo_add == "Periculosidade":
+                            valor_add = salario_base_add * 0.30
+                        else:
+                            base = salario_minimo if base_calc_insal == "Salário Mínimo" else salario_base_add
+                            perc_insal = 0.10 if "Mínimo" in grau else (0.20 if "Médio" in grau else 0.40)
+                            valor_add = base * perc_insal
+                        
+                        st.metric(f"Valor do Adicional ({tipo_add})", f"R$ {valor_add:,.2f}")
+                        st.caption("Lembre-se de pedir reflexos em 13º, Férias e FGTS na petição!")
 
             # --- CRIMINAL (MANTIDO) ---
             elif area_calc == "Criminal":
