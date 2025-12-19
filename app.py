@@ -275,15 +275,36 @@ with st.sidebar:
         st.session_state.logado = False
         st.rerun()
 
+    # --- ÁREA DE ADMINISTRAÇÃO ATUALIZADA ---
     if st.session_state.usuario_atual == 'admin':
         st.divider()
-        with st.expander("👑 Admin"):
+        with st.expander("👑 Painel Admin"):
+            st.markdown("### 🆕 Criar Usuário")
             novo_user = st.text_input("Login")
             novo_pass = st.text_input("Senha", type="password")
             novo_banca = st.text_input("Escritório")
-            if st.button("Criar"):
+            if st.button("Criar Usuário"):
                 run_query("INSERT INTO usuarios (username, senha, escritorio, email_oab, creditos) VALUES (?, ?, ?, ?, ?)", (novo_user, novo_pass, novo_banca, "", 50))
-                st.success("Criado!")
+                st.success("Criado com sucesso!")
+            
+            st.divider()
+            
+            st.markdown("### 💰 Adicionar Créditos")
+            # Busca todos os usuários para o selectbox
+            df_users = run_query("SELECT username FROM usuarios", return_data=True)
+            
+            if not df_users.empty:
+                user_recarga = st.selectbox("Selecionar Usuário:", df_users['username'])
+                qtd_recarga = st.number_input("Quantidade de Créditos:", min_value=1, value=50, step=10)
+                
+                if st.button("➕ Confirmar Recarga"):
+                    run_query("UPDATE usuarios SET creditos = creditos + ? WHERE username = ?", (qtd_recarga, user_recarga))
+                    st.toast(f"✅ Recarga de {qtd_recarga} enviada para {user_recarga}!")
+                    time.sleep(1)
+                    st.rerun()
+            else:
+                st.warning("Nenhum usuário encontrado.")
+    # ----------------------------------------
 
 # ==========================================================
 # LÓGICA DAS TELAS
