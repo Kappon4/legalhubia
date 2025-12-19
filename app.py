@@ -390,12 +390,14 @@ st.markdown("---")
 # --- SIDEBAR (AGORA APENAS PARA CONFIGURAÇÕES E LOGOUT) ---
 with st.sidebar:
     # ---------------------------------------------------------------------
-    # LOGO: CERTIFIQUE-SE DE QUE O ARQUIVO 'diagrama-ia.png' ESTÁ NA PASTA
+    # LOGO: CARREGA A IMAGEM UPLOADED PELO NOME
     # ---------------------------------------------------------------------
     try:
+        # Tenta carregar a imagem local
         st.sidebar.image("diagrama-ia.png", use_container_width=True)
     except:
-        st.warning("⚠️ Imagem 'diagrama-ia.png' não encontrada.")
+        # Se não encontrar, mostra um placeholder para não quebrar o layout
+        st.warning("⚠️ Imagem 'diagrama-ia.png' não encontrada na pasta.")
 
     st.markdown("<h2 class='tech-header' style='font-size:1.5rem;'>CONFIGURAÇÕES</h2>", unsafe_allow_html=True)
     st.markdown(f"<div style='font-size:0.8rem; color:#E2E8F0; margin-bottom: 20px;'>Usuário: {st.session_state.usuario_atual}<br>Escritório: {st.session_state.escritorio_atual}</div>", unsafe_allow_html=True)
