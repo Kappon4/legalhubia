@@ -109,7 +109,7 @@ def get_base64_of_bin_file(bin_file):
         return base64.b64encode(data).decode()
     except FileNotFoundError: return None
 
-# --- FUNÇÕES QUE FALTAVAM E CAUSAVAM ERRO ---
+# --- FUNÇÕES AUXILIARES ---
 def gerar_word(texto):
     """Gera um arquivo Word a partir de um texto."""
     doc = Document()
@@ -370,7 +370,7 @@ if menu_opcao == "📊 Dashboard":
             <div style='background: rgba(245, 158, 11, 0.1); border-left: 3px solid #F59E0B; padding: 10px; border-radius: 4px;'><strong style='color: #F59E0B; font-family: Rajdhani;'>⚖️ LIVE JURISPRUDENCE</strong><br><span style='font-size: 0.8rem; color: #E2E8F0;'>Sincronia STF/STJ.</span></div>
             """, unsafe_allow_html=True)
 
-# 2. REDATOR JURÍDICO
+# 2. REDATOR JURÍDICO (SEM UPLOAD - REMOVIDO)
 elif menu_opcao == "✍️ Redator Jurídico":
     st.markdown("<h2 class='tech-header'>✍️ REDATOR IA AVANÇADO</h2>", unsafe_allow_html=True)
     if "fatos_recuperados" not in st.session_state: st.session_state.fatos_recuperados = ""
@@ -397,6 +397,7 @@ elif menu_opcao == "✍️ Redator Jurídico":
     with col_input:
         with st.container(border=True):
             st.markdown("##### 📝 DADOS E FATOS")
+            # --- UPLOAD REMOVIDO DESTA ABA ---
             fatos = st.text_area("Descreva os fatos detalhadamente:", height=200, value=st.session_state.fatos_recuperados)
             legislacao_extra = st.text_input("Citar Legislação/Súmula Específica (Opcional):", placeholder="Ex: Súmula 331 do TST")
             formato = st.radio("Formato de Saída:", ["Texto Corrido", "Tópicos Estruturados"], horizontal=True)
@@ -406,7 +407,17 @@ elif menu_opcao == "✍️ Redator Jurídico":
         if creditos_atuais > 0 and fatos and cli_final:
             with st.spinner("Analisando caso, buscando teses e redigindo..."):
                 jur = buscar_jurisprudencia_real(f"{area} {tipo} {fatos}") if web else "Jurisprudência padrão aplicada."
-                prompt = f"Atue como Advogado Sênior. Peça: {tipo}. Área: {area}. Tom: {tom}. Cliente: {cli_final}. Fatos: {fatos}. Lei: {legislacao_extra}. Juris: {jur}. Formato: {formato}."
+                prompt = f"""
+                Atue como Advogado Sênior especialista em {area}.
+                Escreva uma {tipo} completa.
+                Tom: {tom}.
+                Cliente: {cli_final}.
+                Fatos: {fatos}.
+                Legislação Obrigatória: {legislacao_extra}.
+                Jurisprudência encontrada para usar: {jur}.
+                Formato: {formato}.
+                Estruture com: Endereçamento, Qualificação, Fatos, Direito (com teses robustas), Pedidos e Fechamento.
+                """
                 try:
                     res = genai.GenerativeModel(mod_escolhido).generate_content(prompt).text
                     run_query("UPDATE usuarios SET creditos = creditos - 1 WHERE username = ?", (st.session_state.usuario_atual,))
@@ -448,7 +459,7 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
                         st.download_button("BAIXAR LAUDO", gerar_word(res), "Laudo.docx")
     else: tela_bloqueio("Pro")
 
-# 4. AUDIENCIA
+# 4. AUDIENCIA (COM UPLOAD DE PDF - MOVIDO PARA CÁ)
 elif menu_opcao == "🏛️ Estratégia de Audiência":
     if verificar_acesso("Elite"):
         st.markdown("<h2 class='tech-header'>🏛️ ESTRATEGISTA DE AUDIÊNCIA</h2>", unsafe_allow_html=True)
@@ -456,20 +467,43 @@ elif menu_opcao == "🏛️ Estratégia de Audiência":
         with c1: area = st.selectbox("Rito/Área", ["Trabalhista (Ordinário)", "Trabalhista (Sumaríssimo)", "Cível (Comum)", "Juizado Especial"])
         with c2: papel = st.selectbox("Papel", ["Advogado do Autor", "Advogado do Réu"])
         with c3: perfil_juiz = st.selectbox("Perfil do Juiz (IA Adaptativa)", ["Padrão", "Legalista Rígido", "Conciliador/Mediador", "Pró-Reclamante", "Pró-Empresa"])
+        
         col_txt, col_up = st.columns([2, 1])
-        with col_txt: detalhes = st.text_area("Resumo do Caso / Pontos Controversos:", height=150)
-        with col_up: testemunhas = st.text_area("Lista de Testemunhas (Opcional):")
+        with col_txt: 
+            detalhes = st.text_area("Resumo do Caso / Pontos Controversos:", height=150)
+        with col_up: 
+            # --- NOVO LOCAL DO UPLOAD ---
+            upload_autos = st.file_uploader("Anexar Autos/Peças (PDF) para Contexto", type="pdf")
+            # ----------------------------
+            testemunhas = st.text_area("Lista de Testemunhas (Opcional):")
+        
         if st.button("🔮 SIMULAR CENÁRIOS"):
             if detalhes:
-                with st.spinner(f"Simulando audiência..."):
-                    prompt = f"Estrategista jurídico. Caso: {detalhes}. Perfil Juiz: {perfil_juiz}. Gere perguntas cruzadas e análise de risco."
+                with st.spinner(f"Simulando audiência com juiz perfil '{perfil_juiz}'..."):
+                    # Extrai contexto se houver upload
+                    contexto_pdf = ""
+                    if upload_autos:
+                        contexto_pdf = f"\n\n[CONTEXTO DOS AUTOS - DOCUMENTOS ANEXADOS]:\n{extrair_texto_pdf(upload_autos)}"
+
+                    prompt = f"""
+                    Aja como um estrategista jurídico sênior.
+                    Caso: {detalhes}. Área: {area}. Meu lado: {papel}.
+                    {contexto_pdf}
+                    Perfil do Juiz: {perfil_juiz}. Testemunhas: {testemunhas}.
+                    
+                    Gere uma estratégia dividida em 3 seções:
+                    1. Perguntas Cruzadas: O que perguntar para a outra parte e testemunhas para expor contradições.
+                    2. Análise de Risco: O que o juiz {perfil_juiz} provavelmente vai focar.
+                    3. Alegações Finais Orais: Um roteiro curto e impactante.
+                    """
                     res = genai.GenerativeModel(mod_escolhido).generate_content(prompt).text
+                    
                     tab1, tab2, tab3 = st.tabs(["⚔️ Perguntas Cruzadas", "⚠️ Análise de Risco", "🗣️ Alegações Finais"])
                     with tab1: st.markdown(res)
                     with tab3: st.download_button("BAIXAR ROTEIRO", gerar_word(res), "Roteiro_Audiencia.docx")
     else: tela_bloqueio("Elite")
 
-# 5. GESTÃO DE CASOS (COMPLETA E RESTAURADA)
+# 5. GESTÃO DE CASOS (MANTIDO)
 elif menu_opcao == "📂 Gestão de Casos":
     st.markdown("<h2 class='tech-header'>📂 COFRE DIGITAL</h2>", unsafe_allow_html=True)
     if "pasta_aberta" not in st.session_state: st.session_state.pasta_aberta = None
@@ -487,7 +521,6 @@ elif menu_opcao == "📂 Gestão de Casos":
             if st.button("⬅ VOLTAR"): st.session_state.pasta_aberta = None; st.rerun()
             st.markdown(f"### Arquivos de: {st.session_state.pasta_aberta}")
             
-            # --- ÁREA DE UPLOAD RESTAURADA ---
             with st.expander("➕ ADICIONAR NOVO DOCUMENTO", expanded=False):
                 c_add1, c_add2 = st.columns(2)
                 novo_tipo = c_add1.text_input("Nome do Documento (Ex: Procuração):")
@@ -508,7 +541,6 @@ elif menu_opcao == "📂 Gestão de Casos":
                         st.success("Adicionado com sucesso!")
                         time.sleep(1)
                         st.rerun()
-            # ---------------------------------
 
             st.divider()
             docs_cli = df_docs[df_docs['cliente'] == st.session_state.pasta_aberta]
@@ -517,7 +549,6 @@ elif menu_opcao == "📂 Gestão de Casos":
                     st.write(row['conteudo'][:300] + "..." if len(row['conteudo']) > 300 else row['conteudo'])
                     c_d, c_e = st.columns([4, 1])
                     with c_d:
-                        # Botão de download corrigido chamando a função definida
                         st.download_button("📥 BAIXAR DOCX", gerar_word(row['conteudo']), f"{row['tipo']}.docx", key=f"dl_{idx}")
                     with c_e:
                         if st.button("🗑️ EXCLUIR", key=f"del_{idx}"):
