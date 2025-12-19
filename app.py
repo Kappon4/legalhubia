@@ -328,8 +328,42 @@ if menu_opcao == "📊 Dashboard":
     st.markdown("---")
     st.subheader("🚀 Atalhos Rápidos")
     col_a, col_b = st.columns(2)
-    with col_a: st.info("Precisa de uma Inicial? Vá em **Redator**.")
-    with col_b: st.success("Tem audiência amanhã? Vá em **Estratégia**.")
+    with col_a: 
+        st.info(" Precisa de uma Inicial? Vá em **Redator**.")
+    with col_b: 
+        st.success(" Tem audiência amanhã? Vá em **Estratégia**.")
+
+    # --- NOVO: RESUMO DAS FUNCIONALIDADES ---
+    st.markdown("---")
+    st.markdown("### 🛠️ O Que Você Pode Fazer Aqui:")
+    
+    row1_c1, row1_c2, row1_c3 = st.columns(3)
+    with row1_c1:
+        with st.container(border=True):
+            st.markdown("#### ✍️ Redator IA")
+            st.write("Crie petições, contratos e recursos em segundos. A IA pesquisa jurisprudência e formata o texto para você.")
+    with row1_c2:
+        with st.container(border=True):
+            st.markdown("#### 🧮 Calculadora Jurídica")
+            st.write("Realize perícias contábeis completas (Trabalhista, Cível, Criminal) apenas anexando o contrato em PDF.")
+    with row1_c3:
+        with st.container(border=True):
+            st.markdown("#### 🏛️ Estratégia de Audiência")
+            st.write("Prepare-se para audiências. A IA lê o processo e gera roteiros de perguntas para testemunhas e análise de risco.")
+
+    row2_c1, row2_c2, row2_c3 = st.columns(3)
+    with row2_c1:
+        with st.container(border=True):
+            st.markdown("#### 📂 Gestão de Casos (GED)")
+            st.write("Seus arquivos gerados ficam salvos automaticamente na nuvem segura do seu escritório.")
+    with row2_c2:
+        with st.container(border=True):
+            st.markdown("#### 🚦 Monitor de Prazos")
+            st.write("Conecte seu e-mail da OAB. O sistema busca intimações e calcula a data fatal automaticamente.")
+    with row2_c3:
+        with st.container(border=True):
+            st.markdown("#### 🔧 Ferramentas Extras")
+            st.write("Utilitários essenciais: Transcrição de áudio do WhatsApp, Resumo de PDF e Comparador de Versões.")
 
 # 2. REDATOR
 elif menu_opcao == "✍️ Redator Jurídico":
@@ -485,4 +519,4 @@ elif menu_opcao == "🔧 Ferramentas Extras":
             st.write(genai.GenerativeModel(mod_escolhido).generate_content(f"Diferenças: {extrair_texto_pdf(p1)} E {extrair_texto_pdf(p2)}").text)
 
 st.markdown("---")
-st.markdown("<center style='color: #555;'>🔒 LegalHub Enterprise v3.0 | Dark Mode Edition</center>", unsafe_allow_html=True)
+st.markdown("<center style='color: #555;'>🔒 LegalHub Enterprise v3.5 | Dark Mode Edition</center>", unsafe_allow_html=True)
