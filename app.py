@@ -23,13 +23,13 @@ from google.api_core.exceptions import ResourceExhausted, NotFound, InvalidArgum
 # 1. CONFIGURAÇÃO VISUAL
 st.set_page_config(page_title="LegalHub SaaS", page_icon="⚖️", layout="wide")
 
-# --- 2. BANCO DE DADOS (SQLITE) ---
+# --- 2. BANCO DE DADOS (SQLITE) - VERSÃO CORRIGIDA ---
 def init_db():
-    """Cria o banco de dados e as tabelas se não existirem."""
+    """Cria o banco de dados e garante que o ADMIN exista."""
     conn = sqlite3.connect('legalhub.db')
     c = conn.cursor()
     
-    # Tabela de Usuários
+    # Cria Tabela de Usuários
     c.execute('''
         CREATE TABLE IF NOT EXISTS usuarios (
             username TEXT PRIMARY KEY,
@@ -39,7 +39,7 @@ def init_db():
         )
     ''')
     
-    # Tabela de Documentos
+    # Cria Tabela de Documentos
     c.execute('''
         CREATE TABLE IF NOT EXISTS documentos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -52,16 +52,18 @@ def init_db():
         )
     ''')
     
-    # --- DADOS INICIAIS ---
-    c.execute('SELECT count(*) FROM usuarios')
-    if c.fetchone()[0] == 0:
-        # Cria usuários de teste originais
-        c.execute("INSERT INTO usuarios VALUES ('advogado1', '123', 'Escritório Alpha', 'lucas@alpha.adv.br')")
-        c.execute("INSERT INTO usuarios VALUES ('advogado2', '123', 'Escritório Beta', 'joao@beta.adv.br')")
-        # Cria o ADMIN (Necessário para cadastrar novos escritórios pelo site)
-        c.execute("INSERT INTO usuarios VALUES ('admin', 'admin', 'LegalHub Master', 'suporte@legalhub.com')")
-        conn.commit()
+    # --- CORREÇÃO AQUI: INSERT OR IGNORE ---
+    # Isso força a criação dos usuários mesmo se o banco já existir.
+    # O "IGNORE" evita erro se o usuário já estiver lá.
     
+    # Usuários de Teste
+    c.execute("INSERT OR IGNORE INTO usuarios VALUES ('advogado1', '123', 'Escritório Alpha', 'lucas@alpha.adv.br')")
+    c.execute("INSERT OR IGNORE INTO usuarios VALUES ('advogado2', '123', 'Escritório Beta', 'joao@beta.adv.br')")
+    
+    # Usuário ADMIN (Obrigatório para o painel)
+    c.execute("INSERT OR IGNORE INTO usuarios VALUES ('admin', 'admin', 'LegalHub Master', 'suporte@legalhub.com')")
+    
+    conn.commit()
     conn.close()
 
 def run_query(query, params=(), return_data=False):
@@ -152,7 +154,7 @@ if st.sidebar.button("Sair (Logout)"):
 
 st.sidebar.divider()
 
-# --- [NOVO] PAINEL DE ADMINISTRAÇÃO (Integrado do seu código) ---
+# --- PAINEL DE ADMINISTRAÇÃO ---
 # Só aparece se o usuário for 'admin'
 if st.session_state.usuario_atual == 'admin':
     with st.sidebar.expander("👑 Cadastrar Novo Escritório"):
