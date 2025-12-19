@@ -17,9 +17,6 @@ import smtplib
 import ssl
 from email.message import EmailMessage
 import plotly.express as px
-# IMPORTANTE: É necessário instalar o pacote streamlit-option-menu
-# Execute: pip install streamlit-option-menu
-from streamlit_option_menu import option_menu
 
 # --- IMPORTAÇÃO DE ERROS ---
 from google.api_core.exceptions import ResourceExhausted, NotFound, InvalidArgument
@@ -34,7 +31,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed" # Sidebar recolhida por padrão
 )
 
-# --- CSS AVANÇADO (MENU HORIZONTAL FUTURISTA) ---
+# --- CSS AVANÇADO (MENU HORIZONTAL FUTURISTA NATIVO) ---
 def local_css():
     st.markdown("""
     <style>
@@ -93,39 +90,6 @@ def local_css():
             text-shadow: 0 0 20px rgba(0, 243, 255, 0.3);
         }
 
-        /* --- CUSTOMIZAÇÃO DA BARRA DE NAVEGAÇÃO HORIZONTAL (streamlit-option-menu) --- */
-        .st-emotion-cache-15hul0a { /* Container do menu */
-            background-color: rgba(10, 15, 30, 0.8) !important;
-            border-bottom: 1px solid rgba(0, 243, 255, 0.3);
-            box-shadow: 0 4px 20px rgba(0, 243, 255, 0.1);
-            backdrop-filter: blur(10px);
-            padding: 0.5rem 1rem;
-        }
-
-        .st-emotion-cache-10trblm { /* Itens do menu */
-            color: #94A3B8 !important;
-            font-family: 'Rajdhani', sans-serif;
-            font-weight: 600;
-            font-size: 1.1rem;
-            letter-spacing: 1px;
-            transition: all 0.3s ease;
-            border-radius: 4px;
-            margin: 0 5px;
-        }
-        
-        .st-emotion-cache-10trblm:hover { /* Hover nos itens */
-            color: #FFFFFF !important;
-            background-color: rgba(0, 243, 255, 0.1) !important;
-            box-shadow: 0 0 15px rgba(0, 243, 255, 0.2);
-        }
-
-        .st-emotion-cache-1r6slb0 { /* Item selecionado */
-            color: #FFFFFF !important;
-            background: linear-gradient(90deg, rgba(0, 243, 255, 0.2) 0%, transparent 100%) !important;
-            border-bottom: 3px solid var(--neon-blue) !important;
-            text-shadow: 0 0 10px var(--neon-blue);
-        }
-        
         /* --- LOGOTIPO NO CABEÇALHO --- */
         .header-logo {
             display: flex;
@@ -349,8 +313,7 @@ creditos_atuais = df_user.iloc[0]['creditos'] if not df_user.empty else 0
 if "navegacao_override" not in st.session_state:
     st.session_state.navegacao_override = None
 
-# --- CABEÇALHO HORIZONTAL (NOVO) ---
-# Cria uma coluna para o logo e outra para o menu
+# --- CABEÇALHO HORIZONTAL (VERSÃO CSS NATIVO) ---
 col_logo, col_menu = st.columns([1, 4])
 
 with col_logo:
@@ -361,11 +324,7 @@ with col_logo:
     """, unsafe_allow_html=True)
 
 with col_menu:
-    # Lista de Opções e Ícones
-    opcoes_menu = ["Dashboard", "Redator IA", "Perícia & Calc", "Audiência", "Gestão Casos", "Monitor Prazos", "Ferramentas"]
-    icones_menu = ["speedometer2", "pen-fill", "calculator-fill", "people-fill", "folder-fill", "stoplights-fill", "tools"]
-
-    # Mapeamento para nomes internos
+    # Mapeamento
     mapa_nav = {
         "Dashboard": "📊 Dashboard",
         "Redator IA": "✍️ Redator Jurídico", 
@@ -375,32 +334,55 @@ with col_menu:
         "Monitor Prazos": "🚦 Monitor de Prazos",
         "Ferramentas": "🔧 Ferramentas Extras"
     }
+    opcoes_menu = list(mapa_nav.keys())
 
-    # Inverso para controlar a seleção via override
-    mapa_inv = {v: k for k, v in mapa_nav.items()}
-    
-    default_index = 0
-    if st.session_state.navegacao_override:
-        try: 
-            nome_curto = mapa_inv.get(st.session_state.navegacao_override, "Dashboard")
-            default_index = opcoes_menu.index(nome_curto)
-        except: default_index = 0
-        st.session_state.navegacao_override = None
-    
-    # Menu Horizontal usando streamlit-option-menu
-    escolha_menu = option_menu(
-        menu_title=None, # Esconde o título do menu
-        options=opcoes_menu,
-        icons=icones_menu,
-        default_index=default_index,
-        orientation="horizontal",
-        styles={
-            "container": {"padding": "0!important", "background-color": "transparent"},
-            "icon": {"color": "#00F3FF", "font-size": "1rem"}, 
-            "nav-link": {"font-size": "1rem", "text-align": "center", "margin":"0px", "--hover-color": "rgba(0, 243, 255, 0.1)"},
-            "nav-link-selected": {"background-color": "rgba(0, 243, 255, 0.2)", "border-bottom": "3px solid #00F3FF"},
+    # CSS para transformar o Radio em Menu Horizontal
+    st.markdown("""
+    <style>
+        div[role="radiogroup"] {
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            background: rgba(10, 15, 30, 0.8);
+            padding: 10px;
+            border-radius: 8px;
+            border-bottom: 1px solid rgba(0, 243, 255, 0.3);
         }
-    )
+        div[role="radiogroup"] label {
+            background: transparent !important;
+            border: none !important;
+            margin: 0 !important;
+            padding: 5px 15px !important;
+            color: #94A3B8 !important;
+            transition: all 0.3s;
+        }
+        div[role="radiogroup"] label:hover {
+            color: #FFF !important;
+            text-shadow: 0 0 5px #00F3FF;
+        }
+        div[role="radiogroup"] label[data-checked="true"] {
+            color: #00F3FF !important;
+            border-bottom: 2px solid #00F3FF !important;
+            background: rgba(0, 243, 255, 0.1) !important;
+        }
+        div[role="radiogroup"] div[data-testid="stMarkdownContainer"] p {
+             font-size: 1rem !important; 
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Determinar índice para o radio button se houver override
+    idx_radio = 0
+    if st.session_state.navegacao_override:
+        try:
+            # Encontrar a chave correta baseada no valor
+            key_override = [k for k, v in mapa_nav.items() if v == st.session_state.navegacao_override][0]
+            idx_radio = opcoes_menu.index(key_override)
+        except:
+            idx_radio = 0
+        st.session_state.navegacao_override = None
+
+    escolha_menu = st.radio("Menu Navegação", options=opcoes_menu, index=idx_radio, horizontal=True, label_visibility="collapsed")
     menu_opcao = mapa_nav[escolha_menu]
 
 st.markdown("---")
