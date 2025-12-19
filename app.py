@@ -17,6 +17,9 @@ import smtplib
 import ssl
 from email.message import EmailMessage
 import plotly.express as px
+# IMPORTANTE: É necessário instalar o pacote streamlit-option-menu
+# Execute: pip install streamlit-option-menu
+from streamlit_option_menu import option_menu
 
 # --- IMPORTAÇÃO DE ERROS ---
 from google.api_core.exceptions import ResourceExhausted, NotFound, InvalidArgument
@@ -28,10 +31,10 @@ st.set_page_config(
     page_title="LegalHub Elite | AI System", 
     page_icon="🛡️", 
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed" # Sidebar recolhida por padrão
 )
 
-# --- CSS AVANÇADO (MENU FUTURISTA & CORREÇÃO DE CORES) ---
+# --- CSS AVANÇADO (MENU HORIZONTAL FUTURISTA) ---
 def local_css():
     st.markdown("""
     <style>
@@ -40,10 +43,10 @@ def local_css():
 
         /* --- VARIÁVEIS CYBER --- */
         :root {
-            --bg-dark: #050A14;         /* Fundo Ultra Dark */
-            --bg-card: rgba(20, 30, 50, 0.6); 
-            --text-main: #FFFFFF;       
-            --neon-blue: #00F3FF;       /* Cyan Cyberpunk */
+            --bg-dark: #050A14;
+            --bg-card: rgba(20, 30, 50, 0.6);
+            --text-main: #FFFFFF;
+            --neon-blue: #00F3FF;
             --neon-purple: #BC13FE;
             --border-glow: 1px solid rgba(0, 243, 255, 0.2);
         }
@@ -51,7 +54,6 @@ def local_css():
         /* --- GERAL --- */
         .stApp {
             background-color: var(--bg-dark);
-            /* Grid Background Effect */
             background-image: 
                 linear-gradient(rgba(0, 243, 255, 0.03) 1px, transparent 1px),
                 linear-gradient(90deg, rgba(0, 243, 255, 0.03) 1px, transparent 1px);
@@ -62,14 +64,14 @@ def local_css():
 
         h1, h2, h3, h4, h5, h6 {
             color: #FFFFFF !important;
-            font-family: 'Rajdhani', sans-serif; /* Fonte Títulos Futuristas */
+            font-family: 'Rajdhani', sans-serif;
             text-transform: uppercase;
             letter-spacing: 1px;
         }
 
-        /* --- CORREÇÃO: FORÇAR TEXTOS BRANCOS (ÁREAS MARCADAS EM VERDE) --- */
+        /* --- TEXTOS BRANCOS --- */
         p, .stCaption, div[data-testid="caption"], div[data-testid="stMetricLabel"] label, div[data-testid="stMarkdownContainer"] p {
-            color: #E2E8F0 !important; /* Branco Gelo */
+            color: #E2E8F0 !important;
             font-family: 'Inter', sans-serif;
         }
         
@@ -78,7 +80,6 @@ def local_css():
             text-shadow: 0 0 10px rgba(0, 243, 255, 0.5);
         }
         
-        /* Corrigindo cor de rótulos de input */
         label, .stTextInput label, .stSelectbox label, .stTextArea label {
             color: #CBD5E1 !important;
         }
@@ -92,64 +93,61 @@ def local_css():
             text-shadow: 0 0 20px rgba(0, 243, 255, 0.3);
         }
 
-        /* --- SIDEBAR CUSTOMIZADA --- */
-        section[data-testid="stSidebar"] {
-            background-color: #020408;
-            border-right: 1px solid rgba(0, 243, 255, 0.1);
+        /* --- CUSTOMIZAÇÃO DA BARRA DE NAVEGAÇÃO HORIZONTAL (streamlit-option-menu) --- */
+        .st-emotion-cache-15hul0a { /* Container do menu */
+            background-color: rgba(10, 15, 30, 0.8) !important;
+            border-bottom: 1px solid rgba(0, 243, 255, 0.3);
+            box-shadow: 0 4px 20px rgba(0, 243, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 0.5rem 1rem;
         }
-        
-        /* --- MENU DE NAVEGAÇÃO FUTURISTA (TRANSFORMAÇÃO RADIO) --- */
-        /* 1. Esconder as bolinhas padrão */
-        div[role="radiogroup"] label > div:first-child {
-            display: none !important;
-        }
-        
-        /* 2. Estilizar o container do texto como um botão Cyber */
-        div[role="radiogroup"] label {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            padding: 12px 16px;
-            border-radius: 4px;
-            margin-bottom: 8px;
-            transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
-            position: relative;
-            overflow: hidden;
-            color: #94A3B8; /* Cor inativa */
+
+        .st-emotion-cache-10trblm { /* Itens do menu */
+            color: #94A3B8 !important;
             font-family: 'Rajdhani', sans-serif;
             font-weight: 600;
             font-size: 1.1rem;
-            letter-spacing: 0.5px;
+            letter-spacing: 1px;
+            transition: all 0.3s ease;
+            border-radius: 4px;
+            margin: 0 5px;
+        }
+        
+        .st-emotion-cache-10trblm:hover { /* Hover nos itens */
+            color: #FFFFFF !important;
+            background-color: rgba(0, 243, 255, 0.1) !important;
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.2);
+        }
+
+        .st-emotion-cache-1r6slb0 { /* Item selecionado */
+            color: #FFFFFF !important;
+            background: linear-gradient(90deg, rgba(0, 243, 255, 0.2) 0%, transparent 100%) !important;
+            border-bottom: 3px solid var(--neon-blue) !important;
+            text-shadow: 0 0 10px var(--neon-blue);
+        }
+        
+        /* --- LOGOTIPO NO CABEÇALHO --- */
+        .header-logo {
             display: flex;
             align-items: center;
+            margin-right: 2rem;
+        }
+        .header-logo h1 {
+            font-size: 1.8rem;
+            margin: 0;
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(0, 243, 255, 0.5);
+        }
+        .header-logo span {
+            font-weight: 300;
+            color: #fff;
+            font-size: 1.2rem;
         }
 
-        /* 3. Efeito Hover (Mouse em cima) */
-        div[role="radiogroup"] label:hover {
-            background: rgba(0, 243, 255, 0.05);
-            border-color: rgba(0, 243, 255, 0.3);
-            color: #FFFFFF;
-            transform: translateX(5px);
-            box-shadow: -3px 0 10px rgba(0, 243, 255, 0.1);
-        }
-
-        /* 4. Item Selecionado (A Mágica acontece aqui) */
-        div[role="radiogroup"] label[data-checked="true"] {
-            background: linear-gradient(90deg, rgba(0, 243, 255, 0.1) 0%, transparent 100%);
-            border-left: 4px solid var(--neon-blue);
-            border-top: 1px solid rgba(0, 243, 255, 0.2);
-            border-bottom: 1px solid rgba(0, 243, 255, 0.2);
-            border-right: none;
-            color: #FFFFFF;
-            text-shadow: 0 0 8px var(--neon-blue);
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-        }
-
-        /* Ícones dentro do menu (emojis) */
-        div[role="radiogroup"] label p {
-            font-size: 1.1rem !important;
-            margin: 0 !important;
-            line-height: 1.2 !important;
-            color: inherit !important;
+        /* --- SIDEBAR PARA CONFIGURAÇÕES --- */
+        section[data-testid="stSidebar"] {
+            background-color: #020408;
+            border-right: 1px solid rgba(0, 243, 255, 0.1);
         }
 
         /* --- BOTÕES DE AÇÃO --- */
@@ -157,7 +155,7 @@ def local_css():
             background: transparent;
             color: var(--neon-blue);
             border: 1px solid var(--neon-blue);
-            border-radius: 0px; /* Bordas quadradas estilo Sci-Fi */
+            border-radius: 0px;
             padding: 0.6rem 1.2rem;
             font-family: 'Rajdhani', sans-serif;
             font-weight: 700;
@@ -177,9 +175,8 @@ def local_css():
         div[data-testid="metric-container"], div[data-testid="stExpander"], .folder-card {
             background: rgba(10, 15, 30, 0.7);
             border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 0px; /* Reto futurista */
+            border-radius: 0px;
             backdrop-filter: blur(10px);
-            /* Canto cortado estilo Tech */
             clip-path: polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%); 
         }
 
@@ -336,7 +333,7 @@ def buscar_intimacoes_email(user, pwd, server):
 if "GOOGLE_API_KEY" in st.secrets:
     api_key = st.secrets["GOOGLE_API_KEY"]
 else:
-    api_key = st.sidebar.text_input("🔑 API Key:", type="password")
+    api_key = st.text_input("🔑 API Key (Insira no painel lateral para salvar):", type="password")
 
 if api_key:
     genai.configure(api_key=api_key)
@@ -352,43 +349,73 @@ creditos_atuais = df_user.iloc[0]['creditos'] if not df_user.empty else 0
 if "navegacao_override" not in st.session_state:
     st.session_state.navegacao_override = None
 
-with st.sidebar:
-    # ------------------------------------------------------------
-    # LOGO
-    # ------------------------------------------------------------
-    st.sidebar.image("https://placehold.co/200x80/020408/FFF?text=LEGALHUB", use_container_width=True)
-    
-    st.markdown("<h2 class='tech-header' style='font-size:1.5rem;'>NAVEGAÇÃO</h2>", unsafe_allow_html=True)
-    
-    # Lista de Opções
-    opcoes_menu = [" Dashboard", " Redator IA", " Perícia & Calc", " Audiência", " Gestão Casos", " Monitor Prazos", " Ferramentas"]
-    
-    # Mapeamento para nomes internos se precisar
+# --- CABEÇALHO HORIZONTAL (NOVO) ---
+# Cria uma coluna para o logo e outra para o menu
+col_logo, col_menu = st.columns([1, 4])
+
+with col_logo:
+    st.markdown("""
+        <div class='header-logo'>
+            <h1 class='tech-header'>LEGALHUB<span>ELITE</span></h1>
+        </div>
+    """, unsafe_allow_html=True)
+
+with col_menu:
+    # Lista de Opções e Ícones
+    opcoes_menu = ["Dashboard", "Redator IA", "Perícia & Calc", "Audiência", "Gestão Casos", "Monitor Prazos", "Ferramentas"]
+    icones_menu = ["speedometer2", "pen-fill", "calculator-fill", "people-fill", "folder-fill", "stoplights-fill", "tools"]
+
+    # Mapeamento para nomes internos
     mapa_nav = {
-        " Dashboard": "📊 Dashboard",
-        " Redator IA": "✍️ Redator Jurídico", 
-        " Perícia & Calc": "🧮 Calculadoras & Perícia",
-        " Audiência": "🏛️ Estratégia de Audiência",
-        " Gestão Casos": "📂 Gestão de Casos",
-        " Monitor Prazos": "🚦 Monitor de Prazos",
-        " Ferramentas": "🔧 Ferramentas Extras"
+        "Dashboard": "📊 Dashboard",
+        "Redator IA": "✍️ Redator Jurídico", 
+        "Perícia & Calc": "🧮 Calculadoras & Perícia",
+        "Audiência": "🏛️ Estratégia de Audiência",
+        "Gestão Casos": "📂 Gestão de Casos",
+        "Monitor Prazos": "🚦 Monitor de Prazos",
+        "Ferramentas": "🔧 Ferramentas Extras"
     }
 
-    # Inverso
+    # Inverso para controlar a seleção via override
     mapa_inv = {v: k for k, v in mapa_nav.items()}
     
-    idx_menu = 0
+    default_index = 0
     if st.session_state.navegacao_override:
         try: 
-            nome_curto = mapa_inv.get(st.session_state.navegacao_override, " Dashboard")
-            idx_menu = opcoes_menu.index(nome_curto)
-        except: idx_menu = 0
+            nome_curto = mapa_inv.get(st.session_state.navegacao_override, "Dashboard")
+            default_index = opcoes_menu.index(nome_curto)
+        except: default_index = 0
         st.session_state.navegacao_override = None
     
-    # MENU RADIO TRANSFORMADO EM BOTÕES PELO CSS
-    escolha_curta = st.radio("MENU_OCULTO", opcoes_menu, index=idx_menu, label_visibility="collapsed")
-    menu_opcao = mapa_nav[escolha_curta]
-    
+    # Menu Horizontal usando streamlit-option-menu
+    escolha_menu = option_menu(
+        menu_title=None, # Esconde o título do menu
+        options=opcoes_menu,
+        icons=icones_menu,
+        default_index=default_index,
+        orientation="horizontal",
+        styles={
+            "container": {"padding": "0!important", "background-color": "transparent"},
+            "icon": {"color": "#00F3FF", "font-size": "1rem"}, 
+            "nav-link": {"font-size": "1rem", "text-align": "center", "margin":"0px", "--hover-color": "rgba(0, 243, 255, 0.1)"},
+            "nav-link-selected": {"background-color": "rgba(0, 243, 255, 0.2)", "border-bottom": "3px solid #00F3FF"},
+        }
+    )
+    menu_opcao = mapa_nav[escolha_menu]
+
+st.markdown("---")
+
+# --- SIDEBAR (AGORA APENAS PARA CONFIGURAÇÕES E LOGOUT) ---
+with st.sidebar:
+    st.markdown("<h2 class='tech-header' style='font-size:1.5rem;'>CONFIGURAÇÕES</h2>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size:0.8rem; color:#E2E8F0; margin-bottom: 20px;'>Usuário: {st.session_state.usuario_atual}<br>Escritório: {st.session_state.escritorio_atual}</div>", unsafe_allow_html=True)
+
+    if "GOOGLE_API_KEY" not in st.secrets:
+        st.text_input("🔑 API Key (Google Gemini):", type="password", key="sidebar_api_key")
+        if st.session_state.sidebar_api_key:
+             genai.configure(api_key=st.session_state.sidebar_api_key)
+             st.success("API Key configurada temporariamente.")
+
     st.markdown("---")
     
     # Display de Créditos Moderno
