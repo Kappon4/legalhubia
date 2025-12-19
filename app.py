@@ -114,8 +114,19 @@ def init_db():
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS usuarios (
             username TEXT PRIMARY KEY, senha TEXT, escritorio TEXT, email_oab TEXT, creditos INTEGER DEFAULT 10, plano TEXT DEFAULT 'Starter')''')
-    try: c.execute("ALTER TABLE usuarios ADD COLUMN creditos INTEGER DEFAULT 10"); except: pass
-    try: c.execute("ALTER TABLE usuarios ADD COLUMN plano TEXT DEFAULT 'Starter'"); except: pass
+    
+    # --- CORREÇÃO AQUI (Try/Except separados em linhas) ---
+    try:
+        c.execute("ALTER TABLE usuarios ADD COLUMN creditos INTEGER DEFAULT 10")
+    except:
+        pass
+        
+    try:
+        c.execute("ALTER TABLE usuarios ADD COLUMN plano TEXT DEFAULT 'Starter'")
+    except:
+        pass
+    # -----------------------------------------------------
+
     c.execute('''CREATE TABLE IF NOT EXISTS documentos (
             id INTEGER PRIMARY KEY AUTOINCREMENT, escritorio TEXT, data_criacao TEXT, cliente TEXT, area TEXT, tipo TEXT, conteudo TEXT)''')
     c.execute('SELECT count(*) FROM usuarios')
