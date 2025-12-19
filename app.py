@@ -93,7 +93,7 @@ def local_css():
         .stButton>button:hover { background: var(--neon-blue); color: #000; box-shadow: 0 0 20px rgba(0, 243, 255, 0.6); }
         
         div[data-testid="metric-container"], div[data-testid="stExpander"], .folder-card { background: var(--bg-card); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 0px; backdrop-filter: blur(12px); }
-        .stTextInput>div>div>input, .stTextArea>div>div>textarea { background-color: rgba(0, 0, 0, 0.3) !important; border: 1px solid #334155 !important; color: #FFF !important; border-radius: 0px; }
+        .stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div>div { background-color: rgba(0, 0, 0, 0.3) !important; border: 1px solid #334155 !important; color: #FFF !important; border-radius: 0px; }
         
         div[role="radiogroup"] { display: flex; justify-content: space-between; background: rgba(10, 15, 30, 0.8); padding: 10px; border-radius: 8px; border-bottom: 1px solid rgba(0, 243, 255, 0.3); }
         div[role="radiogroup"] label { background: transparent !important; border: none !important; margin: 0 !important; padding: 5px 15px !important; color: #94A3B8 !important; }
@@ -121,20 +121,15 @@ def get_base64_of_bin_file(bin_file):
 def init_db():
     conn = sqlite3.connect('legalhub.db')
     c = conn.cursor()
-    # Tabela Usuarios (Adicionado coluna 'plano')
+    # Tabela Usuarios
     c.execute('''CREATE TABLE IF NOT EXISTS usuarios (
             username TEXT PRIMARY KEY, senha TEXT, escritorio TEXT, email_oab TEXT, creditos INTEGER DEFAULT 10, plano TEXT DEFAULT 'Starter')''')
     
-    # --- CORREÇÃO DA SINTAXE DE ERRO (TRY/EXCEPT MULTILINHAS) ---
-    try:
-        c.execute("ALTER TABLE usuarios ADD COLUMN creditos INTEGER DEFAULT 10")
-    except:
-        pass
-        
-    try:
-        c.execute("ALTER TABLE usuarios ADD COLUMN plano TEXT DEFAULT 'Starter'")
-    except:
-        pass
+    # Migrações seguras
+    try: c.execute("ALTER TABLE usuarios ADD COLUMN creditos INTEGER DEFAULT 10")
+    except: pass
+    try: c.execute("ALTER TABLE usuarios ADD COLUMN plano TEXT DEFAULT 'Starter'")
+    except: pass
     
     c.execute('''CREATE TABLE IF NOT EXISTS documentos (
             id INTEGER PRIMARY KEY AUTOINCREMENT, escritorio TEXT, data_criacao TEXT, cliente TEXT, area TEXT, tipo TEXT, conteudo TEXT)''')
@@ -358,33 +353,86 @@ if menu_opcao == "📊 Dashboard":
             st.markdown("#### 🏛️ AUDIÊNCIA")
             if st.button("ABRIR", key="d_aud"): st.session_state.navegacao_override = "🏛️ Estratégia de Audiência"; st.rerun()
 
+    st.write("")
+    col_chart, col_info = st.columns([2, 1])
+    with col_chart:
+        st.markdown("##### 📈 DADOS DE PRODUTIVIDADE")
+        with st.container(border=True):
+            df_areas = run_query("SELECT area, COUNT(*) as qtd FROM documentos WHERE escritorio = ? GROUP BY area", (st.session_state.escritorio_atual,), return_data=True)
+            if not df_areas.empty:
+                colors_tech = ['#00F3FF', '#BC13FE', '#2E5CFF', '#FFFFFF', '#4A4A4A']
+                fig = px.pie(df_areas, values='qtd', names='area', hole=0.7, color_discrete_sequence=colors_tech)
+                fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#E2E8F0", showlegend=True, margin=dict(t=20, b=20, l=20, r=20))
+                st.plotly_chart(fig, use_container_width=True)
+            else: st.info("Aguardando dados...")
+    
+    with col_info:
+        st.markdown("##### 🛡️ SECURITY & COMPLIANCE")
+        with st.container(border=True):
+            st.markdown("""
+            <div style='background: rgba(16, 185, 129, 0.1); border-left: 3px solid #10B981; padding: 10px; margin-bottom: 8px; border-radius: 4px;'>
+                <strong style='color: #10B981; font-family: Rajdhani;'>✓ LGPD COMPLIANT</strong><br><span style='font-size: 0.8rem; color: #E2E8F0;'>Dados anonimizados.</span>
+            </div>
+            <div style='background: rgba(59, 130, 246, 0.1); border-left: 3px solid #3B82F6; padding: 10px; margin-bottom: 8px; border-radius: 4px;'>
+                <strong style='color: #3B82F6; font-family: Rajdhani;'>🔒 E2E ENCRYPTION</strong><br><span style='font-size: 0.8rem; color: #E2E8F0;'>Criptografia Militar.</span>
+            </div>
+            <div style='background: rgba(245, 158, 11, 0.1); border-left: 3px solid #F59E0B; padding: 10px; border-radius: 4px;'>
+                <strong style='color: #F59E0B; font-family: Rajdhani;'>⚖️ LIVE JURISPRUDENCE</strong><br><span style='font-size: 0.8rem; color: #E2E8F0;'>Sincronia STF/STJ.</span>
+            </div>
+            """, unsafe_allow_html=True)
+
 # 2. REDATOR (LIBERADO PARA TODOS)
 elif menu_opcao == "✍️ Redator Jurídico":
     st.markdown("<h2 class='tech-header'>✍️ REDATOR IA</h2>", unsafe_allow_html=True)
     
     if "fatos_recuperados" not in st.session_state: st.session_state.fatos_recuperados = ""
+    if "cliente_recuperado" not in st.session_state: st.session_state.cliente_recuperado = ""
+
+    # Busca clientes existentes
+    df_clientes = run_query("SELECT DISTINCT cliente FROM documentos WHERE escritorio = ?", (st.session_state.escritorio_atual,), return_data=True)
+    lista_clientes = df_clientes['cliente'].tolist() if not df_clientes.empty else []
+
     col_config, col_input = st.columns([1, 2])
     with col_config:
+        st.markdown("##### ⚙️ PARÂMETROS")
         tipo = st.selectbox("Peça", ["Inicial", "Contestação", "Contrato", "Parecer"])
         area = st.selectbox("Área", ["Cível", "Trabalhista", "Criminal", "Família"])
+        
         # Limitação: Apenas PRO/Elite podem usar Jurisprudência Automática
         web_disabled = not verificar_acesso("Pro")
         web = st.checkbox("Jurisprudência Web (PRO)", value=not web_disabled, disabled=web_disabled)
-        if web_disabled: st.caption("🔒 Upgrade para PRO para liberar pesquisa web.")
+        if web_disabled: st.caption("🔒 Upgrade para PRO para liberar.")
         
-        cli = st.text_input("Cliente")
+        # --- SELETOR DE CLIENTE (RESTAURADO) ---
+        st.markdown("##### 👤 CLIENTE")
+        modo_cliente = st.radio("Seleção:", ["Existente", "Novo"], horizontal=True, label_visibility="collapsed")
+        
+        cli_final = ""
+        if modo_cliente == "Existente":
+            if lista_clientes:
+                idx = 0
+                if st.session_state.cliente_recuperado in lista_clientes:
+                    idx = lista_clientes.index(st.session_state.cliente_recuperado)
+                cli_final = st.selectbox("Nome:", lista_clientes, index=idx)
+            else:
+                st.warning("Sem registros.")
+                cli_final = st.text_input("Nome do Novo Cliente:")
+        else:
+            cli_final = st.text_input("Nome do Novo Cliente:")
+        # ----------------------------------------
+
     with col_input:
         fatos = st.text_area("Fatos do Caso", height=300)
     
     if st.button("GERAR PEÇA (1 CRÉDITO)"):
-        if creditos_atuais > 0 and fatos:
+        if creditos_atuais > 0 and fatos and cli_final:
             with st.spinner("Gerando..."):
                 time.sleep(2) # Simulação
                 prompt = f"Peça: {tipo}. Área: {area}. Fatos: {fatos}. Jurisp: {web}"
                 try:
                     res = genai.GenerativeModel(mod_escolhido).generate_content(prompt).text
                     run_query("UPDATE usuarios SET creditos = creditos - 1 WHERE username = ?", (st.session_state.usuario_atual,))
-                    run_query("INSERT INTO documentos (escritorio, data_criacao, cliente, area, tipo, conteudo) VALUES (?, ?, ?, ?, ?, ?)", (st.session_state.escritorio_atual, datetime.now().strftime("%d/%m/%Y"), cli, area, tipo, fatos + "||" + res))
+                    run_query("INSERT INTO documentos (escritorio, data_criacao, cliente, area, tipo, conteudo) VALUES (?, ?, ?, ?, ?, ?)", (st.session_state.escritorio_atual, datetime.now().strftime("%d/%m/%Y"), cli_final, area, tipo, fatos + "||" + res))
                     st.markdown(res)
                     buf = BytesIO(); Document().save(buf); buf.seek(0)
                     st.download_button("BAIXAR DOCX", buf, "minuta.docx")
