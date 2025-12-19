@@ -106,6 +106,12 @@ def local_css():
         div[data-testid="metric-container"], div[data-testid="stExpander"], .folder-card { background: var(--bg-card); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 0px; backdrop-filter: blur(12px); }
         .stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div>div, .stNumberInput>div>div>input { background-color: rgba(0, 0, 0, 0.3) !important; border: 1px solid #334155 !important; color: #FFF !important; border-radius: 0px; }
         
+        div[role="radiogroup"] { display: flex; justify-content: space-between; background: rgba(10, 15, 30, 0.8); padding: 10px; border-radius: 8px; border-bottom: 1px solid rgba(0, 243, 255, 0.3); }
+        div[role="radiogroup"] label { background: transparent !important; border: none !important; margin: 0 !important; padding: 5px 15px !important; color: #94A3B8 !important; }
+        div[role="radiogroup"] label:hover { color: #FFF !important; text-shadow: 0 0 5px #00F3FF; }
+        div[role="radiogroup"] label[data-checked="true"] { color: #00F3FF !important; border-bottom: 2px solid #00F3FF !important; background: rgba(0, 243, 255, 0.1) !important; }
+        div[role="radiogroup"] div[data-testid="stMarkdownContainer"] p { font-size: 1rem !important; }
+
         #MainMenu {visibility: hidden;} footer {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
@@ -501,10 +507,8 @@ elif menu_opcao == "✍️ Redator Jurídico":
                     res = genai.GenerativeModel(mod_escolhido).generate_content(prompt).text
                     run_query("UPDATE usuarios SET creditos = creditos - 1 WHERE username = ?", (st.session_state.usuario_atual,))
                     run_query("INSERT INTO documentos (escritorio, data_criacao, cliente, area, tipo, conteudo) VALUES (?, ?, ?, ?, ?, ?)", (st.session_state.escritorio_atual, datetime.now().strftime("%d/%m/%Y"), cli_final, area, tipo, fatos + "||" + res))
-                    
                     st.markdown("### 📄 MINUTA GERADA:")
                     if web: st.success(aviso_jur)
-                    
                     with st.container(border=True): st.markdown(res)
                     st.download_button("📥 BAIXAR DOCX", gerar_word(res), f"{tipo}_{cli_final}.docx", use_container_width=True)
                     st.success("Salvo no cofre.")
@@ -538,7 +542,7 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
             
             # --- CÍVEL (NOVO E APROFUNDADO) ---
             if area_calc == "Cível":
-                tab_debito, tab_aluguel = st.tabs(["💸 Atualização de Débitos Judiciais", "🏠 Reajuste de Aluguel"])
+                tab_debito, tab_aluguel, tab_rescisao = st.tabs(["💸 Atualização de Débitos Judiciais", "🏠 Reajuste de Aluguel", "🚫 Rescisão de Contrato"])
                 
                 with tab_debito:
                     st.markdown("#### Correção Monetária e Juros")
@@ -584,6 +588,26 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
                         fator = 1.045 if idx_aluguel == "IPCA (IBGE)" else 1.005 # IGPM baixo na simulação
                         novo_valor = val_aluguel * fator
                         st.success(f"Novo Aluguel Sugerido: R$ {novo_valor:,.2f} (Baseado no acumulado de 12 meses)")
+                
+                with tab_rescisao:
+                    st.markdown("#### Cálculo de Multa por Rescisão Antecipada")
+                    val_aluguel_res = st.number_input("Valor do Aluguel")
+                    multa_padrao = st.number_input("Multa prevista (em aluguéis)", value=3)
+                    data_inicio = st.date_input("Início do Contrato")
+                    data_fim = st.date_input("Fim do Contrato (Prazo Original)")
+                    data_saida = st.date_input("Data de Entrega das Chaves")
+
+                    if st.button("CALCULAR MULTA"):
+                        total_dias = (data_fim - data_inicio).days
+                        dias_cumpridos = (data_saida - data_inicio).days
+                        dias_restantes = total_dias - dias_cumpridos
+
+                        if dias_restantes <= 0:
+                            st.success("Sem multa! O contrato foi cumprido integralmente.")
+                        else:
+                            valor_multa_total = val_aluguel_res * multa_padrao
+                            multa_proporcional = (valor_multa_total / total_dias) * dias_restantes
+                            st.error(f"Multa Devida: R$ {multa_proporcional:.2f}")
 
             # --- FAMÍLIA (NOVO E APROFUNDADO) ---
             elif area_calc == "Família":
@@ -648,7 +672,7 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
                 c1, c2, c3 = st.columns(3)
                 salario = c1.number_input("Salário Base (R$)", min_value=0.0)
                 meses = c2.number_input("Meses Trabalhados", min_value=1)
-                motivo = c3.selectbox("Motivo", ["Sem Justa Causa", "Pedido de Demissão"])
+                motivo = c3.selectbox("Motivo", ["Sem Justa Causa", "Pedido de Demissão", "Justa Causa"])
                 if st.button("CALCULAR"):
                     multa = (salario * 0.08 * meses) * 0.40 if motivo == "Sem Justa Causa" else 0
                     total = salario + multa 
@@ -789,7 +813,6 @@ elif menu_opcao == "🚦 Monitor de Prazos":
 elif menu_opcao == "💎 Planos & Upgrade":
     st.markdown("<h2 class='tech-header' style='text-align:center;'>ESCOLHA SUA ESPECIALIDADE</h2>", unsafe_allow_html=True)
     st.write("")
-    
     col1, col2, col3, col4 = st.columns(4)
     
     def render_plan_card(titulo, preco, desc, slug, css_class):
@@ -802,34 +825,21 @@ elif menu_opcao == "💎 Planos & Upgrade":
             </div>
         </div>
         """, unsafe_allow_html=True)
-        
         btn_label = "SELECIONADO" if st.session_state.plano_atual == slug else "ASSINAR AGORA"
         if st.button(btn_label, key=f"btn_{slug}", disabled=(st.session_state.plano_atual == slug), use_container_width=True):
             run_query("UPDATE usuarios SET plano = ? WHERE username = ?", (slug, st.session_state.usuario_atual))
             st.session_state.plano_atual = slug
-            st.toast(f"Plano {titulo} ativado com sucesso!")
-            time.sleep(1)
-            st.rerun()
+            st.toast(f"Plano {titulo} ativado!")
+            time.sleep(1); st.rerun()
 
     with col1:
-        render_plan_card("Criminalista Elite", "149", 
-                         "✅ Busca STF/STJ<br>✅ Dosimetria da Pena<br>✅ Simulador de Júri<br>✅ Redator de HC", 
-                         "criminal", "plan-crim")
-        
+        render_plan_card("Criminalista Elite", "149", "✅ Busca STF/STJ<br>✅ Dosimetria da Pena<br>✅ Simulador de Júri<br>✅ Redator de HC", "criminal", "plan-crim")
     with col2:
-        render_plan_card("Trabalhista Expert", "149", 
-                         "✅ Busca TST/CSJT<br>✅ Cálculos Rescisórios<br>✅ Instrução Trabalhista<br>✅ Redator CLT", 
-                         "trabalhista", "plan-trab")
-
+        render_plan_card("Trabalhista Expert", "149", "✅ Busca TST/CSJT<br>✅ Cálculos Rescisórios<br>✅ Instrução Trabalhista<br>✅ Redator CLT", "trabalhista", "plan-trab")
     with col3:
-        render_plan_card("Civil & Família", "149", 
-                         "✅ Busca TJs<br>✅ Cálculos Pensão/Atualização<br>✅ Contratos & Divórcio<br>✅ Gestão Patrimonial", 
-                         "civil", "plan-civ")
-
+        render_plan_card("Civil & Família", "149", "✅ Busca TJs<br>✅ Cálculos Pensão/Atualização<br>✅ Contratos & Divórcio<br>✅ Gestão Patrimonial", "civil", "plan-civ")
     with col4:
-        render_plan_card("Full Service", "297", 
-                         "💎 <strong>Acesso a TUDO</strong><br>💎 Todas as áreas<br>💎 Prioridade de Suporte<br>💎 + Créditos IA", 
-                         "full", "plan-full")
+        render_plan_card("Full Service", "297", "💎 <strong>Acesso a TUDO</strong><br>💎 Todas as áreas<br>💎 Prioridade de Suporte<br>💎 + Créditos IA", "full", "plan-full")
 
 st.markdown("---")
 st.markdown("<center style='color: #64748b; font-size: 0.8rem; font-family: Rajdhani;'>🔒 LEGALHUB ELITE v5.5 | ENCRYPTED SESSION</center>", unsafe_allow_html=True)
