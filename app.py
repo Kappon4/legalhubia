@@ -113,7 +113,7 @@ def local_css():
 local_css()
 
 # ==========================================================
-# 2. FUNÇÕES GERAIS E BANCO DE DADOS
+# 2. FUNÇÕES GERAIS E BANCO DE DADOS (IMPORTANTE: NO TOPO)
 # ==========================================================
 def get_base64_of_bin_file(bin_file):
     try:
@@ -122,6 +122,7 @@ def get_base64_of_bin_file(bin_file):
         return base64.b64encode(data).decode()
     except FileNotFoundError: return None
 
+# --- FUNÇÕES AUXILIARES MOVIDAS PARA O TOPO (EVITA NameError) ---
 def gerar_word(texto):
     """Gera um arquivo Word a partir de um texto."""
     doc = Document()
@@ -159,6 +160,28 @@ def buscar_intimacoes_email(user, pwd, server):
         return found, None
     except Exception as e: return [], str(e)
 
+def verificar_permissao(area_necessaria):
+    """Verifica se o plano do usuário cobre a área solicitada."""
+    plano_atual = st.session_state.get('plano_atual', 'starter')
+    if plano_atual == 'full': return True
+    if plano_atual == area_necessaria: return True
+    return False
+
+def tela_bloqueio(area_necessaria, preco):
+    """Exibe tela de bloqueio se o plano não permitir."""
+    cor = "#FF0055"
+    msg = f"Este recurso é exclusivo do plano {area_necessaria.upper()} ou FULL."
+    st.markdown(f"""
+    <div class='lock-screen' style='border-color:{cor};'>
+        <div class='lock-icon'>🔒</div>
+        <div class='lock-title' style='color:{cor};'>ACESSO RESTRITO</div>
+        <p class='lock-desc'>{msg}</p>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button(f"🚀 FAZER UPGRADE", key=f"upg_{area_necessaria}"):
+        st.session_state.navegacao_override = "💎 Planos & Upgrade"
+        st.rerun()
+
 # --- BUSCA JURÍDICA INTELIGENTE (RAG) ---
 def buscar_jurisprudencia_oficial(tema, area):
     sites = ""
@@ -172,6 +195,7 @@ def buscar_jurisprudencia_oficial(tema, area):
         if res: return "\n".join([f"- {r['body']} (Fonte: {r['href']})" for r in res])
         return "Nenhuma jurisprudência específica localizada nas bases oficiais."
     except: return "Erro de conexão com bases jurídicas."
+# -----------------------------------------------------------
 
 def init_db():
     conn = sqlite3.connect('legalhub.db')
@@ -208,32 +232,6 @@ def run_query(query, params=(), return_data=False):
     except Exception: conn.close(); return None
 
 init_db()
-
-# ==========================================================
-# 3. LÓGICA DE PERMISSÕES POR ESPECIALIDADE
-# ==========================================================
-def verificar_permissao(area_necessaria):
-    """
-    Verifica se o plano do usuário cobre a área solicitada.
-    """
-    plano_atual = st.session_state.get('plano_atual', 'starter')
-    if plano_atual == 'full': return True
-    if plano_atual == area_necessaria: return True
-    return False
-
-def card_bloqueio(area_necessaria):
-    cor = "#FF0055"
-    msg = f"Este recurso é exclusivo do plano {area_necessaria.upper()} ou FULL."
-    st.markdown(f"""
-    <div class='lock-screen' style='border-color:{cor};'>
-        <div class='lock-icon'>🔒</div>
-        <div class='lock-title' style='color:{cor};'>ACESSO RESTRITO</div>
-        <p class='lock-desc'>{msg}</p>
-    </div>
-    """, unsafe_allow_html=True)
-    if st.button(f"🚀 FAZER UPGRADE PARA {area_necessaria.upper()}", key=f"upg_{area_necessaria}"):
-        st.session_state.navegacao_override = "💎 Planos & Upgrade"
-        st.rerun()
 
 # ==========================================================
 # 4. LOGIN
@@ -322,6 +320,7 @@ with st.sidebar:
     st.markdown("<h2 class='tech-header' style='font-size:1.5rem;'>CONFIGURAÇÕES</h2>", unsafe_allow_html=True)
     st.markdown(f"<div style='font-size:0.8rem; color:#E2E8F0;'>User: {st.session_state.usuario_atual}<br>Banca: {st.session_state.escritorio_atual}</div>", unsafe_allow_html=True)
     
+    # Label do Plano
     p_label = st.session_state.plano_atual.upper()
     cor_p = "#FFFFFF"
     if p_label == "CRIMINAL": cor_p = "#FF0055"
@@ -413,18 +412,17 @@ elif menu_opcao == "✍️ Redator Jurídico":
     with col_config:
         with st.container(border=True):
             st.markdown("##### ⚙️ ESTRUTURA")
-            # Seleção de Área (Determina os tipos de peça)
-            # Se for plano específico, trava na área. Se for full, libera.
-            opcoes_areas = ["Criminal", "Trabalhista", "Cível", "Família"]
+            
+            # --- DETECÇÃO AUTOMÁTICA DE ÁREA PELO PLANO ---
             plano = st.session_state.plano_atual
+            opcoes_areas = ["Criminal", "Trabalhista", "Cível", "Família"]
+            index_area = 0
             
-            if plano == "criminal": index_area = 0 # Criminal
-            elif plano == "trabalhista": index_area = 1 # Trabalhista
-            elif plano == "civil": index_area = 2 # Cível (assume Cível como padrão para civil/família)
-            else: index_area = 0
+            # Se for plano específico, seleciona automaticamente
+            if plano == "criminal": index_area = 0 
+            elif plano == "trabalhista": index_area = 1 
+            elif plano == "civil": index_area = 2 
             
-            # Se for starter ou full, deixa escolher. Se for específico, força a escolha ou sugere.
-            # Para melhor UX, vamos deixar selecionar, mas a "mágica" só acontece se tiver o plano.
             area = st.selectbox("Área de Atuação", opcoes_areas, index=index_area)
             
             # Tipos de Peça Dinâmicos
@@ -463,7 +461,6 @@ elif menu_opcao == "✍️ Redator Jurídico":
     with col_input:
         with st.container(border=True):
             st.markdown("##### 📝 DADOS E FATOS")
-            # Upload disponível para todos, mas a análise profunda depende do plano (via prompt)
             upload_peticao = st.file_uploader("Anexar Documento Base (PDF)", type="pdf")
             fatos = st.text_area("Descreva os fatos:", height=200, value=st.session_state.fatos_recuperados)
             legislacao_extra = st.text_input("Legislação Específica:")
@@ -514,27 +511,22 @@ elif menu_opcao == "✍️ Redator Jurídico":
                 except Exception as e: st.error(f"Erro: {str(e)}")
         else: st.error("Créditos insuficientes.")
 
-# 3. CALCULADORA (AUTOMÁTICA PELO PLANO)
+# 3. CALCULADORA (APRIMORADA PARA CÍVEL E FAMÍLIA)
 elif menu_opcao == "🧮 Calculadoras & Perícia":
     st.markdown("<h2 class='tech-header'>🧮 CÁLCULOS ESPECIALIZADOS</h2>", unsafe_allow_html=True)
     
-    # Detecção Automática do Plano para evitar menu desnecessário
+    # Detecção Automática do Plano
     plano_atual = st.session_state.plano_atual
     
-    # Se for FULL ou STARTER, mostra todas as opções. Se for específico, já trava na opção certa.
     opcoes_calc = ["Trabalhista", "Cível", "Criminal", "Família"]
     index_calc = 0
-    
-    if plano_atual == "criminal": 
-        opcoes_calc = ["Criminal"]
-    elif plano_atual == "trabalhista":
-        opcoes_calc = ["Trabalhista"]
-    elif plano_atual == "civil":
-        opcoes_calc = ["Cível", "Família"]
+    if plano_atual == "criminal": opcoes_calc = ["Criminal"]
+    elif plano_atual == "trabalhista": opcoes_calc = ["Trabalhista"]
+    elif plano_atual == "civil": opcoes_calc = ["Cível", "Família"]
     
     area_calc = st.selectbox("Selecione a Especialidade:", opcoes_calc)
     
-    # Verifica permissão da área para liberar a calculadora (dupla checagem de segurança)
+    # Verifica permissão da área
     liberado = False
     if area_calc == "Trabalhista" and verificar_permissao("trabalhista"): liberado = True
     elif area_calc == "Criminal" and verificar_permissao("criminal"): liberado = True
@@ -543,16 +535,126 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
 
     if liberado:
         with st.container(border=True):
-            if area_calc == "Trabalhista":
+            
+            # --- CÍVEL (NOVO E APROFUNDADO) ---
+            if area_calc == "Cível":
+                tab_debito, tab_aluguel = st.tabs(["💸 Atualização de Débitos Judiciais", "🏠 Reajuste de Aluguel"])
+                
+                with tab_debito:
+                    st.markdown("#### Correção Monetária e Juros")
+                    c1, c2, c3 = st.columns(3)
+                    valor = c1.number_input("Valor Original (R$)", min_value=0.0, value=1000.0)
+                    dt_inicio = c2.date_input("Data Inicial", value=date(2023, 1, 1))
+                    dt_final = c3.date_input("Data Final", value=date.today())
+                    
+                    c4, c5, c6 = st.columns(3)
+                    indice = c4.selectbox("Índice de Correção", ["Tabela Prática TJ", "IGP-M", "INPC", "IPCA-E", "CDI"])
+                    juros_tipo = c5.selectbox("Juros de Mora", ["1% a.m. Simples", "1% a.m. Composto", "Sem Juros"])
+                    multa = c6.checkbox("Multa de 10% (Art. 523 CPC)")
+                    honra = st.number_input("Honorários Advocatícios (%)", min_value=0, max_value=30, value=10)
+                    
+                    if st.button("CALCULAR ATUALIZAÇÃO"):
+                        # Simulação matemática (Fins demonstrativos)
+                        meses = (dt_final.year - dt_inicio.year) * 12 + dt_final.month - dt_inicio.month
+                        fator_correcao = 1.05 + (meses * 0.005) # Simulação 0.5% ao mês de inflação
+                        val_corrigido = valor * fator_correcao
+                        
+                        val_juros = 0
+                        if "1%" in juros_tipo:
+                            val_juros = val_corrigido * (0.01 * meses)
+                        
+                        subtotal = val_corrigido + val_juros
+                        val_multa = subtotal * 0.10 if multa else 0
+                        val_honra = (subtotal + val_multa) * (honra / 100)
+                        total_final = subtotal + val_multa + val_honra
+                        
+                        st.divider()
+                        col_res1, col_res2 = st.columns(2)
+                        col_res1.metric("Valor Corrigido", f"R$ {val_corrigido:,.2f}")
+                        col_res1.metric("Juros de Mora", f"R$ {val_juros:,.2f}")
+                        col_res2.metric("Multa + Honorários", f"R$ {val_multa + val_honra:,.2f}")
+                        col_res2.metric("TOTAL FINAL", f"R$ {total_final:,.2f}", delta="Atualizado")
+                
+                with tab_aluguel:
+                    st.markdown("#### Reajuste Anual de Contrato")
+                    val_aluguel = st.number_input("Valor Atual do Aluguel", min_value=0.0)
+                    idx_aluguel = st.selectbox("Índice do Contrato", ["IGP-M (FGV)", "IPCA (IBGE)", "IVAR"])
+                    if st.button("CALCULAR NOVO ALUGUEL"):
+                        # Simulação
+                        fator = 1.045 if idx_aluguel == "IPCA (IBGE)" else 1.005 # IGPM baixo na simulação
+                        novo_valor = val_aluguel * fator
+                        st.success(f"Novo Aluguel Sugerido: R$ {novo_valor:,.2f} (Baseado no acumulado de 12 meses)")
+
+            # --- FAMÍLIA (NOVO E APROFUNDADO) ---
+            elif area_calc == "Família":
+                tab_pensao, tab_partilha = st.tabs(["👶 Pensão Alimentícia Completa", "💍 Partilha de Bens & Inventário"])
+                
+                with tab_pensao:
+                    st.markdown("#### Simulador de Pensão")
+                    base_calc = st.radio("Base de Cálculo", ["Salário Mínimo (2025: R$ 1.509)", "Renda Líquida do Alimentante"], horizontal=True)
+                    
+                    if "Mínimo" in base_calc:
+                        percentual = st.slider("Percentual do S.M. (%)", 10, 100, 30)
+                        valor_base = 1509.00
+                    else:
+                        valor_base = st.number_input("Renda Líquida (R$)", value=3000.0)
+                        percentual = st.slider("Percentual da Renda (%)", 10, 50, 30)
+                    
+                    incluir_13 = st.checkbox("Incidir sobre 13º e Férias?", value=True)
+                    filhos = st.number_input("Quantidade de Filhos", 1, 5, 1)
+                    
+                    if st.button("CALCULAR PENSÃO"):
+                        mensal = valor_base * (percentual / 100)
+                        total_anual = mensal * 12
+                        if incluir_13: total_anual += mensal + (mensal/3) # 13 + 1/3 ferias
+                        
+                        st.metric("Valor Mensal por Filho", f"R$ {mensal/filhos:,.2f}")
+                        st.metric("Valor Mensal Total", f"R$ {mensal:,.2f}")
+                        st.caption(f"Custo Anual Estimado: R$ {total_anual:,.2f}")
+
+                with tab_partilha:
+                    st.markdown("#### Simulador de Partilha de Bens (Divórcio)")
+                    regime = st.selectbox("Regime de Bens", ["Comunhão Parcial", "Comunhão Universal", "Separação Total"])
+                    
+                    c_bens1, c_bens2 = st.columns(2)
+                    imoveis = c_bens1.number_input("Valor Imóveis", min_value=0.0)
+                    veiculos = c_bens2.number_input("Valor Veículos", min_value=0.0)
+                    invest = c_bens1.number_input("Investimentos/Saldo", min_value=0.0)
+                    dividas = c_bens2.number_input("Dívidas do Casal", min_value=0.0)
+                    
+                    bem_particular = 0.0
+                    if regime == "Comunhão Parcial":
+                        bem_particular = st.number_input("Bens Particulares (Adquiridos antes/Herança)", min_value=0.0)
+                    
+                    if st.button("SIMULAR PARTILHA"):
+                        total_patrimonio = imoveis + veiculos + invest
+                        patrimonio_comum = total_patrimonio - bem_particular
+                        saldo_partilhavel = patrimonio_comum - dividas
+                        
+                        meacao = saldo_partilhavel / 2 if regime != "Separação Total" else 0
+                        
+                        if regime == "Separação Total":
+                            st.info("Neste regime, não há comunhão de bens (salvo pacto em contrário). Cada um fica com o que está em seu nome.")
+                        else:
+                            st.success(f"💰 Patrimônio Total: R$ {total_patrimonio:,.2f}")
+                            st.warning(f"📉 Dívidas: R$ {dividas:,.2f}")
+                            st.metric("Meação (Para cada cônjuge)", f"R$ {meacao:,.2f}")
+                            if bem_particular > 0:
+                                st.caption(f"Obs: R$ {bem_particular:,.2f} foram excluídos da partilha por serem bens particulares.")
+
+            # --- TRABALHISTA (MANTIDO) ---
+            elif area_calc == "Trabalhista":
                 st.markdown("#### 👷 Cálculo de Rescisão CLT")
                 c1, c2, c3 = st.columns(3)
                 salario = c1.number_input("Salário Base (R$)", min_value=0.0)
-                meses = c2.number_input("Meses", min_value=1)
+                meses = c2.number_input("Meses Trabalhados", min_value=1)
                 motivo = c3.selectbox("Motivo", ["Sem Justa Causa", "Pedido de Demissão"])
                 if st.button("CALCULAR"):
                     multa = (salario * 0.08 * meses) * 0.40 if motivo == "Sem Justa Causa" else 0
                     total = salario + multa 
                     st.success(f"Total Estimado: R$ {total:,.2f}")
+
+            # --- CRIMINAL (MANTIDO) ---
             elif area_calc == "Criminal":
                 st.markdown("#### 🚔 Dosimetria da Pena (Estimativa)")
                 pena_base = st.number_input("Pena Base (Anos)", min_value=0)
@@ -561,26 +663,17 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
                 if st.button("CALCULAR PENA"):
                     pena = pena_base + ((agravantes - atenuantes) * (pena_base/6))
                     st.warning(f"⚖️ Pena Estimada: {pena:.1f} anos")
-            elif area_calc == "Cível":
-                st.markdown("#### ⚖️ Atualização Monetária")
-                valor = st.number_input("Valor Original", min_value=0.0)
-                if st.button("ATUALIZAR"): st.success(f"Valor Corrigido: R$ {valor * 1.05:,.2f} (Exemplo)")
-            elif area_calc == "Família":
-                st.markdown("#### 👨‍👩‍👧 Pensão Alimentícia")
-                renda = st.number_input("Renda Líquida", min_value=0.0)
-                if st.button("CALCULAR"): st.success(f"30% Sugerido: R$ {renda * 0.30:,.2f}")
+            
     else:
-        # Mostra o bloqueio da área que ele tentou acessar (ou a padrão)
+        # Mostra o bloqueio da área que ele tentou acessar
         tela_bloqueio(area_calc, "149")
 
 # 4. AUDIENCIA (BLOQUEIO POR ÁREA)
 elif menu_opcao == "🏛️ Estratégia de Audiência":
     st.markdown("<h2 class='tech-header'>🏛️ ESTRATEGISTA DE AUDIÊNCIA</h2>", unsafe_allow_html=True)
     
-    # Detecção Automática do Plano
     plano_atual = st.session_state.plano_atual
     opcoes_aud = ["Trabalhista", "Criminal", "Cível"]
-    
     if plano_atual == "criminal": opcoes_aud = ["Criminal"]
     elif plano_atual == "trabalhista": opcoes_aud = ["Trabalhista"]
     elif plano_atual == "civil": opcoes_aud = ["Cível"]
@@ -613,7 +706,6 @@ elif menu_opcao == "🏛️ Estratégia de Audiência":
 # 5. GESTÃO DE CASOS (LIBERADO)
 elif menu_opcao == "📂 Gestão de Casos":
     st.markdown("<h2 class='tech-header'>📂 COFRE DIGITAL</h2>", unsafe_allow_html=True)
-    # ... Lógica padrão de gestão de casos (mantida do anterior para economizar espaço visual, é igual)
     if "pasta_aberta" not in st.session_state: st.session_state.pasta_aberta = None
     df_docs = run_query("SELECT * FROM documentos WHERE escritorio = ?", (st.session_state.escritorio_atual,), return_data=True)
     if not df_docs.empty:
@@ -664,7 +756,7 @@ elif menu_opcao == "📂 Gestão de Casos":
                             st.rerun()
     else: st.info("Nenhum documento encontrado.")
 
-# 6. MONITOR (CORRIGIDO PARA QUALQUER PLANO PAGO)
+# 6. MONITOR (LIBERADO PARA PLANOS PAGOS)
 elif menu_opcao == "🚦 Monitor de Prazos":
     if st.session_state.plano_atual != 'starter':
         st.markdown("<h2 class='tech-header'>🚦 RADAR DE PRAZOS INTELIGENTE</h2>", unsafe_allow_html=True)
