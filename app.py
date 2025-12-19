@@ -22,7 +22,7 @@ import plotly.express as px
 from google.api_core.exceptions import ResourceExhausted, NotFound, InvalidArgument
 
 # ==========================================================
-# 1. CONFIGURAÇÃO VISUAL - TEMA CYBER SECURITY
+# 1. CONFIGURAÇÃO VISUAL - TEMA CYBER FUTURE
 # ==========================================================
 st.set_page_config(
     page_title="LegalHub Elite | AI System", 
@@ -31,144 +31,168 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- CSS PROFISSIONAL (TECH & SECURE) ---
+# --- CSS AVANÇADO (MENU FUTURISTA & CORREÇÃO DE CORES) ---
 def local_css():
     st.markdown("""
     <style>
         /* IMPORTANDO FONTE TECH */
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;500;700&family=Inter:wght@300;400;600&display=swap');
 
-        /* --- VARIÁVEIS DE COR (PALETA CYBER) --- */
+        /* --- VARIÁVEIS CYBER --- */
         :root {
-            --bg-dark: #0F172A;        /* Fundo Principal (Deep Navy) */
-            --bg-card: rgba(30, 41, 59, 0.7); /* Fundo Vidro (Slate 800) */
-            --text-main: #FFFFFF;      /* TEXTO AGORA BRANCO PURO */
-            --accent-primary: #38BDF8; /* Azul Neon (Sky 400) */
-            --accent-glow: rgba(56, 189, 248, 0.4);
-            --gradient-btn: linear-gradient(135deg, #0284c7 0%, #38bdf8 100%);
-            --border-glass: 1px solid rgba(255, 255, 255, 0.1);
+            --bg-dark: #050A14;         /* Fundo Ultra Dark */
+            --bg-card: rgba(20, 30, 50, 0.6); 
+            --text-main: #FFFFFF;       
+            --neon-blue: #00F3FF;       /* Cyan Cyberpunk */
+            --neon-purple: #BC13FE;
+            --border-glow: 1px solid rgba(0, 243, 255, 0.2);
         }
 
         /* --- GERAL --- */
         .stApp {
             background-color: var(--bg-dark);
-            background-image: radial-gradient(circle at 10% 20%, rgba(56, 189, 248, 0.05) 0%, transparent 20%),
-                              radial-gradient(circle at 90% 80%, rgba(139, 92, 246, 0.05) 0%, transparent 20%);
+            /* Grid Background Effect */
+            background-image: 
+                linear-gradient(rgba(0, 243, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 243, 255, 0.03) 1px, transparent 1px);
+            background-size: 30px 30px;
             font-family: 'Inter', sans-serif;
             color: var(--text-main);
         }
 
         h1, h2, h3, h4, h5, h6 {
             color: #FFFFFF !important;
-            font-family: 'Inter', sans-serif;
-            letter-spacing: -0.5px;
-        }
-        
-        /* CORREÇÃO PARA LETRAS BRANCAS (MÉTRICAS E TEXTOS) */
-        div[data-testid="stMetricLabel"] {
-            color: #FFFFFF !important; /* Título da métrica branco */
-            font-weight: 600;
-        }
-        div[data-testid="stMetricValue"] {
-            color: #38BDF8 !important; /* Valor da métrica em Azul Neon para destaque (ou mude para #FFF) */
-        }
-        
-        p, .stCaption, div[data-testid="caption"] {
-            color: #F1F5F9 !important; /* Texto comum e legendas quase branco (Slate 100) */
+            font-family: 'Rajdhani', sans-serif; /* Fonte Títulos Futuristas */
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
-        /* TÍTULOS COM GRADIENTE (EFEITO TECH) */
+        /* --- CORREÇÃO: FORÇAR TEXTOS BRANCOS (ÁREAS MARCADAS EM VERDE) --- */
+        p, .stCaption, div[data-testid="caption"], div[data-testid="stMetricLabel"] label, div[data-testid="stMarkdownContainer"] p {
+            color: #E2E8F0 !important; /* Branco Gelo */
+            font-family: 'Inter', sans-serif;
+        }
+        
+        div[data-testid="stMetricValue"] {
+            color: var(--neon-blue) !important;
+            text-shadow: 0 0 10px rgba(0, 243, 255, 0.5);
+        }
+        
+        /* Corrigindo cor de rótulos de input */
+        label, .stTextInput label, .stSelectbox label, .stTextArea label {
+            color: #CBD5E1 !important;
+        }
+
+        /* --- TÍTULOS COM EFEITO GLITCH --- */
         .tech-header {
-            background: linear-gradient(90deg, #FFFFFF 0%, #38BDF8 100%);
+            background: linear-gradient(90deg, #FFFFFF 0%, var(--neon-blue) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            font-weight: 800;
+            font-weight: 700;
+            text-shadow: 0 0 20px rgba(0, 243, 255, 0.3);
         }
 
-        /* --- SIDEBAR --- */
+        /* --- SIDEBAR CUSTOMIZADA --- */
         section[data-testid="stSidebar"] {
-            background-color: #020617; /* Quase preto */
-            border-right: 1px solid #1E293B;
-            box-shadow: 5px 0 15px rgba(0,0,0,0.3);
+            background-color: #020408;
+            border-right: 1px solid rgba(0, 243, 255, 0.1);
         }
         
-        /* Texto da Sidebar Branco */
-        section[data-testid="stSidebar"] p, section[data-testid="stSidebar"] span {
-            color: #FFFFFF !important;
+        /* --- MENU DE NAVEGAÇÃO FUTURISTA (TRANSFORMAÇÃO RADIO) --- */
+        /* 1. Esconder as bolinhas padrão */
+        div[role="radiogroup"] label > div:first-child {
+            display: none !important;
+        }
+        
+        /* 2. Estilizar o container do texto como um botão Cyber */
+        div[role="radiogroup"] label {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 12px 16px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+            position: relative;
+            overflow: hidden;
+            color: #94A3B8; /* Cor inativa */
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 600;
+            font-size: 1.1rem;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
         }
 
-        /* --- BOTÕES MODERNOS --- */
+        /* 3. Efeito Hover (Mouse em cima) */
+        div[role="radiogroup"] label:hover {
+            background: rgba(0, 243, 255, 0.05);
+            border-color: rgba(0, 243, 255, 0.3);
+            color: #FFFFFF;
+            transform: translateX(5px);
+            box-shadow: -3px 0 10px rgba(0, 243, 255, 0.1);
+        }
+
+        /* 4. Item Selecionado (A Mágica acontece aqui) */
+        div[role="radiogroup"] label[data-checked="true"] {
+            background: linear-gradient(90deg, rgba(0, 243, 255, 0.1) 0%, transparent 100%);
+            border-left: 4px solid var(--neon-blue);
+            border-top: 1px solid rgba(0, 243, 255, 0.2);
+            border-bottom: 1px solid rgba(0, 243, 255, 0.2);
+            border-right: none;
+            color: #FFFFFF;
+            text-shadow: 0 0 8px var(--neon-blue);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Ícones dentro do menu (emojis) */
+        div[role="radiogroup"] label p {
+            font-size: 1.1rem !important;
+            margin: 0 !important;
+            line-height: 1.2 !important;
+            color: inherit !important;
+        }
+
+        /* --- BOTÕES DE AÇÃO --- */
         .stButton>button {
-            background: var(--gradient-btn);
-            color: white;
-            border: none;
-            border-radius: 8px;
+            background: transparent;
+            color: var(--neon-blue);
+            border: 1px solid var(--neon-blue);
+            border-radius: 0px; /* Bordas quadradas estilo Sci-Fi */
             padding: 0.6rem 1.2rem;
-            font-weight: 600;
-            letter-spacing: 0.5px;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            width: 100%;
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 700;
             text-transform: uppercase;
-            font-size: 0.85rem;
+            transition: all 0.3s ease;
+            position: relative;
+            clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
         }
         
         .stButton>button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 0 15px var(--accent-glow);
-            border: 1px solid #7DD3FC;
+            background: var(--neon-blue);
+            color: #000;
+            box-shadow: 0 0 20px rgba(0, 243, 255, 0.6);
         }
 
-        /* --- INPUTS & CAMPOS --- */
-        .stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div>div, .stNumberInput>div>div>input {
-            background-color: #1E293B !important;
-            color: #F8FAFC !important;
-            border: 1px solid #334155 !important;
-            border-radius: 6px;
-            transition: border-color 0.3s;
-        }
-        
-        .stTextInput>div>div>input:focus, .stTextArea>div>div>textarea:focus {
-            border-color: var(--accent-primary) !important;
-            box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
-        }
-
-        /* --- CARDS & CONTAINERS (GLASSMORPHISM) --- */
-        div[data-testid="metric-container"] {
-            background: var(--bg-card);
+        /* --- CARDS/CONTAINERS --- */
+        div[data-testid="metric-container"], div[data-testid="stExpander"], .folder-card {
+            background: rgba(10, 15, 30, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 0px; /* Reto futurista */
             backdrop-filter: blur(10px);
-            border: var(--border-glass);
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            transition: transform 0.2s;
-        }
-        
-        div[data-testid="metric-container"]:hover {
-             border-color: var(--accent-primary);
+            /* Canto cortado estilo Tech */
+            clip-path: polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%); 
         }
 
-        /* Estiliza os Expanders e Containers Gerais */
-        div[data-testid="stExpander"], div[data-testid="stContainer"] {
-            border: var(--border-glass);
-            border-radius: 10px;
-            background-color: rgba(30, 41, 59, 0.3);
+        /* --- INPUTS --- */
+        .stTextInput>div>div>input, .stTextArea>div>div>textarea {
+            background-color: rgba(0, 0, 0, 0.3) !important;
+            border: 1px solid #334155 !important;
+            color: #FFF !important;
+            border-radius: 0px;
         }
-
-        /* --- SCROLLBAR --- */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #0F172A; 
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #334155; 
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #475569; 
+        .stTextInput>div>div>input:focus {
+            border-color: var(--neon-blue) !important;
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.1);
         }
 
         #MainMenu {visibility: hidden;}
@@ -233,9 +257,9 @@ def login_screen():
         # Logo Tech
         st.markdown("""
             <div style='text-align: center;'>
-                <h1 style='font-size: 3rem; margin-bottom: 0;'>🛡️</h1>
-                <h1 class='tech-header' style='font-size: 2.5rem;'>LEGALHUB <span style='font-weight: 300; color: #94a3b8;'>ELITE</span></h1>
-                <p style='color: #E2E8F0; font-size: 0.9rem; letter-spacing: 1px;'>SECURE LEGAL INTELLIGENCE SYSTEM</p>
+                <h1 style='font-size: 3.5rem; margin-bottom: 0; text-shadow: 0 0 20px rgba(0, 243, 255, 0.5);'>🛡️</h1>
+                <h1 class='tech-header' style='font-size: 2.5rem; letter-spacing: 3px;'>LEGALHUB <span style='font-weight: 300; color: #fff;'>ELITE</span></h1>
+                <p style='color: #00F3FF; font-size: 0.8rem; letter-spacing: 2px; text-transform: uppercase;'>Artificial Intelligence System</p>
             </div>
         """, unsafe_allow_html=True)
         
@@ -243,21 +267,21 @@ def login_screen():
         st.write("")
         
         with st.container(border=True):
-            st.markdown("#### Identificação")
+            st.markdown("#### ACCESS CONTROL")
             username = st.text_input("ID Usuário")
             password = st.text_input("Chave de Acesso", type="password")
             
             st.write("")
-            if st.button("🔓 INICIAR SESSÃO SEGURA", use_container_width=True):
+            if st.button("🔓 INICIAR SESSÃO", use_container_width=True):
                 users = run_query("SELECT * FROM usuarios WHERE username = ? AND senha = ?", (username, password), return_data=True)
                 if not users.empty:
                     st.session_state.logado = True
                     st.session_state.usuario_atual = username
                     st.session_state.escritorio_atual = users.iloc[0]['escritorio']
                     st.rerun()
-                else: st.error("Acesso Negado. Credenciais Inválidas.")
+                else: st.error("Acesso Negado.")
             
-            st.markdown("<div style='text-align:center; margin-top:10px; color: #94a3b8; font-size: 0.8rem;'>v5.5 Secure Build</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; margin-top:10px; color: #475569; font-size: 0.7rem; font-family: Rajdhani;'>SYSTEM V5.5 // SECURE</div>", unsafe_allow_html=True)
 
 if not st.session_state.logado:
     login_screen()
@@ -330,51 +354,67 @@ if "navegacao_override" not in st.session_state:
 
 with st.sidebar:
     # ------------------------------------------------------------
-    # 1. LOGO AQUI (ÁREA VERMELHA DO SEU PRINT)
-    # SUBSTITUA O LINK ABAIXO PELO CAMINHO DA SUA IMAGEM (ex: "logo.png")
+    # LOGO
     # ------------------------------------------------------------
-    st.sidebar.image("https://placehold.co/200x80/0F172A/FFF?text=LOGO", use_container_width=True)
+    st.sidebar.image("https://placehold.co/200x80/020408/FFF?text=LEGALHUB", use_container_width=True)
     
-    st.markdown("<h2 class='tech-header'>🛡️ LEGALHUB</h2>", unsafe_allow_html=True)
-    st.markdown(f"<div style='font-size:0.8rem; color:#E2E8F0; margin-bottom: 20px;'>{st.session_state.escritorio_atual}</div>", unsafe_allow_html=True)
+    st.markdown("<h2 class='tech-header' style='font-size:1.5rem;'>NAVEGAÇÃO</h2>", unsafe_allow_html=True)
     
     # Lista de Opções
-    opcoes_menu = ["📊 Dashboard", "✍️ Redator Jurídico", "🧮 Calculadoras & Perícia", "🏛️ Estratégia de Audiência", "📂 Gestão de Casos", "🚦 Monitor de Prazos", "🔧 Ferramentas Extras"]
+    opcoes_menu = [" Dashboard", " Redator IA", " Perícia & Calc", " Audiência", " Gestão Casos", " Monitor Prazos", " Ferramentas"]
+    
+    # Mapeamento para nomes internos se precisar
+    mapa_nav = {
+        " Dashboard": "📊 Dashboard",
+        " Redator IA": "✍️ Redator Jurídico", 
+        " Perícia & Calc": "🧮 Calculadoras & Perícia",
+        " Audiência": "🏛️ Estratégia de Audiência",
+        " Gestão Casos": "📂 Gestão de Casos",
+        " Monitor Prazos": "🚦 Monitor de Prazos",
+        " Ferramentas": "🔧 Ferramentas Extras"
+    }
+
+    # Inverso
+    mapa_inv = {v: k for k, v in mapa_nav.items()}
     
     idx_menu = 0
     if st.session_state.navegacao_override:
-        try: idx_menu = opcoes_menu.index(st.session_state.navegacao_override)
+        try: 
+            nome_curto = mapa_inv.get(st.session_state.navegacao_override, " Dashboard")
+            idx_menu = opcoes_menu.index(nome_curto)
         except: idx_menu = 0
         st.session_state.navegacao_override = None
     
-    menu_opcao = st.radio("SISTEMA:", opcoes_menu, index=idx_menu)
+    # MENU RADIO TRANSFORMADO EM BOTÕES PELO CSS
+    escolha_curta = st.radio("MENU_OCULTO", opcoes_menu, index=idx_menu, label_visibility="collapsed")
+    menu_opcao = mapa_nav[escolha_curta]
     
     st.markdown("---")
     
     # Display de Créditos Moderno
-    st.markdown("#### SALDO DE CRÉDITOS")
+    st.markdown("<h4 style='font-size:1rem; color:#94A3B8;'>CRÉDITOS</h4>", unsafe_allow_html=True)
     col_cred1, col_cred2 = st.columns([1, 3])
-    with col_cred1: st.markdown("<h3 style='color:#38BDF8;'>💎</h3>", unsafe_allow_html=True)
+    with col_cred1: st.markdown("<h3 style='color:#00F3FF; margin:0;'>💎</h3>", unsafe_allow_html=True)
     with col_cred2: 
-        st.markdown(f"<h3 style='margin:0; color:#38BDF8;'>{creditos_atuais}</h3>", unsafe_allow_html=True)
-        st.progress(min(creditos_atuais/50, 1.0))
+        st.markdown(f"<h3 style='margin:0; color:#FFFFFF; text-shadow: 0 0 10px #00F3FF;'>{creditos_atuais}</h3>", unsafe_allow_html=True)
+    st.progress(min(creditos_atuais/50, 1.0))
     
     st.write("")
-    if st.button("🔒 LOGOUT"):
+    if st.button("LOGOUT / SAIR"):
         st.session_state.logado = False
         st.rerun()
 
     # --- ÁREA DE ADMINISTRAÇÃO ---
     if st.session_state.usuario_atual == 'admin':
         st.markdown("---")
-        with st.expander("🛠️ PAINEL ADMIN"):
+        with st.expander("🛠️ ADMIN CONSOLE"):
             st.markdown("##### ➕ Novo Usuário")
             novo_user = st.text_input("Login")
             novo_pass = st.text_input("Senha", type="password")
             novo_banca = st.text_input("Escritório")
-            if st.button("Criar Acesso"):
+            if st.button("CRIAR"):
                 run_query("INSERT INTO usuarios (username, senha, escritorio, email_oab, creditos) VALUES (?, ?, ?, ?, ?)", (novo_user, novo_pass, novo_banca, "", 50))
-                st.success("Usuário criado!")
+                st.success("OK")
             
             st.divider()
             st.markdown("##### 💰 Recarga")
@@ -382,7 +422,7 @@ with st.sidebar:
             if not df_users.empty:
                 user_recarga = st.selectbox("Usuário:", df_users['username'])
                 qtd_recarga = st.number_input("Qtd:", min_value=1, value=50, step=10)
-                if st.button("Confirmar Recarga"):
+                if st.button("RECARREGAR"):
                     run_query("UPDATE usuarios SET creditos = creditos + ? WHERE username = ?", (qtd_recarga, user_recarga))
                     st.toast(f"✅ Recarga efetuada para {user_recarga}!")
                     time.sleep(1)
@@ -394,67 +434,67 @@ with st.sidebar:
 
 # 1. DASHBOARD
 if menu_opcao == "📊 Dashboard":
-    st.markdown(f"<h2 class='tech-header'>Painel de Controle <span style='font-weight:300; font-size: 1.5rem; color:#E2E8F0;'>| {st.session_state.usuario_atual}</span></h2>", unsafe_allow_html=True)
+    st.markdown(f"<h2 class='tech-header'>SYSTEM STATUS <span style='font-weight:300; font-size: 1.5rem; color:#64748b;'>| {st.session_state.usuario_atual}</span></h2>", unsafe_allow_html=True)
     
     # Métricas Superiores
     c1, c2, c3 = st.columns(3)
     docs_feitos = run_query("SELECT count(*) FROM documentos WHERE escritorio = ?", (st.session_state.escritorio_atual,), return_data=True).iloc[0][0]
     
-    c1.metric("📄 Documentos Gerados", docs_feitos, delta="+2 esse mês")
-    c2.metric("💎 Créditos Disponíveis", creditos_atuais)
-    c3.metric("📅 Prazos Ativos", "0", delta="Regular", delta_color="off")
+    c1.metric("DOCUMENTOS", docs_feitos, delta="Online")
+    c2.metric("CRÉDITOS", creditos_atuais)
+    c3.metric("PRAZOS", "0", delta="Estável", delta_color="off")
     
     st.write("")
     
     # Gráfico e Dicas
     col_chart, col_info = st.columns([2, 1])
     with col_chart:
-        st.markdown("##### 📈 Análise de Produtividade")
+        st.markdown("##### 📈 DADOS DE PRODUTIVIDADE")
         with st.container(border=True):
             df_areas = run_query("SELECT area, COUNT(*) as qtd FROM documentos WHERE escritorio = ? GROUP BY area", (st.session_state.escritorio_atual,), return_data=True)
             if not df_areas.empty:
                 # Cores Tech para o gráfico
-                colors_tech = ['#38BDF8', '#0EA5E9', '#0284C7', '#6366F1', '#8B5CF6']
-                fig = px.pie(df_areas, values='qtd', names='area', hole=0.6, color_discrete_sequence=colors_tech)
+                colors_tech = ['#00F3FF', '#BC13FE', '#2E5CFF', '#FFFFFF', '#4A4A4A']
+                fig = px.pie(df_areas, values='qtd', names='area', hole=0.7, color_discrete_sequence=colors_tech)
                 fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#E2E8F0", showlegend=True, margin=dict(t=20, b=20, l=20, r=20))
                 st.plotly_chart(fig, use_container_width=True)
-            else: st.info("Sem dados para análise visual.")
+            else: st.info("Aguardando dados...")
     
     with col_info:
-        st.markdown("##### 💡 Status do Sistema")
+        st.markdown("##### 💡 SYSTEM LOGS")
         with st.container(border=True):
-            st.success("Servidor IA: Online")
-            st.info("Banco de Dados: Seguro")
-            st.warning("Atualização: v5.5 Estável")
+            st.success("AI SERVER: ONLINE")
+            st.info("DATABASE: SECURE")
+            st.warning("VERSION: 5.5 STABLE")
             st.markdown("---")
-            st.caption("Dica: Use a 'Jurisprudência Inteligente' para aumentar a precisão das peças.")
+            st.caption("Dica: Utilize a busca jurisprudencial para aumentar a precisão.")
 
     # CARDS DE FUNCIONALIDADES
     st.write("")
-    st.subheader("🛠️ Acesso Rápido")
+    st.subheader("🛠️ ACESSO RÁPIDO")
     
     r1c1, r1c2, r1c3 = st.columns(3)
     with r1c1:
         with st.container(border=True):
-            st.markdown("#### ✍️ Redator IA")
-            st.caption("Geração de peças processuais.")
-            if st.button("Abrir Redator", key="btn_redator"):
+            st.markdown("#### ✍️ REDATOR")
+            st.caption("IA Generativa de Peças.")
+            if st.button("INICIAR", key="btn_redator"):
                 st.session_state.navegacao_override = "✍️ Redator Jurídico"
                 st.rerun()
 
     with r1c2:
         with st.container(border=True):
-            st.markdown("#### 🧮 Perícia")
-            st.caption("Cálculos complexos automatizados.")
-            if st.button("Abrir Perícia", key="btn_pericia"):
+            st.markdown("#### 🧮 PERÍCIA")
+            st.caption("Cálculos Automatizados.")
+            if st.button("CALCULAR", key="btn_pericia"):
                 st.session_state.navegacao_override = "🧮 Calculadoras & Perícia"
                 st.rerun()
 
     with r1c3:
         with st.container(border=True):
-            st.markdown("#### 🏛️ Audiência")
-            st.caption("Simulação e estratégia de defesa.")
-            if st.button("Abrir Audiência", key="btn_aud"):
+            st.markdown("#### 🏛️ AUDIÊNCIA")
+            st.caption("Simulador Estratégico.")
+            if st.button("SIMULAR", key="btn_aud"):
                 st.session_state.navegacao_override = "🏛️ Estratégia de Audiência"
                 st.rerun()
 
@@ -463,31 +503,31 @@ if menu_opcao == "📊 Dashboard":
 
     with r2c1:
         with st.container(border=True):
-            st.markdown("#### ⚖️ Jurisprudência")
-            st.caption("Busca em tribunais superiores.")
-            if st.button("Pesquisar", key="btn_juris"):
+            st.markdown("#### ⚖️ JURISPRUDÊNCIA")
+            st.caption("Busca de Tribunais.")
+            if st.button("PESQUISAR", key="btn_juris"):
                 st.session_state.navegacao_override = "✍️ Redator Jurídico"
                 st.rerun()
 
     with r2c2:
         with st.container(border=True):
-            st.markdown("#### 📄 Chat PDF")
-            st.caption("Interrogatório de documentos.")
-            if st.button("Analisar PDF", key="btn_pdf"):
+            st.markdown("#### 📄 CHAT PDF")
+            st.caption("Análise Documental.")
+            if st.button("ANALISAR", key="btn_pdf"):
                 st.session_state.navegacao_override = "🔧 Ferramentas Extras"
                 st.rerun()
 
     with r2c3:
         with st.container(border=True):
-            st.markdown("#### 📅 Prazos")
-            st.caption("Monitoramento de intimações.")
-            if st.button("Ver Monitor", key="btn_prazo"):
+            st.markdown("#### 📅 PRAZOS")
+            st.caption("Monitoramento Fatal.")
+            if st.button("MONITORAR", key="btn_prazo"):
                 st.session_state.navegacao_override = "🚦 Monitor de Prazos"
                 st.rerun()
 
 # 2. REDATOR
 elif menu_opcao == "✍️ Redator Jurídico":
-    st.markdown("<h2 class='tech-header'>✍️ Redator Inteligente</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 class='tech-header'>✍️ REDATOR IA</h2>", unsafe_allow_html=True)
     
     if "fatos_recuperados" not in st.session_state: st.session_state.fatos_recuperados = ""
     if "cliente_recuperado" not in st.session_state: st.session_state.cliente_recuperado = ""
@@ -499,12 +539,12 @@ elif menu_opcao == "✍️ Redator Jurídico":
     
     with col_config:
         with st.container(border=True):
-            st.markdown("##### ⚙️ Parâmetros")
+            st.markdown("##### ⚙️ PARÂMETROS")
             tipo = st.selectbox("Tipo de Peça", ["Inicial", "Contestação", "Recurso Inominado", "Apelação", "Contrato", "Parecer"])
             area = st.selectbox("Área", ["Cível", "Trabalhista", "Criminal", "Família", "Tributário"])
             web = st.checkbox("Incluir Jurisprudência Web", value=True)
             
-            st.markdown("##### 👤 Cliente")
+            st.markdown("##### 👤 CLIENTE")
             modo_cliente = st.radio("Seleção:", ["Existente", "Novo"], horizontal=True, label_visibility="collapsed")
             
             cli_final = ""
@@ -521,13 +561,13 @@ elif menu_opcao == "✍️ Redator Jurídico":
                 cli_final = st.text_input("Nome do Novo Cliente:")
 
     with col_input:
-        st.markdown("##### 📝 Fatos e Dados do Caso")
-        fatos = st.text_area("Descreva os detalhes aqui...", height=350, value=st.session_state.fatos_recuperados, placeholder="Cole os fatos, datas e valores relevantes...")
+        st.markdown("##### 📝 FATOS DO CASO")
+        fatos = st.text_area("Insira os dados...", height=350, value=st.session_state.fatos_recuperados, placeholder="Descreva os fatos, datas e valores...")
     
     st.write("")
-    if st.button("✨ EXECUTAR GERAÇÃO (1 CRÉDITO)", use_container_width=True):
+    if st.button("✨ GERAR DOCUMENTO (1 CRÉDITO)", use_container_width=True):
         if creditos_atuais > 0 and fatos and cli_final:
-            with st.spinner("Processando dados com IA..."):
+            with st.spinner("PROCESSANDO DADOS..."):
                 jur = buscar_jurisprudencia_real(f"{area} {tipo} {fatos}") if web else ""
                 prompt = f"Advogado {area}. Peça: {tipo}. Fatos: {fatos}. Jurisp: {jur}. Formal e Técnico."
                 try:
@@ -537,34 +577,34 @@ elif menu_opcao == "✍️ Redator Jurídico":
                     run_query("INSERT INTO documentos (escritorio, data_criacao, cliente, area, tipo, conteudo) VALUES (?, ?, ?, ?, ?, ?)", 
                                 (st.session_state.escritorio_atual, datetime.now().strftime("%d/%m/%Y"), cli_final, area, tipo, fatos + "||" + res))
                     
-                    st.markdown("### 📄 Resultado:")
+                    st.markdown("### 📄 RESULTADO:")
                     with st.container(border=True):
                         st.markdown(res)
                     
-                    st.download_button("📥 Baixar Documento (.docx)", gerar_word(res), "Minuta_LegalHub.docx", use_container_width=True)
-                    st.success(f"Documento salvo em: {cli_final}")
+                    st.download_button("📥 DOWNLOAD (.docx)", gerar_word(res), "Minuta_LegalHub.docx", use_container_width=True)
+                    st.success(f"Salvo em: {cli_final}")
                     time.sleep(2)
                     st.rerun()
-                except Exception as e: st.error(f"Erro no processamento: {str(e)}")
-        else: st.error("Verifique créditos e preenchimento dos campos.")
+                except Exception as e: st.error(f"Erro: {str(e)}")
+        else: st.error("Créditos insuficientes ou dados faltantes.")
 
 # 3. CALCULADORA
 elif menu_opcao == "🧮 Calculadoras & Perícia":
-    st.markdown("<h2 class='tech-header'>🧮 Laboratório de Perícia</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 class='tech-header'>🧮 LABORATÓRIO DE PERÍCIA</h2>", unsafe_allow_html=True)
     
     with st.container(border=True):
         c1, c2 = st.columns(2)
         with c1:
             tipo_calc = st.selectbox("Selecione o Cálculo:", ["Aluguel", "Divórcio", "FGTS", "INSS", "PASEP", "Pensão", "RMC/RCC", "Superendividamento", "Criminal (Dosimetria)", "Trabalhista"])
-            dt_base = st.date_input("Data Base do Cálculo")
+            dt_base = st.date_input("Data Base")
         with c2:
-            upload = st.file_uploader("Anexar Documento Base (PDF)", type="pdf")
+            upload = st.file_uploader("Anexar PDF", type="pdf")
         
-        dados = st.text_area("Insira os valores e parâmetros manuais:")
+        dados = st.text_area("Parâmetros Manuais:")
         
-        if st.button("🧮 PROCESSAR CÁLCULO"):
+        if st.button("🧮 PROCESSAR"):
             if dados or upload:
-                with st.spinner("Realizando cálculos..."):
+                with st.spinner("Calculando..."):
                     txt = f"\nPDF Contexto: {extrair_texto_pdf(upload)}" if upload else ""
                     prompt = f"Atue como Perito Contábil em {tipo_calc}. Data Base: {dt_base}. Parâmetros: {dados} {txt}. Gere Laudo Técnico detalhado com memória de cálculo."
                     try:
@@ -576,16 +616,16 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
 
 # 4. AUDIENCIA
 elif menu_opcao == "🏛️ Estratégia de Audiência":
-    st.markdown("<h2 class='tech-header'>🏛️ Simulador de Audiência</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 class='tech-header'>🏛️ SIMULADOR DE AUDIÊNCIA</h2>", unsafe_allow_html=True)
     
     col_setup, col_doc = st.columns([1, 1])
     with col_setup:
-        area = st.selectbox("Área do Direito", ["Trabalhista", "Cível", "Criminal"])
-        papel = st.selectbox("Você representa:", ["Autor/Reclamante", "Réu/Reclamada"])
+        area = st.selectbox("Área", ["Trabalhista", "Cível", "Criminal"])
+        papel = st.selectbox("Representando:", ["Autor/Reclamante", "Réu/Reclamada"])
     with col_doc:
         upload = st.file_uploader("Processo/Inicial (PDF)", type="pdf")
     
-    obs = st.text_area("Pontos sensíveis do caso:")
+    obs = st.text_area("Pontos sensíveis:")
     
     if st.button("🎭 GERAR ESTRATÉGIA"):
         if obs or upload:
@@ -600,14 +640,14 @@ elif menu_opcao == "🏛️ Estratégia de Audiência":
 
 # 5. GESTÃO DE CASOS
 elif menu_opcao == "📂 Gestão de Casos":
-    st.markdown("<h2 class='tech-header'>📂 Cofre Digital de Processos</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 class='tech-header'>📂 COFRE DIGITAL</h2>", unsafe_allow_html=True)
     
     if "pasta_aberta" not in st.session_state: st.session_state.pasta_aberta = None
     df_docs = run_query("SELECT * FROM documentos WHERE escritorio = ?", (st.session_state.escritorio_atual,), return_data=True)
 
     if not df_docs.empty:
         if st.session_state.pasta_aberta is None:
-            st.info("Selecione o dossiê do cliente para acessar os arquivos.")
+            st.info("Selecione o dossiê para acessar os arquivos.")
             clientes_unicos = df_docs['cliente'].unique()
             cols = st.columns(4) 
             for i, cliente in enumerate(clientes_unicos):
@@ -617,7 +657,7 @@ elif menu_opcao == "📂 Gestão de Casos":
                         st.markdown(f"**{cliente}**")
                         qtd = len(df_docs[df_docs['cliente'] == cliente])
                         st.caption(f"{qtd} arquivos")
-                        if st.button(f"Abrir Pasta", key=f"btn_{i}"):
+                        if st.button(f"ABRIR", key=f"btn_{i}"):
                             st.session_state.pasta_aberta = cliente
                             st.rerun()
 
@@ -628,19 +668,19 @@ elif menu_opcao == "📂 Gestão de Casos":
                     st.session_state.pasta_aberta = None
                     st.rerun()
             with col_title:
-                st.markdown(f"### 📂 Cliente: {st.session_state.pasta_aberta}")
+                st.markdown(f"### 📂 CLIENTE: {st.session_state.pasta_aberta}")
 
-            with st.expander("➕ Adicionar Novo Item ao Dossiê", expanded=False):
+            with st.expander("➕ NOVO DOCUMENTO", expanded=False):
                 c_add1, c_add2 = st.columns(2)
-                novo_tipo = c_add1.text_input("Nome do Documento:")
+                novo_tipo = c_add1.text_input("Nome:")
                 nova_area = c_add2.selectbox("Categoria:", ["Documentos Pessoais", "Provas", "Andamento", "Anotações", "Financeiro"])
                 
-                tab_up, tab_txt = st.tabs(["📤 Upload", "✍️ Nota Rápida"])
+                tab_up, tab_txt = st.tabs(["📤 Upload", "✍️ Nota"])
                 conteudo_novo = ""
                 with tab_up: arquivo_novo = st.file_uploader("Arquivo PDF", key="novo_up")
                 with tab_txt: texto_novo = st.text_area("Texto:", key="nova_nota")
 
-                if st.button("💾 Salvar"):
+                if st.button("💾 SALVAR"):
                     if novo_tipo:
                         if arquivo_novo: conteudo_novo = f"[ARQUIVO] {extrair_texto_pdf(arquivo_novo)}"
                         elif texto_novo: conteudo_novo = texto_novo
@@ -673,18 +713,18 @@ elif menu_opcao == "📂 Gestão de Casos":
 
 # 6. MONITOR
 elif menu_opcao == "🚦 Monitor de Prazos":
-    st.markdown("<h2 class='tech-header'>🚦 Radar de Prazos</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 class='tech-header'>🚦 RADAR DE PRAZOS</h2>", unsafe_allow_html=True)
     
     with st.container(border=True):
-        st.markdown("##### Configuração IMAP")
+        st.markdown("##### CONFIGURAÇÃO IMAP")
         c_email1, c_email2, c_email3 = st.columns(3)
         email_leitura = c_email1.text_input("Email", placeholder="adv@jus.com")
         senha_leitura = c_email2.text_input("Senha App", type="password")
         servidor_imap = c_email3.text_input("Host", value="imap.gmail.com")
 
-        if st.button("🔄 ESCANEAR CAIXA DE ENTRADA"):
+        if st.button("🔄 ESCANEAR"):
             if email_leitura and senha_leitura:
-                with st.spinner("Varrendo metadados de e-mails..."):
+                with st.spinner("Varrendo metadados..."):
                     msgs, err = buscar_intimacoes_email(email_leitura, senha_leitura, servidor_imap)
                     if err: st.error(err)
                     elif not msgs: st.info("Nenhuma intimação detectada.")
@@ -699,7 +739,7 @@ elif menu_opcao == "🚦 Monitor de Prazos":
 
 # 7. EXTRAS
 elif menu_opcao == "🔧 Ferramentas Extras":
-    st.markdown("<h2 class='tech-header'>🔧 Toolkit Avançado</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 class='tech-header'>🔧 TOOLKIT AVANÇADO</h2>", unsafe_allow_html=True)
     
     tabs_ex = st.tabs(["🔎 Analisador PDF", "🎙️ Transcrição", "⚖️ Comparador"])
     
@@ -721,4 +761,4 @@ elif menu_opcao == "🔧 Ferramentas Extras":
             st.write(genai.GenerativeModel(mod_escolhido).generate_content(f"Compare juridicamente e aponte divergências: {extrair_texto_pdf(p1)} vs {extrair_texto_pdf(p2)}").text)
 
 st.markdown("---")
-st.markdown("<center style='color: #64748b; font-size: 0.8rem;'>🔒 LegalHub Enterprise v5.5 | Encrypted Session | 2025</center>", unsafe_allow_html=True)
+st.markdown("<center style='color: #64748b; font-size: 0.8rem; font-family: Rajdhani;'>🔒 LEGALHUB ELITE v5.5 | ENCRYPTED SESSION</center>", unsafe_allow_html=True)
