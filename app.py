@@ -204,12 +204,28 @@ if api_key:
                     st.dataframe(df)
                     st.metric("Total Casos", len(df))
 
-    with tab7: # Calculadora Simples
-        st.header("📅 Calc. Simples")
-        dt = st.date_input("Publicação", datetime.now())
-        txt = st.text_area("Texto")
-        if st.button("Calc"):
-            st.write(genai.GenerativeModel(modelo_escolhido).generate_content(f"Calcule o prazo processual (CPC/CLT/CPP) para a data {dt}. Texto: {txt}").text)
+    with tab7: # Calculadora
+        st.header("📅 Calculadora de Prazos")
+        st.info("⚠️ Sugestão baseada em IA. Sempre confira feriados locais.")
+        col_p1, col_p2 = st.columns(2)
+        with col_p1:
+            data_pub = st.date_input("Data da Publicação", datetime.now())
+        with col_p2:
+            esfera = st.selectbox("Esfera", ["Cível (CPC - Dias Úteis)", "Trabalhista (CLT)", "Penal (CPP - Dias Corridos)", "Juizado Especial"])
+        texto_prazo = st.text_area("Texto da Intimação:", height=150)
+
+        if st.button("📆 Calcular Prazo"):
+            if texto_prazo:
+                with st.spinner("Calculando..."):
+                    prompt_prazo = f"""
+                    Assistente jurídico Sênior. Contexto: {esfera}. Data Ref: {data_pub.strftime('%d/%m/%Y')}.
+                    Texto: "{texto_prazo}".
+                    TAREFA: 1. Identifique o Ato. 2. Prazo Legal. 3. Úteis ou Corridos? 4. Data Fatal Sugerida. 5. Atenção a Feriados.
+                    """
+                    try:
+                        res = genai.GenerativeModel(modelo_escolhido).generate_content(prompt_prazo).text
+                        st.markdown(res)
+                    except Exception as e: st.error(f"Erro: {e}")
 
     with tab8: # Audiencia
         st.header("🏛️ Audiência")
