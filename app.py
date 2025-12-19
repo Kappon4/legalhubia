@@ -1,16 +1,4 @@
-import sys
-import subprocess
 import streamlit as st
-
-# ==========================================================
-# 0. AUTO-CORREÇÃO DE SISTEMA (Força atualização da Biblioteca)
-# ==========================================================
-# Isso resolve o erro 404 atualizando a ferramenta do Google automaticamente
-try:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-U", "google-generativeai"])
-except Exception as e:
-    pass # Se falhar, segue o jogo
-
 import google.generativeai as genai
 from pypdf import PdfReader
 from docx import Document
@@ -31,11 +19,11 @@ from email.message import EmailMessage
 import plotly.express as px
 import base64
 
-# --- IMPORTAÇÃO DE ERROS ---
-from google.api_core.exceptions import ResourceExhausted, NotFound, InvalidArgument
+# --- IMPORT ERROR HANDLING ---
+from google.api_core.exceptions import ResourceExhausted, NotFound, InvalidArgument, PermissionDenied
 
 # ==========================================================
-# 1. CONFIGURAÇÃO VISUAL - TEMA CYBER FUTURE
+# 1. VISUAL CONFIGURATION - CYBER FUTURE THEME
 # ==========================================================
 st.set_page_config(
     page_title="LegalHub Elite | AI System", 
@@ -45,7 +33,7 @@ st.set_page_config(
 )
 
 # ==========================================================
-# 2. FUNÇÕES GERAIS E BANCO DE DADOS
+# 2. GENERAL FUNCTIONS AND DATABASE
 # ==========================================================
 def get_base64_of_bin_file(bin_file):
     try:
@@ -54,9 +42,7 @@ def get_base64_of_bin_file(bin_file):
         return base64.b64encode(data).decode()
     except FileNotFoundError: return None
 
-# --- FUNÇÕES AUXILIARES ---
 def gerar_word(texto):
-    """Gera um arquivo Word a partir de um texto."""
     doc = Document()
     for p in texto.split('\n'):
         if p.strip(): doc.add_paragraph(p)
@@ -66,39 +52,41 @@ def gerar_word(texto):
     return buf
 
 def extrair_texto_pdf(arquivo):
-    """Extrai texto de um PDF."""
     try: return "".join([p.extract_text() for p in PdfReader(arquivo).pages])
     except: return ""
 
-# --- FUNÇÃO DE IA ULTRA-ROBUSTA (RESOLVE ERRO 404) ---
+# --- ROBUST AI FUNCTION (FIX FOR 404 ERROR) ---
 def tentar_gerar_conteudo(prompt, api_key_val):
+    """
+    Attempts to generate content by iterating through multiple models to avoid 404 errors.
+    """
     if not api_key_val:
-        return "⚠️ Erro: API Key não configurada. Insira na barra lateral."
+        return "⚠️ Error: API Key not configured."
     
     genai.configure(api_key=api_key_val)
     
-    # Lista de modelos para testar um por um
-    modelos_para_testar = [
-        "gemini-1.5-flash", 
-        "gemini-1.5-pro", 
-        "gemini-1.0-pro", 
-        "gemini-pro"
+    # List of models to try (from newest to oldest/most stable)
+    modelos_para_tentar = [
+        "gemini-1.5-flash",
+        "gemini-1.5-pro",
+        "gemini-1.0-pro",
+        "gemini-pro",
+        "models/gemini-1.5-flash", # Some libs require prefix
+        "models/gemini-pro"
     ]
     
-    erro_log = []
+    erro_final = ""
     
-    for modelo in modelos_para_testar:
+    for modelo in modelos_para_tentar:
         try:
-            # Tenta gerar com o modelo atual
             model = genai.GenerativeModel(modelo)
             response = model.generate_content(prompt)
             return response.text
         except Exception as e:
-            # Se der erro, guarda o erro e tenta o próximo
-            erro_log.append(f"{modelo}: {str(e)}")
-            continue
-    
-    return f"❌ Não foi possível gerar. Erros: {erro_log[-1]}"
+            erro_final = str(e)
+            continue # Try next model
+            
+    return f"❌ Failed to generate with all available models. Final error: {erro_final}. Check if your API Key has permission in Google AI Studio."
 
 def buscar_intimacoes_email(user, pwd, server):
     try:
@@ -106,7 +94,7 @@ def buscar_intimacoes_email(user, pwd, server):
         mail.login(user, pwd)
         mail.select("inbox")
         status, msgs = mail.search(None, '(UNSEEN)')
-        if not msgs[0]: return [], "Nada novo."
+        if not msgs[0]: return [], "Nothing new."
         found = []
         for e_id in msgs[0].split()[-5:]:
             res, data = mail.fetch(e_id, "(RFC822)")
@@ -128,15 +116,15 @@ def verificar_permissao(area_necessaria):
 
 def tela_bloqueio(area_necessaria, preco):
     cor = "#FF0055"
-    msg = f"Este recurso é exclusivo do plano {area_necessaria.upper()} ou FULL."
+    msg = f"This feature is exclusive to the {area_necessaria.upper()} or FULL plan."
     st.markdown(f"""
     <div class='lock-screen' style='border-color:{cor};'>
         <div class='lock-icon'>🔒</div>
-        <div class='lock-title' style='color:{cor};'>ACESSO RESTRITO</div>
+        <div class='lock-title' style='color:{cor};'>ACCESS RESTRICTED</div>
         <p class='lock-desc'>{msg}</p>
     </div>
     """, unsafe_allow_html=True)
-    if st.button(f"🚀 FAZER UPGRADE", key=f"upg_{area_necessaria}"):
+    if st.button(f"🚀 UPGRADE", key=f"upg_{area_necessaria}"):
         st.session_state.navegacao_override = "💎 Planos & Upgrade"
         st.rerun()
 
@@ -149,11 +137,11 @@ def buscar_jurisprudencia_oficial(tema, area):
     query = f"{tema} {sites}"
     try:
         res = DDGS().text(query, region="br-pt", max_results=4)
-        if res: return "\n".join([f"- {r['body']} (Fonte: {r['href']})" for r in res])
-        return "Nenhuma jurisprudência específica localizada nas bases oficiais."
-    except: return "Erro de conexão com bases jurídicas."
+        if res: return "\n".join([f"- {r['body']} (Source: {r['href']})" for r in res])
+        return "No specific jurisprudence found in official databases."
+    except: return "Connection error with legal databases."
 
-# --- CSS AVANÇADO COM BACKGROUND ---
+# --- ADVANCED CSS WITH BACKGROUND ---
 def local_css():
     bg_image_b64 = get_base64_of_bin_file("unnamed.jpg")
     bg_css = ""
@@ -349,7 +337,7 @@ if not st.session_state.logado:
 if "GOOGLE_API_KEY" in st.secrets: api_key = st.secrets["GOOGLE_API_KEY"]
 else: api_key = st.text_input("🔑 API Key (Salve no sidebar):", type="password")
 
-# (A configuração da API agora é feita dentro da função tentar_gerar_conteudo)
+# API Configuration is now handled inside 'tentar_gerar_conteudo'
 
 df_user = run_query("SELECT creditos, plano FROM usuarios WHERE username = ?", (st.session_state.usuario_atual,), return_data=True)
 if not df_user.empty:
@@ -601,7 +589,7 @@ elif menu_opcao == "✍️ Redator Jurídico":
                 api_key_to_use = api_key if api_key else st.session_state.get('sidebar_api_key')
                 res = tentar_gerar_conteudo(prompt, api_key_to_use)
                 
-                if "❌" not in res:
+                if "❌ Falha" not in res:
                     run_query("UPDATE usuarios SET creditos = creditos - 1 WHERE username = ?", (st.session_state.usuario_atual,))
                     run_query("INSERT INTO documentos (escritorio, data_criacao, cliente, area, tipo, conteudo) VALUES (?, ?, ?, ?, ?, ?)", (st.session_state.escritorio_atual, datetime.now().strftime("%d/%m/%Y"), cli_final, area, tipo, fatos + "||" + res))
                     st.markdown("### 📄 MINUTA GERADA:")
