@@ -1,9 +1,8 @@
 streamlit
-google-generativeai>=0.7.0
-python-docx
+google-generativeai
 pypdf
+python-docx
 duckduckgo-search
-gspread
-oauth2client
 pandas
 plotly
+streamlit-option-menu
