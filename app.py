@@ -40,7 +40,7 @@ def local_css():
             background: linear-gradient(135deg, #000000 0%, #1c1c1c 100%);
             color: #FFFFFF;
         }
-        h1, h2, h3 {
+        h1, h2, h3, h4 {
             color: #FFFFFF !important;
             font-family: 'Helvetica Neue', sans-serif;
             font-weight: 600;
@@ -56,6 +56,7 @@ def local_css():
             padding: 0.5rem 1rem;
             font-weight: bold;
             transition: all 0.3s ease;
+            width: 100%;
         }
         .stButton>button:hover {
             background-color: #E5C100;
@@ -77,21 +78,22 @@ def local_css():
             border-right: 1px solid #333;
         }
 
-        /* --- CARDS/PASTAS --- */
+        /* --- CARDS DASHBOARD --- */
         div[data-testid="metric-container"] {
             background-color: #1a1a1a;
             border: 1px solid #333;
             border-radius: 10px;
         }
         
-        .folder-card {
+        /* Estiliza os containers (cards) */
+        [data-testid="stVerticalBlock"] > [style*="flex-direction: column;"] > [data-testid="stVerticalBlock"] {
+            /* Tenta focar nos containers internos */
+        }
+        
+        div[data-testid="stExpander"] {
             background-color: #2d2d2d;
-            padding: 20px;
-            border-radius: 10px;
             border: 1px solid #444;
-            text-align: center;
-            cursor: pointer;
-            transition: 0.3s;
+            border-radius: 8px;
         }
 
         #MainMenu {visibility: hidden;}
@@ -234,14 +236,32 @@ if api_key:
 df_user = run_query("SELECT creditos FROM usuarios WHERE username = ?", (st.session_state.usuario_atual,), return_data=True)
 creditos_atuais = df_user.iloc[0]['creditos'] if not df_user.empty else 0
 
+# --- CONTROLE DE NAVEGAÇÃO EXTRA (PARA OS CARDS) ---
+# Usamos session_state para forçar a mudança de página caso venha dos cards
+if "navegacao_override" not in st.session_state:
+    st.session_state.navegacao_override = None
+
 with st.sidebar:
     st.markdown("<h1 style='color: #FFD700 !important;'>⚖️ LegalHub</h1>", unsafe_allow_html=True)
     st.caption(f"Licenciado para: {st.session_state.escritorio_atual}")
     st.divider()
     
+    # Lista de Opções
+    opcoes_menu = ["📊 Dashboard", "✍️ Redator Jurídico", "🧮 Calculadoras & Perícia", "🏛️ Estratégia de Audiência", "📂 Gestão de Casos", "🚦 Monitor de Prazos", "🔧 Ferramentas Extras"]
+    
+    # Se houver um override (clique no card), define o index
+    idx_menu = 0
+    if st.session_state.navegacao_override:
+        try:
+            idx_menu = opcoes_menu.index(st.session_state.navegacao_override)
+        except:
+            idx_menu = 0
+        st.session_state.navegacao_override = None # Limpa após usar
+    
     menu_opcao = st.radio(
         "MENU PRINCIPAL:",
-        ["📊 Dashboard", "✍️ Redator Jurídico", "🧮 Calculadoras & Perícia", "🏛️ Estratégia de Audiência", "📂 Gestão de Casos", "🚦 Monitor de Prazos", "🔧 Ferramentas Extras"]
+        opcoes_menu,
+        index=idx_menu
     )
     
     st.divider()
@@ -292,12 +312,69 @@ if menu_opcao == "📊 Dashboard":
     with col_info:
         st.info("💡 Dica: Use o Redator para gerar documentos e alimentar o gráfico.")
 
+    # ==========================================================
+    # --- INTEGRAÇÃO DOS 6 CARDS ---
+    # ==========================================================
     st.markdown("---")
-    st.markdown("### 🛠️ Funcionalidades:")
+    st.markdown("### 🛠️ Funcionalidades Rápidas:")
+    
+    # LINHA 1
     r1c1, r1c2, r1c3 = st.columns(3)
-    r1c1.container(border=True).markdown("#### ✍️ Redator IA\nCrie petições e contratos.")
-    r1c2.container(border=True).markdown("#### 🧮 Perícia\nCálculos Trabalhistas e Cíveis.")
-    r1c3.container(border=True).markdown("#### 🏛️ Audiência\nEstratégia e Perguntas.")
+    
+    with r1c1:
+        with st.container(border=True):
+            st.markdown("#### ✍️ Redator IA")
+            st.caption("Crie petições e contratos.")
+            if st.button("Acessar Redator"):
+                st.session_state.navegacao_override = "✍️ Redator Jurídico"
+                st.rerun()
+
+    with r1c2:
+        with st.container(border=True):
+            st.markdown("#### 🧮 Perícia")
+            st.caption("Cálculos Trabalhistas e Cíveis.")
+            if st.button("Acessar Perícia"):
+                st.session_state.navegacao_override = "🧮 Calculadoras & Perícia"
+                st.rerun()
+
+    with r1c3:
+        with st.container(border=True):
+            st.markdown("#### 🏛️ Audiência")
+            st.caption("Estratégia e Perguntas.")
+            if st.button("Acessar Audiência"):
+                st.session_state.navegacao_override = "🏛️ Estratégia de Audiência"
+                st.rerun()
+
+    st.write("") # Espaçamento
+    
+    # LINHA 2
+    r2c1, r2c2, r2c3 = st.columns(3)
+
+    with r2c1:
+        with st.container(border=True):
+            st.markdown("#### ⚖️ Jurisprudência")
+            st.caption("Pesquisa inteligente.")
+            if st.button("Pesquisar"):
+                # Manda para redator, onde tem busca
+                st.session_state.navegacao_override = "✍️ Redator Jurídico"
+                st.rerun()
+
+    with r2c2:
+        with st.container(border=True):
+            st.markdown("#### 📄 Chat com PDF")
+            st.caption("Resuma e converse com processos.")
+            if st.button("Acessar Chat PDF"):
+                st.session_state.navegacao_override = "🔧 Ferramentas Extras"
+                st.rerun()
+
+    with r2c3:
+        with st.container(border=True):
+            st.markdown("#### 📅 Prazos")
+            st.caption("Calculadora e gestão de datas.")
+            if st.button("Ver Prazos"):
+                st.session_state.navegacao_override = "🚦 Monitor de Prazos"
+                st.rerun()
+    # ==========================================================
 
 # 2. REDATOR (ATUALIZADO COM SELETOR DE CLIENTE)
 elif menu_opcao == "✍️ Redator Jurídico":
@@ -484,6 +561,13 @@ elif menu_opcao == "📂 Gestão de Casos":
 # 6. MONITOR
 elif menu_opcao == "🚦 Monitor de Prazos":
     st.markdown("<h2 class='highlight-gold'>🚦 Monitor de Intimações</h2>", unsafe_allow_html=True)
+    
+    # Simulação de inputs de email para evitar erro de variável não definida
+    c_email1, c_email2, c_email3 = st.columns(3)
+    email_leitura = c_email1.text_input("Email", placeholder="advogado@email.com")
+    senha_leitura = c_email2.text_input("Senha de App", type="password")
+    servidor_imap = c_email3.text_input("Servidor IMAP", value="imap.gmail.com")
+
     if st.button("🔄 BUSCAR NOVOS E-MAILS"):
         if email_leitura and senha_leitura:
             with st.spinner("Lendo e-mails..."):
@@ -497,7 +581,7 @@ elif menu_opcao == "🚦 Monitor de Prazos":
                             if st.button("Analisar Prazo", key=m['assunto']):
                                 res = genai.GenerativeModel(mod_escolhido).generate_content(f"Analise prazo: {m['corpo']}").text
                                 st.write(res)
-        else: st.error("Configure o e-mail na barra lateral.")
+        else: st.error("Preencha os dados de e-mail acima.")
 
 # 7. EXTRAS
 elif menu_opcao == "🔧 Ferramentas Extras":
