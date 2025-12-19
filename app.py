@@ -16,6 +16,7 @@ from email.header import decode_header
 import smtplib
 import ssl
 from email.message import EmailMessage
+import plotly.express as px # --- NOVA IMPORTAÇÃO PARA O GRÁFICO ---
 
 # --- IMPORTAÇÃO DE ERROS ---
 from google.api_core.exceptions import ResourceExhausted, NotFound, InvalidArgument
@@ -316,8 +317,9 @@ with st.sidebar:
 # 1. DASHBOARD
 if menu_opcao == "📊 Dashboard":
     st.markdown(f"<h2 class='highlight-gold'>Bem-vindo, Dr(a). {st.session_state.usuario_atual}</h2>", unsafe_allow_html=True)
-    st.write("Visão geral do escritório.")
+    st.write("Visão geral estratégica do escritório.")
     
+    # Métricas Superiores
     c1, c2, c3 = st.columns(3)
     docs_feitos = run_query("SELECT count(*) FROM documentos WHERE escritorio = ?", (st.session_state.escritorio_atual,), return_data=True).iloc[0][0]
     
@@ -326,14 +328,44 @@ if menu_opcao == "📊 Dashboard":
     c3.metric("Prazos Ativos", "0", "Em dia")
     
     st.markdown("---")
-    st.subheader("🚀 Atalhos Rápidos")
-    col_a, col_b = st.columns(2)
-    with col_a: 
-        st.info(" Precisa de uma Inicial? Vá em **Redator**.")
-    with col_b: 
-        st.success(" Tem audiência amanhã? Vá em **Estratégia**.")
+    
+    # --- NOVO: GRÁFICO DE PIZZA/ROSCA (ÁREAS DE ATUAÇÃO) ---
+    st.subheader("📈 Performance por Área")
+    
+    col_chart, col_info = st.columns([2, 1])
+    
+    with col_chart:
+        # Busca dados agrupados por área
+        df_areas = run_query("SELECT area, COUNT(*) as qtd FROM documentos WHERE escritorio = ? GROUP BY area", (st.session_state.escritorio_atual,), return_data=True)
+        
+        if not df_areas.empty:
+            # Cria o gráfico de rosca (Donut Chart) com tema Dourado
+            fig = px.pie(
+                df_areas, 
+                values='qtd', 
+                names='area', 
+                hole=0.4, # Faz o buraco da rosca
+                color_discrete_sequence=['#FFD700', '#FFA500', '#DAA520', '#B8860B', '#F0E68C'] # Tons de Dourado
+            )
+            # Configurações para Dark Mode (Fundo transparente e texto branco)
+            fig.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                font_color="white",
+                showlegend=True,
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("Ainda não há dados suficientes para gerar o gráfico. Crie documentos na aba Redator!")
 
-    # --- NOVO: RESUMO DAS FUNCIONALIDADES ---
+    with col_info:
+        st.markdown("### 🚀 Acesso Rápido")
+        st.info(" Precisa de uma Inicial? Vá em **Redator**.")
+        st.success(" Tem audiência amanhã? Vá em **Estratégia**.")
+        st.warning(" Dúvida no cálculo? Vá em **Calculadoras**.")
+
+    # --- VITRINE DE FUNCIONALIDADES ---
     st.markdown("---")
     st.markdown("### 🛠️ O Que Você Pode Fazer Aqui:")
     
@@ -519,4 +551,4 @@ elif menu_opcao == "🔧 Ferramentas Extras":
             st.write(genai.GenerativeModel(mod_escolhido).generate_content(f"Diferenças: {extrair_texto_pdf(p1)} E {extrair_texto_pdf(p2)}").text)
 
 st.markdown("---")
-st.markdown("<center style='color: #555;'>🔒 LegalHub Enterprise v3.5 | Dark Mode Edition</center>", unsafe_allow_html=True)
+st.markdown("<center style='color: #555;'>🔒 LegalHub Enterprise v3.6 | Dark Mode Edition</center>", unsafe_allow_html=True)
