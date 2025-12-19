@@ -106,12 +106,6 @@ def local_css():
         div[data-testid="metric-container"], div[data-testid="stExpander"], .folder-card { background: var(--bg-card); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 0px; backdrop-filter: blur(12px); }
         .stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div>div, .stNumberInput>div>div>input { background-color: rgba(0, 0, 0, 0.3) !important; border: 1px solid #334155 !important; color: #FFF !important; border-radius: 0px; }
         
-        div[role="radiogroup"] { display: flex; justify-content: space-between; background: rgba(10, 15, 30, 0.8); padding: 10px; border-radius: 8px; border-bottom: 1px solid rgba(0, 243, 255, 0.3); }
-        div[role="radiogroup"] label { background: transparent !important; border: none !important; margin: 0 !important; padding: 5px 15px !important; color: #94A3B8 !important; }
-        div[role="radiogroup"] label:hover { color: #FFF !important; text-shadow: 0 0 5px #00F3FF; }
-        div[role="radiogroup"] label[data-checked="true"] { color: #00F3FF !important; border-bottom: 2px solid #00F3FF !important; background: rgba(0, 243, 255, 0.1) !important; }
-        div[role="radiogroup"] div[data-testid="stMarkdownContainer"] p { font-size: 1rem !important; }
-
         #MainMenu {visibility: hidden;} footer {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
@@ -119,7 +113,7 @@ def local_css():
 local_css()
 
 # ==========================================================
-# 2. FUNÇÕES GERAIS E BANCO DE DADOS (IMPORTANTE: NO TOPO)
+# 2. FUNÇÕES GERAIS E BANCO DE DADOS
 # ==========================================================
 def get_base64_of_bin_file(bin_file):
     try:
@@ -128,7 +122,7 @@ def get_base64_of_bin_file(bin_file):
         return base64.b64encode(data).decode()
     except FileNotFoundError: return None
 
-# --- FUNÇÕES AUXILIARES MOVIDAS PARA O TOPO (EVITA NameError) ---
+# --- FUNÇÕES AUXILIARES MOVIDAS PARA O TOPO ---
 def gerar_word(texto):
     """Gera um arquivo Word a partir de um texto."""
     doc = Document()
@@ -201,7 +195,6 @@ def buscar_jurisprudencia_oficial(tema, area):
         if res: return "\n".join([f"- {r['body']} (Fonte: {r['href']})" for r in res])
         return "Nenhuma jurisprudência específica localizada nas bases oficiais."
     except: return "Erro de conexão com bases jurídicas."
-# -----------------------------------------------------------
 
 def init_db():
     conn = sqlite3.connect('legalhub.db')
@@ -424,7 +417,6 @@ elif menu_opcao == "✍️ Redator Jurídico":
             opcoes_areas = ["Criminal", "Trabalhista", "Cível", "Família"]
             index_area = 0
             
-            # Se for plano específico, seleciona automaticamente
             if plano == "criminal": index_area = 0 
             elif plano == "trabalhista": index_area = 1 
             elif plano == "civil": index_area = 2 
@@ -515,11 +507,11 @@ elif menu_opcao == "✍️ Redator Jurídico":
                 except Exception as e: st.error(f"Erro: {str(e)}")
         else: st.error("Créditos insuficientes.")
 
-# 3. CALCULADORA (APRIMORADA PARA CÍVEL E FAMÍLIA)
+# 3. CALCULADORA (APRIMORADA E COM DETECÇÃO AUTOMÁTICA)
 elif menu_opcao == "🧮 Calculadoras & Perícia":
     st.markdown("<h2 class='tech-header'>🧮 CÁLCULOS ESPECIALIZADOS</h2>", unsafe_allow_html=True)
     
-    # Detecção Automática do Plano
+    # Detecção Automática do Plano para evitar menu desnecessário
     plano_atual = st.session_state.plano_atual
     
     opcoes_calc = ["Trabalhista", "Cível", "Criminal", "Família"]
@@ -558,7 +550,7 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
                     honra = st.number_input("Honorários Advocatícios (%)", min_value=0, max_value=30, value=10)
                     
                     if st.button("CALCULAR ATUALIZAÇÃO"):
-                        # Simulação matemática (Fins demonstrativos)
+                        # Simulação matemática
                         meses = (dt_final.year - dt_inicio.year) * 12 + dt_final.month - dt_inicio.month
                         fator_correcao = 1.05 + (meses * 0.005) # Simulação 0.5% ao mês de inflação
                         val_corrigido = valor * fator_correcao
@@ -591,11 +583,11 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
                 
                 with tab_rescisao:
                     st.markdown("#### Cálculo de Multa por Rescisão Antecipada")
-                    val_aluguel_res = st.number_input("Valor do Aluguel")
+                    val_aluguel_res = st.number_input("Valor do Aluguel", key="v_alug_res")
                     multa_padrao = st.number_input("Multa prevista (em aluguéis)", value=3)
-                    data_inicio = st.date_input("Início do Contrato")
-                    data_fim = st.date_input("Fim do Contrato (Prazo Original)")
-                    data_saida = st.date_input("Data de Entrega das Chaves")
+                    data_inicio = st.date_input("Início do Contrato", key="dt_ini_res")
+                    data_fim = st.date_input("Fim do Contrato (Prazo Original)", key="dt_fim_res")
+                    data_saida = st.date_input("Data de Entrega das Chaves", key="dt_sai_res")
 
                     if st.button("CALCULAR MULTA"):
                         total_dias = (data_fim - data_inicio).days
@@ -712,7 +704,14 @@ elif menu_opcao == "🏛️ Estratégia de Audiência":
 
     if liberado:
         c1, c2 = st.columns(2)
-        with c1: papel = st.selectbox("Papel", ["Autor/MP", "Réu/Defesa"])
+        # Lógica de papéis dinâmica
+        opcoes_papel = ["Advogado do Autor", "Advogado do Réu"] # Padrão Cível
+        if area_aud == "Trabalhista":
+            opcoes_papel = ["Advogado do Reclamante", "Advogado da Reclamada"]
+        elif area_aud == "Criminal":
+            opcoes_papel = ["Defesa", "Acusação/MP"]
+            
+        with c1: papel = st.selectbox("Papel", opcoes_papel)
         with c2: perfil_juiz = st.selectbox("Perfil Juiz", ["Padrão", "Rígido", "Conciliador"])
         detalhes = st.text_area("Resumo do Caso:")
         upload_autos = st.file_uploader("Autos (PDF) - Opcional", type="pdf")
@@ -813,6 +812,7 @@ elif menu_opcao == "🚦 Monitor de Prazos":
 elif menu_opcao == "💎 Planos & Upgrade":
     st.markdown("<h2 class='tech-header' style='text-align:center;'>ESCOLHA SUA ESPECIALIDADE</h2>", unsafe_allow_html=True)
     st.write("")
+    
     col1, col2, col3, col4 = st.columns(4)
     
     def render_plan_card(titulo, preco, desc, slug, css_class):
@@ -825,21 +825,34 @@ elif menu_opcao == "💎 Planos & Upgrade":
             </div>
         </div>
         """, unsafe_allow_html=True)
+        
         btn_label = "SELECIONADO" if st.session_state.plano_atual == slug else "ASSINAR AGORA"
         if st.button(btn_label, key=f"btn_{slug}", disabled=(st.session_state.plano_atual == slug), use_container_width=True):
             run_query("UPDATE usuarios SET plano = ? WHERE username = ?", (slug, st.session_state.usuario_atual))
             st.session_state.plano_atual = slug
-            st.toast(f"Plano {titulo} ativado!")
-            time.sleep(1); st.rerun()
+            st.toast(f"Plano {titulo} ativado com sucesso!")
+            time.sleep(1)
+            st.rerun()
 
     with col1:
-        render_plan_card("Criminalista Elite", "149", "✅ Busca STF/STJ<br>✅ Dosimetria da Pena<br>✅ Simulador de Júri<br>✅ Redator de HC", "criminal", "plan-crim")
+        render_plan_card("Criminalista Elite", "149", 
+                         "✅ Busca STF/STJ<br>✅ Dosimetria da Pena<br>✅ Simulador de Júri<br>✅ Redator de HC", 
+                         "criminal", "plan-crim")
+        
     with col2:
-        render_plan_card("Trabalhista Expert", "149", "✅ Busca TST/CSJT<br>✅ Cálculos Rescisórios<br>✅ Instrução Trabalhista<br>✅ Redator CLT", "trabalhista", "plan-trab")
+        render_plan_card("Trabalhista Expert", "149", 
+                         "✅ Busca TST/CSJT<br>✅ Cálculos Rescisórios<br>✅ Instrução Trabalhista<br>✅ Redator CLT", 
+                         "trabalhista", "plan-trab")
+
     with col3:
-        render_plan_card("Civil & Família", "149", "✅ Busca TJs<br>✅ Cálculos Pensão/Atualização<br>✅ Contratos & Divórcio<br>✅ Gestão Patrimonial", "civil", "plan-civ")
+        render_plan_card("Civil & Família", "149", 
+                         "✅ Busca TJs<br>✅ Cálculos Pensão/Atualização<br>✅ Contratos & Divórcio<br>✅ Gestão Patrimonial", 
+                         "civil", "plan-civ")
+
     with col4:
-        render_plan_card("Full Service", "297", "💎 <strong>Acesso a TUDO</strong><br>💎 Todas as áreas<br>💎 Prioridade de Suporte<br>💎 + Créditos IA", "full", "plan-full")
+        render_plan_card("Full Service", "297", 
+                         "💎 <strong>Acesso a TUDO</strong><br>💎 Todas as áreas<br>💎 Prioridade de Suporte<br>💎 + Créditos IA", 
+                         "full", "plan-full")
 
 st.markdown("---")
 st.markdown("<center style='color: #64748b; font-size: 0.8rem; font-family: Rajdhani;'>🔒 LEGALHUB ELITE v5.5 | ENCRYPTED SESSION</center>", unsafe_allow_html=True)
