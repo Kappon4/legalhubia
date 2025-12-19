@@ -165,10 +165,6 @@ def verificar_permissao(area_necessaria):
     plano_atual = st.session_state.get('plano_atual', 'starter')
     if plano_atual == 'full': return True
     if plano_atual == area_necessaria: return True
-    
-    # Bancário está dentro do pacote Civil
-    if area_necessaria == 'bancario' and plano_atual == 'civil': return True
-    
     return False
 
 def tela_bloqueio(area_necessaria, preco):
@@ -553,7 +549,7 @@ elif menu_opcao == "✍️ Redator Jurídico":
                 except Exception as e: st.error(f"Erro: {str(e)}")
         else: st.error("Créditos insuficientes.")
 
-# 3. CALCULADORA (APRIMORADA PARA CÍVEL E FAMÍLIA)
+# 3. CALCULADORA (APRIMORADA PARA CÍVEL, FAMÍLIA, TRABALHISTA E BANCÁRIO)
 elif menu_opcao == "🧮 Calculadoras & Perícia":
     st.markdown("<h2 class='tech-header'>🧮 CÁLCULOS ESPECIALIZADOS</h2>", unsafe_allow_html=True)
     
@@ -580,22 +576,24 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
             
             # --- CÍVEL (NOVO E APROFUNDADO) ---
             if area_calc == "Cível":
-                tab_debito, tab_aluguel, tab_rescisao, tab_bancario = st.tabs(["💸 Atualização de Débitos Judiciais", "🏠 Reajuste de Aluguel", "🚫 Rescisão de Contrato", "🏦 Juros Abusivos (Bancário/Veículos)"])
+                tab_debito, tab_aluguel, tab_rescisao, tab_bancario, tab_veiculo = st.tabs([
+                    "💸 Atualização Débitos", "🏠 Reajuste Aluguel", "🚫 Rescisão Aluguel", "🏦 Juros Bancários", "🚘 Financ. Veículos"
+                ])
                 
                 with tab_debito:
                     st.markdown("#### Correção Monetária e Juros")
                     c1, c2, c3 = st.columns(3)
-                    valor = c1.number_input("Valor Original (R$)", min_value=0.0, value=1000.0)
-                    dt_inicio = c2.date_input("Data Inicial", value=date(2023, 1, 1))
-                    dt_final = c3.date_input("Data Final", value=date.today())
+                    valor = c1.number_input("Valor Original (R$)", min_value=0.0, value=1000.0, key="c_valor")
+                    dt_inicio = c2.date_input("Data Inicial", value=date(2023, 1, 1), key="c_dt_ini")
+                    dt_final = c3.date_input("Data Final", value=date.today(), key="c_dt_fim")
                     
                     c4, c5, c6 = st.columns(3)
-                    indice = c4.selectbox("Índice de Correção", ["Tabela Prática TJ", "IGP-M", "INPC", "IPCA-E", "CDI"])
-                    juros_tipo = c5.selectbox("Juros de Mora", ["1% a.m. Simples", "1% a.m. Composto", "Sem Juros"])
-                    multa = c6.checkbox("Multa de 10% (Art. 523 CPC)")
-                    honra = st.number_input("Honorários Advocatícios (%)", min_value=0, max_value=30, value=10)
+                    indice = c4.selectbox("Índice de Correção", ["Tabela Prática TJ", "IGP-M", "INPC", "IPCA-E", "CDI"], key="c_ind")
+                    juros_tipo = c5.selectbox("Juros de Mora", ["1% a.m. Simples", "1% a.m. Composto", "Sem Juros"], key="c_jur")
+                    multa = c6.checkbox("Multa de 10% (Art. 523 CPC)", key="c_mul")
+                    honra = st.number_input("Honorários Advocatícios (%)", min_value=0, max_value=30, value=10, key="c_hon")
                     
-                    if st.button("CALCULAR ATUALIZAÇÃO"):
+                    if st.button("CALCULAR ATUALIZAÇÃO", key="btn_c_atu"):
                         # Simulação matemática (Fins demonstrativos)
                         meses = (dt_final.year - dt_inicio.year) * 12 + dt_final.month - dt_inicio.month
                         fator_correcao = 1.05 + (meses * 0.005) # Simulação 0.5% ao mês de inflação
@@ -619,9 +617,9 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
                 
                 with tab_aluguel:
                     st.markdown("#### Reajuste Anual de Contrato")
-                    val_aluguel = st.number_input("Valor Atual do Aluguel", min_value=0.0)
-                    idx_aluguel = st.selectbox("Índice do Contrato", ["IGP-M (FGV)", "IPCA (IBGE)", "IVAR"])
-                    if st.button("CALCULAR NOVO ALUGUEL"):
+                    val_aluguel = st.number_input("Valor Atual do Aluguel", min_value=0.0, key="alu_val")
+                    idx_aluguel = st.selectbox("Índice do Contrato", ["IGP-M (FGV)", "IPCA (IBGE)", "IVAR"], key="alu_idx")
+                    if st.button("CALCULAR NOVO ALUGUEL", key="btn_alu"):
                         # Simulação
                         fator = 1.045 if idx_aluguel == "IPCA (IBGE)" else 1.005 # IGPM baixo na simulação
                         novo_valor = val_aluguel * fator
@@ -629,13 +627,13 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
                 
                 with tab_rescisao:
                     st.markdown("#### Cálculo de Multa por Rescisão Antecipada")
-                    val_aluguel_res = st.number_input("Valor do Aluguel", key="v_alug_res")
-                    multa_padrao = st.number_input("Multa prevista (em aluguéis)", value=3)
-                    data_inicio = st.date_input("Início do Contrato", key="dt_ini_res")
-                    data_fim = st.date_input("Fim do Contrato (Prazo Original)", key="dt_fim_res")
-                    data_saida = st.date_input("Data de Entrega das Chaves", key="dt_sai_res")
+                    val_aluguel_res = st.number_input("Valor do Aluguel", key="res_val")
+                    multa_padrao = st.number_input("Multa prevista (em aluguéis)", value=3, key="res_mul")
+                    data_inicio = st.date_input("Início do Contrato", key="res_dt_ini")
+                    data_fim = st.date_input("Fim do Contrato (Prazo Original)", key="res_dt_fim")
+                    data_saida = st.date_input("Data de Entrega das Chaves", key="res_dt_sai")
 
-                    if st.button("CALCULAR MULTA"):
+                    if st.button("CALCULAR MULTA", key="btn_res"):
                         total_dias = (data_fim - data_inicio).days
                         dias_cumpridos = (data_saida - data_inicio).days
                         dias_restantes = total_dias - dias_cumpridos
@@ -646,45 +644,80 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
                             valor_multa_total = val_aluguel_res * multa_padrao
                             multa_proporcional = (valor_multa_total / total_dias) * dias_restantes
                             st.error(f"Multa Devida: R$ {multa_proporcional:.2f}")
-                
+
                 with tab_bancario:
-                    st.markdown("#### 🚘 Revisional de Contrato (Veículos/Empréstimos)")
-                    st.info("Verifique se a taxa de juros do financiamento está acima da média de mercado (BACEN).")
-                    
+                    st.markdown("#### 🏦 Revisional Bancária (Empréstimos)")
                     c1, c2 = st.columns(2)
-                    valor_financiado = c1.number_input("Valor Financiado (R$)", value=50000.0)
-                    parcelas = c2.number_input("Nº Parcelas", value=48)
+                    valor_emprestimo = c1.number_input("Valor Liberado (R$)", value=10000.0, key="ban_val")
+                    num_parcelas = c2.number_input("Nº Parcelas", value=24, key="ban_par")
                     
                     c3, c4 = st.columns(2)
-                    taxa_contrato = c3.number_input("Taxa do Contrato (% a.m.)", value=3.5)
-                    taxa_bacen = c4.number_input("Taxa Média BACEN (% a.m.)", value=1.8, help="Consulte a série histórica do BACEN.")
-                    
-                    if st.button("CALCULAR REVISIONAL"):
+                    tx_banco = c3.number_input("Taxa Contrato (% a.m.)", value=4.5, key="ban_tx")
+                    tx_media = c4.number_input("Taxa Média BACEN (% a.m.)", value=1.9, help="Consulte a série histórica do BACEN.", key="ban_bac")
+
+                    if st.button("CALCULAR REVISIONAL (BANCO)", key="btn_ban"):
                         def pmt(p, i, n):
                             i = i / 100
+                            if i == 0: return p/n
                             return p * (i * (1 + i)**n) / ((1 + i)**n - 1)
 
-                        parcela_real = pmt(valor_financiado, taxa_contrato, parcelas)
-                        parcela_justa = pmt(valor_financiado, taxa_bacen, parcelas)
+                        parc_real = pmt(valor_emprestimo, tx_banco, num_parcelas)
+                        parc_justa = pmt(valor_emprestimo, tx_media, num_parcelas)
+                        
+                        total_real = parc_real * num_parcelas
+                        total_justo = parc_justa * num_parcelas
+                        diferenca = total_real - total_justo
 
-                        total_real = parcela_real * parcelas
-                        total_justo = parcela_justa * parcelas
-                        excesso = total_real - total_justo
-
-                        st.divider()
-                        c_res1, c_res2, c_res3 = st.columns(3)
-                        c_res1.metric("Parcela Atual", f"R$ {parcela_real:,.2f}")
-                        c_res1.caption(f"Total: R$ {total_real:,.2f}")
-
-                        c_res2.metric("Parcela Recalculada", f"R$ {parcela_justa:,.2f}")
-                        c_res2.caption(f"Total: R$ {total_justo:,.2f}")
-
-                        c_res3.metric("Valor a Recuperar", f"R$ {excesso:,.2f}", delta="Excesso Cobrado")
-
-                        if taxa_contrato > (taxa_bacen * 1.5):
-                            st.error(f"⚠️ A taxa contratada é {taxa_contrato/taxa_bacen:.1f}x maior que a média! Há fortes indícios de abusividade.")
+                        c_res1, c_res2 = st.columns(2)
+                        c_res1.metric("Parcela Cobrada", f"R$ {parc_real:,.2f}")
+                        c_res2.metric("Parcela Justa (Média)", f"R$ {parc_justa:,.2f}")
+                        
+                        if tx_banco > (tx_media * 1.5):
+                            st.error(f"⚠️ Taxa abusiva! {tx_banco/tx_media:.1f}x acima da média. Indício forte para ação revisional.")
+                            st.metric("Valor a Recuperar (Estimado)", f"R$ {diferenca:,.2f}")
                         else:
-                            st.warning("A taxa está acima da média, mas a abusividade depende da interpretação do juiz.")
+                            st.warning("Taxa acima da média, mas dentro da margem de tolerância jurisprudencial.")
+
+                with tab_veiculo:
+                    st.markdown("#### 🚘 Revisional de Financiamento de Veículo")
+                    c1, c2 = st.columns(2)
+                    val_veiculo = c1.number_input("Valor do Veículo (FIPE/Nota)", value=60000.0, key="vei_val")
+                    entrada = c2.number_input("Valor da Entrada", value=10000.0, key="vei_ent")
+                    
+                    c3, c4 = st.columns(2)
+                    tarifas = c3.number_input("Tarifas (TAC, Registro, Avaliação)", value=2500.0, key="vei_tar")
+                    seguro = c4.number_input("Seguro Prestamista (Venda Casada?)", value=1500.0, key="vei_seg")
+                    
+                    st.divider()
+                    c5, c6 = st.columns(2)
+                    tx_vei_con = c5.number_input("Taxa Contrato (% a.m.)", value=2.9, key="vei_tx")
+                    tx_vei_bacen = c6.number_input("Taxa Média BACEN - Veículos", value=1.4, key="vei_bac")
+                    n_parc_vei = st.number_input("Nº Parcelas", value=48, key="vei_par")
+
+                    if st.button("CALCULAR REVISIONAL (VEÍCULO)", key="btn_vei"):
+                        valor_financiado = val_veiculo - entrada + tarifas + seguro
+                        
+                        def pmt(p, i, n):
+                            i = i / 100
+                            if i == 0: return p/n
+                            return p * (i * (1 + i)**n) / ((1 + i)**n - 1)
+
+                        parc_atual = pmt(valor_financiado, tx_vei_con, n_parc_vei)
+                        # Cálculo sem as tarifas abusivas e com taxa justa
+                        valor_justo_finan = val_veiculo - entrada 
+                        parc_justa = pmt(valor_justo_finan, tx_vei_bacen, n_parc_vei)
+                        
+                        diff_mensal = parc_atual - parc_justa
+                        diff_total = diff_mensal * n_parc_vei
+
+                        st.info(f"Valor Financiado Real (com taxas): R$ {valor_financiado:,.2f}")
+                        
+                        col1, col2 = st.columns(2)
+                        col1.metric("Parcela Atual", f"R$ {parc_atual:,.2f}")
+                        col2.metric("Parcela Justa (S/ Taxas + Juros Médios)", f"R$ {parc_justa:,.2f}")
+                        
+                        st.success(f"💰 Potencial de Economia: R$ {diff_total:,.2f}")
+                        st.caption("Considerando a exclusão de tarifas acessórias e aplicação da taxa média de mercado.")
 
             # --- FAMÍLIA (NOVO E APROFUNDADO) ---
             elif area_calc == "Família":
@@ -692,22 +725,22 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
                 
                 with tab_pensao:
                     st.markdown("#### Simulador de Pensão")
-                    base_calc = st.radio("Base de Cálculo", ["Salário Mínimo (2025: R$ 1.509)", "Renda Líquida do Alimentante"], horizontal=True)
+                    base_calc = st.radio("Base de Cálculo", ["Salário Mínimo (2025: R$ 1.509)", "Renda Líquida do Alimentante"], horizontal=True, key="fam_base")
                     
                     if "Mínimo" in base_calc:
-                        percentual = st.slider("Percentual do S.M. (%)", 10, 100, 30)
+                        percentual = st.slider("Percentual do S.M. (%)", 10, 100, 30, key="fam_perc_sm")
                         valor_base = 1509.00
                     else:
-                        valor_base = st.number_input("Renda Líquida (R$)", value=3000.0)
-                        percentual = st.slider("Percentual da Renda (%)", 10, 50, 30)
+                        valor_base = st.number_input("Renda Líquida (R$)", value=3000.0, key="fam_renda")
+                        percentual = st.slider("Percentual da Renda (%)", 10, 50, 30, key="fam_perc_renda")
                     
-                    incluir_13 = st.checkbox("Incidir sobre 13º e Férias?", value=True)
-                    filhos = st.number_input("Quantidade de Filhos", 1, 5, 1)
+                    incluir_13 = st.checkbox("Incidir sobre 13º e Férias?", value=True, key="fam_13")
+                    filhos = st.number_input("Quantidade de Filhos", 1, 5, 1, key="fam_filhos")
                     
-                    if st.button("CALCULAR PENSÃO"):
+                    if st.button("CALCULAR PENSÃO", key="btn_fam_pen"):
                         mensal = valor_base * (percentual / 100)
                         total_anual = mensal * 12
-                        if incluir_13: total_anual += mensal + (mensal/3) # 13 + 1/3 ferias
+                        if incluir_13: total_anual += mensal + (mensal/3) 
                         
                         st.metric("Valor Mensal por Filho", f"R$ {mensal/filhos:,.2f}")
                         st.metric("Valor Mensal Total", f"R$ {mensal:,.2f}")
@@ -715,19 +748,19 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
 
                 with tab_partilha:
                     st.markdown("#### Simulador de Partilha de Bens (Divórcio)")
-                    regime = st.selectbox("Regime de Bens", ["Comunhão Parcial", "Comunhão Universal", "Separação Total"])
+                    regime = st.selectbox("Regime de Bens", ["Comunhão Parcial", "Comunhão Universal", "Separação Total"], key="fam_reg")
                     
                     c_bens1, c_bens2 = st.columns(2)
-                    imoveis = c_bens1.number_input("Valor Imóveis", min_value=0.0)
-                    veiculos = c_bens2.number_input("Valor Veículos", min_value=0.0)
-                    invest = c_bens1.number_input("Investimentos/Saldo", min_value=0.0)
-                    dividas = c_bens2.number_input("Dívidas do Casal", min_value=0.0)
+                    imoveis = c_bens1.number_input("Valor Imóveis", min_value=0.0, key="fam_imo")
+                    veiculos = c_bens2.number_input("Valor Veículos", min_value=0.0, key="fam_vei")
+                    invest = c_bens1.number_input("Investimentos/Saldo", min_value=0.0, key="fam_inv")
+                    dividas = c_bens2.number_input("Dívidas do Casal", min_value=0.0, key="fam_div")
                     
                     bem_particular = 0.0
                     if regime == "Comunhão Parcial":
-                        bem_particular = st.number_input("Bens Particulares (Adquiridos antes/Herança)", min_value=0.0)
+                        bem_particular = st.number_input("Bens Particulares (Adquiridos antes/Herança)", min_value=0.0, key="fam_part")
                     
-                    if st.button("SIMULAR PARTILHA"):
+                    if st.button("SIMULAR PARTILHA", key="btn_fam_par"):
                         total_patrimonio = imoveis + veiculos + invest
                         patrimonio_comum = total_patrimonio - bem_particular
                         saldo_partilhavel = patrimonio_comum - dividas
@@ -747,10 +780,10 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
             elif area_calc == "Trabalhista":
                 st.markdown("#### 👷 Cálculo de Rescisão CLT")
                 c1, c2, c3 = st.columns(3)
-                salario = c1.number_input("Salário Base (R$)", min_value=0.0)
-                meses = c2.number_input("Meses Trabalhados", min_value=1)
-                motivo = c3.selectbox("Motivo", ["Sem Justa Causa", "Pedido de Demissão", "Justa Causa"])
-                if st.button("CALCULAR"):
+                salario = c1.number_input("Salário Base (R$)", min_value=0.0, key="trab_sal")
+                meses = c2.number_input("Meses Trabalhados", min_value=1, key="trab_mes")
+                motivo = c3.selectbox("Motivo", ["Sem Justa Causa", "Pedido de Demissão", "Justa Causa"], key="trab_mot")
+                if st.button("CALCULAR", key="btn_trab"):
                     multa = (salario * 0.08 * meses) * 0.40 if motivo == "Sem Justa Causa" else 0
                     total = salario + multa 
                     st.success(f"Total Estimado: R$ {total:,.2f}")
@@ -758,53 +791,16 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
             # --- CRIMINAL (MANTIDO) ---
             elif area_calc == "Criminal":
                 st.markdown("#### 🚔 Dosimetria da Pena (Estimativa)")
-                pena_base = st.number_input("Pena Base (Anos)", min_value=0)
-                agravantes = st.number_input("Qtd. Agravantes", min_value=0)
-                atenuantes = st.number_input("Qtd. Atenuantes", min_value=0)
-                if st.button("CALCULAR PENA"):
+                pena_base = st.number_input("Pena Base (Anos)", min_value=0, key="crim_pen")
+                agravantes = st.number_input("Qtd. Agravantes", min_value=0, key="crim_agra")
+                atenuantes = st.number_input("Qtd. Atenuantes", min_value=0, key="crim_ate")
+                if st.button("CALCULAR PENA", key="btn_crim"):
                     pena = pena_base + ((agravantes - atenuantes) * (pena_base/6))
                     st.warning(f"⚖️ Pena Estimada: {pena:.1f} anos")
             
             # --- BANCÁRIO (AGORA DENTRO DE CÍVEL, MAS MANTIDO PARA COMPATIBILIDADE SELECIONADA DIRETAMENTE) ---
             elif area_calc == "Bancário":
-                st.markdown("#### 🏦 Revisional de Juros (Abusividade)")
-                st.info("Compare a taxa do contrato com a Taxa Média de Mercado (BACEN).")
-
-                c1, c2 = st.columns(2)
-                valor_financiado = c1.number_input("Valor Financiado (R$)", value=50000.0)
-                parcelas = c2.number_input("Número de Parcelas", value=48)
-
-                c3, c4 = st.columns(2)
-                taxa_contrato = c3.number_input("Taxa do Contrato (% a.m.)", value=3.5)
-                taxa_bacen = c4.number_input("Taxa Média BACEN (% a.m.)", value=1.8, help="Consulte a série histórica do BACEN para o período.")
-
-                if st.button("CALCULAR ABUSIVIDADE"):
-                    # Helper function inside the block or use numpy (but keeping it simple with raw python)
-                    def pmt(p, i, n):
-                        i = i / 100
-                        return p * (i * (1 + i)**n) / ((1 + i)**n - 1)
-
-                    parcela_real = pmt(valor_financiado, taxa_contrato, parcelas)
-                    parcela_justa = pmt(valor_financiado, taxa_bacen, parcelas)
-
-                    total_real = parcela_real * parcelas
-                    total_justo = parcela_justa * parcelas
-                    excesso = total_real - total_justo
-
-                    st.divider()
-                    c_res1, c_res2, c_res3 = st.columns(3)
-                    c_res1.metric("Parcela Atual", f"R$ {parcela_real:,.2f}")
-                    c_res1.caption(f"Total: R$ {total_real:,.2f}")
-
-                    c_res2.metric("Parcela Recalculada", f"R$ {parcela_justa:,.2f}")
-                    c_res2.caption(f"Total: R$ {total_justo:,.2f}")
-
-                    c_res3.metric("Valor a Recuperar", f"R$ {excesso:,.2f}", delta="Excesso Cobrado")
-
-                    if taxa_contrato > (taxa_bacen * 1.5):
-                        st.error(f"⚠️ A taxa contratada é {taxa_contrato/taxa_bacen:.1f}x maior que a média! Há fortes indícios de abusividade.")
-                    else:
-                        st.warning("A taxa está acima da média, mas a abusividade depende da interpretação do juiz (geralmente acima de 1.5x a média).")
+                st.info("Acesse a aba 'Cível' para a calculadora bancária completa.")
             
     else:
         # Mostra o bloqueio da área que ele tentou acessar
