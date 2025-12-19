@@ -54,7 +54,6 @@ def check_password():
         st.markdown("## 🔒 Acesso Restrito - LegalHub")
         senha = st.text_input("Digite a senha de acesso:", type="password")
         if st.button("Entrar"):
-            # Se não tiver senha configurada, entra direto (pra facilitar)
             if "SENHA_ACESSO" not in st.secrets or senha == st.secrets["SENHA_ACESSO"]:
                 st.session_state.logado = True
                 st.rerun()
@@ -100,7 +99,6 @@ if api_key:
     st.sidebar.divider()
     
     try:
-        # Tenta listar o que a chave realmente enxerga
         modelos_reais = []
         for m in genai.list_models():
             if 'generateContent' in m.supported_generation_methods:
@@ -115,21 +113,22 @@ if api_key:
             modelo_escolhido = st.sidebar.selectbox("Modelo:", modelos_reais, index=index_flash)
         else:
             st.sidebar.error("Sem modelos disponíveis.")
-            modelo_escolhido = "models/gemini-1.5-flash" # Fallback
+            modelo_escolhido = "models/gemini-1.5-flash" 
 
     except Exception as e:
         st.sidebar.error(f"Erro Google: {e}")
         modelo_escolhido = "models/gemini-1.5-flash"
 
-    # --- DEFINIÇÃO DAS ABAS (AGORA SÃO 7) ---
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    # --- DEFINIÇÃO DAS ABAS (AGORA SÃO 8) ---
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
         "✍️ Redator", 
         "📂 Ler PDF", 
         "🎙️ Transcritor", 
         "⚖️ Comparador", 
         "💬 Chat", 
         "📊 Dashboard",
-        "📅 Prazos" # Nova aba
+        "📅 Prazos",
+        "🏛️ Audiência" # Nova aba
     ])
     
     # --- ABA 1: REDATOR ---
@@ -149,20 +148,16 @@ if api_key:
                 with st.spinner(f"Usando {modelo_escolhido}..."):
                     jurisp = buscar_jurisprudencia_real(f"{area} {tipo} {fatos}") if web else ""
                     prompt = f"Advogado {area}. Peça: {tipo}. Fatos: {fatos}. Jurisprudência: {jurisp}. Estruture formalmente."
-                    
                     try:
                         res = genai.GenerativeModel(modelo_escolhido).generate_content(prompt).text
                         st.markdown(res)
                         st.download_button("Baixar Word", gerar_word(res), "minuta.docx")
-                        
                         if cliente:
                             s = conectar_planilha()
                             if s: 
                                 s.append_row([datetime.now().strftime("%d/%m/%Y"), cliente, area, tipo, fatos[:50]]) 
                                 st.success("Salvo!")
-                                
-                    except Exception as e:
-                        st.error(f"Erro: {e}")
+                    except Exception as e: st.error(f"Erro: {e}")
 
     # --- ABA 2: LER PDF ---
     with tab2:
@@ -188,10 +183,8 @@ if api_key:
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
                         tmp.write(aud.getvalue())
                         tmp_path = tmp.name
-                    
                     f = genai.upload_file(tmp_path)
                     time.sleep(2) 
-                    
                     res = genai.GenerativeModel(modelo_escolhido).generate_content(["Transcreva o áudio e faça um resumo jurídico.", f]).text
                     st.markdown(res)
                     st.download_button("Baixar", gerar_word(res), "transcricao.docx")
@@ -202,11 +195,9 @@ if api_key:
     # --- ABA 4: COMPARADOR ---
     with tab4:
         st.header("⚖️ Comparador de Versões")
-        st.info("Compare dois PDFs para achar diferenças.")
         c_a, c_b = st.columns(2)
         p1 = c_a.file_uploader("Original", type="pdf", key="v1")
         p2 = c_b.file_uploader("Alterado", type="pdf", key="v2")
-        
         if p1 and p2 and st.button("Comparar Documentos"):
             with st.spinner("Comparando..."):
                 try:
@@ -221,17 +212,13 @@ if api_key:
         st.header("Chat Jurídico")
         if "hist" not in st.session_state: st.session_state.hist = []
         for m in st.session_state.hist: st.chat_message(m["role"]).write(m["content"])
-        
         if p := st.chat_input("Tire suas dúvidas..."):
             st.chat_message("user").write(p)
             st.session_state.hist.append({"role":"user", "content":p})
-            
             try:
                 response = genai.GenerativeModel(modelo_escolhido).generate_content(p)
                 res = response.text
-            except Exception as e:
-                res = f"Erro: {e}"
-            
+            except Exception as e: res = f"Erro: {e}"
             st.chat_message("assistant").write(res)
             st.session_state.hist.append({"role":"assistant", "content":res})
 
@@ -248,7 +235,6 @@ if api_key:
                         m1, m2, m3 = st.columns(3)
                         m1.metric("Total de Casos", len(df))
                         m2.metric("Último Cliente", df.iloc[-1]["Cliente"] if "Cliente" in df.columns else "N/A")
-                        
                         st.divider()
                         g1, g2 = st.columns(2)
                         if "Tipo de Ação" in df.columns:
@@ -260,46 +246,68 @@ if api_key:
                             fig_barras = px.bar(contagem, x="Cliente", y="Qtd", title="Clientes")
                             g2.plotly_chart(fig_barras, use_container_width=True)
                         st.dataframe(df, use_container_width=True)
-                    else: st.info("Planilha vazia ou cabeçalhos incorretos.")
+                    else: st.info("Planilha vazia.")
                 except Exception as e: st.error(f"Erro ao ler planilha: {e}")
-            else:
-                st.warning("Planilha não conectada. Verifique as credenciais.")
+            else: st.warning("Planilha não conectada.")
 
-    # --- ABA 7: CALCULADORA DE PRAZOS (NOVA!) ---
+    # --- ABA 7: CALCULADORA DE PRAZOS ---
     with tab7:
-        st.header("📅 Calculadora de Prazos Processuais")
-        st.info("⚠️ A IA analisa o texto e sugere o prazo com base na legislação (CPC/CPP/CLT). Sempre confira feriados locais.")
-
+        st.header("📅 Calculadora de Prazos")
+        st.info("⚠️ Sugestão baseada em IA. Sempre confira feriados locais.")
         col_p1, col_p2 = st.columns(2)
         with col_p1:
-            data_pub = st.date_input("Data da Publicação/Intimação", datetime.now())
+            data_pub = st.date_input("Data da Publicação", datetime.now())
         with col_p2:
-            esfera = st.selectbox("Esfera / Rito", ["Cível (CPC - Dias Úteis)", "Trabalhista (CLT)", "Penal (CPP - Dias Corridos)", "Juizado Especial (Lei 9.099)"])
-
-        texto_prazo = st.text_area("Cole o texto da Intimação aqui:", height=150, placeholder="Ex: Fica a parte intimada para apresentar contrarrazões...")
+            esfera = st.selectbox("Esfera", ["Cível (CPC - Dias Úteis)", "Trabalhista (CLT)", "Penal (CPP - Dias Corridos)", "Juizado Especial"])
+        texto_prazo = st.text_area("Texto da Intimação:", height=150)
 
         if st.button("📆 Calcular Prazo"):
             if texto_prazo:
-                with st.spinner("Analisando calendário e legislação..."):
+                with st.spinner("Calculando..."):
                     prompt_prazo = f"""
-                    Atue como um assistente jurídico sênior especializado em Prazos.
-                    Contexto: {esfera}.
-                    Data de Referência (Publicação): {data_pub.strftime('%d/%m/%Y')}.
-                    Texto da Intimação: "{texto_prazo}"
-
-                    TAREFA:
-                    1. Identifique o Ato Processual (ex: Apelação, Embargos).
-                    2. Diga qual é o Prazo Legal em dias.
-                    3. Confirme se a contagem é em Dias Úteis ou Corridos.
-                    4. Calcule a DATA FINAL (FATAL) sugerida.
-                    5. Liste feriados nacionais próximos que podem suspender o prazo.
-                    
-                    Responda em formato de tabela ou tópicos claros.
+                    Assistente jurídico Sênior. Contexto: {esfera}. Data Ref: {data_pub.strftime('%d/%m/%Y')}.
+                    Texto: "{texto_prazo}".
+                    TAREFA: 1. Identifique o Ato. 2. Prazo Legal. 3. Úteis ou Corridos? 4. Data Fatal Sugerida. 5. Atenção a Feriados.
                     """
                     try:
                         res = genai.GenerativeModel(modelo_escolhido).generate_content(prompt_prazo).text
                         st.markdown(res)
+                    except Exception as e: st.error(f"Erro: {e}")
+
+    # --- ABA 8: PREPARADOR DE AUDIÊNCIA (NOVA!) ---
+    with tab8:
+        st.header("🏛️ Preparador de Audiência")
+        st.markdown("Gere um roteiro estratégico de perguntas e riscos para sua audiência.")
+        
+        col_aud1, col_aud2 = st.columns(2)
+        with col_aud1:
+            meu_papel = st.selectbox("Você representa:", ["Autor / Reclamante", "Réu / Reclamado"])
+            tipo_aud = st.selectbox("Tipo de Audiência:", ["Instrução e Julgamento", "Conciliação", "Inicial (Trabalhista)", "UNA"])
+        with col_aud2:
+            fatos_caso = st.text_area("Resumo dos Fatos / Pontos Controvertidos:", height=150, placeholder="Ex: O reclamante alega horas extras não pagas, mas batia ponto britânico...")
+            
+        if st.button("🎭 Gerar Roteiro de Audiência"):
+            if fatos_caso:
+                with st.spinner("Simulando cenário e gerando perguntas..."):
+                    prompt_aud = f"""
+                    Aja como um advogado especialista experiente.
+                    Vou realizar uma audiência de {tipo_aud}.
+                    Eu represento o: {meu_papel}.
+                    Fatos do caso: "{fatos_caso}".
+
+                    GERE UM ROTEIRO ESTRATÉGICO COM:
+                    1. 🎯 **Perguntas para a Parte Contrária:** (Focadas em extrair contradições ou confissões).
+                    2. 🛡️ **Perguntas para Minhas Testemunhas:** (Para reforçar minha tese).
+                    3. ⚠️ **Pontos Fracos / Riscos:** (Onde o outro advogado vai tentar me atacar e como me defender).
+                    4. 🤝 **Estratégia de Acordo:** (Vale a pena? Qual seria um valor teto/piso sugerido com base nos riscos?).
+
+                    Use linguagem direta e prática para leitura rápida na mesa de audiência.
+                    """
+                    try:
+                        res_aud = genai.GenerativeModel(modelo_escolhido).generate_content(prompt_aud).text
+                        st.markdown(res_aud)
+                        st.download_button("Baixar Roteiro (Word)", gerar_word(res_aud), "roteiro_audiencia.docx")
                     except Exception as e:
-                        st.error(f"Erro ao calcular: {e}")
+                        st.error(f"Erro ao gerar roteiro: {e}")
 
 else: st.warning("Insira uma chave de API para começar.")
