@@ -538,7 +538,7 @@ elif menu_opcao == "✍️ Redator Jurídico":
             # Tipos de Peça Dinâmicos
             opcoes_pecas = []
             if area == "Trabalhista": opcoes_pecas = ["Reclamação Trabalhista", "Contestação", "Recurso Ordinário"]
-            elif area == "Cível": opcoes_pecas = ["Petição Inicial", "Contestação", "Apelação"]
+            elif area == "Cível": opcoes_pecas = ["Petição Inicial", "Contestação", "Apelação", "Notificação Extrajudicial"]
             elif area == "Criminal": opcoes_pecas = ["Habeas Corpus", "Resposta à Acusação", "Pedido de Liberdade", "Relaxamento de Prisão"]
             elif area == "Família": opcoes_pecas = ["Divórcio", "Alimentos", "Guarda"]
             else: opcoes_pecas = ["Petição Genérica"]
@@ -579,7 +579,7 @@ elif menu_opcao == "✍️ Redator Jurídico":
     st.write("")
     if st.button("✨ GERAR MINUTA COMPLETA (1 CRÉDITO)", use_container_width=True):
         if creditos_atuais > 0 and fatos and cli_final:
-            with st.spinner(f"Redigindo {tipo}... Consultando bases oficiais..."):
+            with st.spinner(f"Redigindo {tipo}... Consultando bases oficiais: {'SIM' if web else 'NÃO'}"):
                 
                 contexto_pdf = ""
                 if upload_peticao:
