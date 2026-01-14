@@ -19,8 +19,11 @@ from email.message import EmailMessage
 import plotly.express as px
 import base64
 
+# --- IMPORT ERROR HANDLING ---
+from google.api_core.exceptions import ResourceExhausted, NotFound, InvalidArgument, PermissionDenied
+
 # ==========================================================
-# 1. CONFIGURAÇÃO VISUAL
+# 1. VISUAL CONFIGURATION - CYBER FUTURE THEME
 # ==========================================================
 st.set_page_config(
     page_title="LegalHub Elite | AI System", 
@@ -30,7 +33,7 @@ st.set_page_config(
 )
 
 # ==========================================================
-# 2. FUNÇÕES GERAIS E BANCO DE DADOS
+# 2. GENERAL FUNCTIONS AND DATABASE
 # ==========================================================
 def get_base64_of_bin_file(bin_file):
     try:
@@ -40,6 +43,7 @@ def get_base64_of_bin_file(bin_file):
     except FileNotFoundError: return None
 
 def gerar_word(texto):
+    """Generates a Word file from text."""
     doc = Document()
     for p in texto.split('\n'):
         if p.strip(): doc.add_paragraph(p)
@@ -49,57 +53,51 @@ def gerar_word(texto):
     return buf
 
 def extrair_texto_pdf(arquivo):
+    """Extracts text from a PDF."""
     try: return "".join([p.extract_text() for p in PdfReader(arquivo).pages])
     except: return ""
 
-# --- FUNÇÃO INTELIGENTE DE SELEÇÃO DE MODELO ---
+# --- ROBUST AI FUNCTION (FIX FOR 404 ERROR) ---
 def tentar_gerar_conteudo(prompt, api_key_val):
+    """
+    Attempts to generate content by iterating through multiple models to avoid 404 errors.
+    """
     if not api_key_val:
-        return "⚠️ Erro: API Key não configurada. Insira na barra lateral."
+        return "⚠️ Error: API Key not configured."
     
     genai.configure(api_key=api_key_val)
     
-    modelo_escolhido = None
+    # List of models to try (from newest to oldest/most stable)
+    modelos_para_tentar = [
+        "gemini-1.5-flash",
+        "gemini-1.5-pro",
+        "gemini-1.0-pro",
+        "gemini-pro",
+        "models/gemini-1.5-flash", # Some libs require prefix
+        "models/gemini-pro"
+    ]
     
-    # TENTATIVA 1: Auto-Detecção (Pergunta ao Google o que tem disponível)
-    try:
-        for m in genai.list_models():
-            if 'generateContent' in m.supported_generation_methods:
-                modelo_escolhido = m.name
-                break # Pega o primeiro que funcionar
-    except Exception as e:
-        print(f"Erro ao listar modelos: {e}")
-
-    # TENTATIVA 2: Lista Manual (Caso a auto-detecção falhe)
-    if not modelo_escolhido:
-        # Tenta nomes comuns, do mais novo para o mais antigo
-        lista_fallback = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.0-pro", "gemini-pro"]
-        for m in lista_fallback:
-            try:
-                # Teste rápido de conexão
-                genai.GenerativeModel(m)
-                modelo_escolhido = m
-                break
-            except: continue
+    erro_final = ""
     
-    if not modelo_escolhido:
-        return "❌ Erro Crítico: Nenhum modelo de IA disponível para sua Chave de API. Verifique se a chave é válida."
-
-    # GERAÇÃO DO CONTEÚDO
-    try:
-        model = genai.GenerativeModel(modelo_escolhido)
-        response = model.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        return f"❌ Erro ao gerar com o modelo '{modelo_escolhido}': {str(e)}"
+    for modelo in modelos_para_tentar:
+        try:
+            model = genai.GenerativeModel(modelo)
+            response = model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            erro_final = str(e)
+            continue # Try next model
+            
+    return f"❌ Failed to generate with all available models. Final error: {erro_final}. Check if your API Key has permission in Google AI Studio."
 
 def buscar_intimacoes_email(user, pwd, server):
+    """Fetches emails via IMAP."""
     try:
         mail = imaplib.IMAP4_SSL(server)
         mail.login(user, pwd)
         mail.select("inbox")
         status, msgs = mail.search(None, '(UNSEEN)')
-        if not msgs[0]: return [], "Nada novo."
+        if not msgs[0]: return [], "Nothing new."
         found = []
         for e_id in msgs[0].split()[-5:]:
             res, data = mail.fetch(e_id, "(RFC822)")
@@ -108,31 +106,39 @@ def buscar_intimacoes_email(user, pwd, server):
                     msg = email.message_from_bytes(response[1])
                     subj = decode_header(msg["Subject"])[0][0]
                     if isinstance(subj, bytes): subj = subj.decode()
-                    found.append({"assunto": subj, "corpo": str(msg)[:2000]})
+                    termos = ["intimação", "processo", "movimentação"]
+                    if any(t in str(subj).lower() for t in termos):
+                        found.append({"assunto": subj, "corpo": str(msg)[:2000]})
         return found, None
     except Exception as e: return [], str(e)
 
 def verificar_permissao(area_necessaria):
+    """Checks if user plan covers the requested area."""
     plano_atual = st.session_state.get('plano_atual', 'starter')
     if plano_atual == 'full': return True
     if plano_atual == area_necessaria: return True
+    
+    # Bancário is inside Civil package
     if area_necessaria == 'bancario' and plano_atual == 'civil': return True
+    
     return False
 
 def tela_bloqueio(area_necessaria, preco):
+    """Displays lock screen if plan doesn't allow access."""
     cor = "#FF0055"
-    msg = f"Este recurso é exclusivo do plano {area_necessaria.upper()} ou FULL."
+    msg = f"This feature is exclusive to the {area_necessaria.upper()} or FULL plan."
     st.markdown(f"""
     <div class='lock-screen' style='border-color:{cor};'>
         <div class='lock-icon'>🔒</div>
-        <div class='lock-title' style='color:{cor};'>ACESSO RESTRITO</div>
+        <div class='lock-title' style='color:{cor};'>ACCESS RESTRICTED</div>
         <p class='lock-desc'>{msg}</p>
     </div>
     """, unsafe_allow_html=True)
-    if st.button(f"🚀 FAZER UPGRADE", key=f"upg_{area_necessaria}"):
+    if st.button(f"🚀 UPGRADE", key=f"upg_{area_necessaria}"):
         st.session_state.navegacao_override = "💎 Planos & Upgrade"
         st.rerun()
 
+# --- INTELLIGENT LEGAL SEARCH (RAG) ---
 def buscar_jurisprudencia_oficial(tema, area):
     sites = ""
     if area == "Criminal": sites = "site:stf.jus.br OR site:stj.jus.br OR site:conjur.com.br"
@@ -142,11 +148,11 @@ def buscar_jurisprudencia_oficial(tema, area):
     query = f"{tema} {sites}"
     try:
         res = DDGS().text(query, region="br-pt", max_results=4)
-        if res: return "\n".join([f"- {r['body']} (Fonte: {r['href']})" for r in res])
-        return "Nenhuma jurisprudência específica localizada nas bases oficiais."
-    except: return "Erro de conexão com bases jurídicas."
+        if res: return "\n".join([f"- {r['body']} (Source: {r['href']})" for r in res])
+        return "No specific jurisprudence found in official databases."
+    except: return "Connection error with legal databases."
 
-# --- CSS AVANÇADO COM BACKGROUND ---
+# --- ADVANCED CSS WITH BACKGROUND ---
 def local_css():
     bg_image_b64 = get_base64_of_bin_file("unnamed.jpg")
     bg_css = ""
@@ -342,7 +348,7 @@ if not st.session_state.logado:
 if "GOOGLE_API_KEY" in st.secrets: api_key = st.secrets["GOOGLE_API_KEY"]
 else: api_key = st.text_input("🔑 API Key (Salve no sidebar):", type="password")
 
-# (A configuração da API agora é feita dentro da função tentar_gerar_conteudo)
+# (API Configuration now handled in trying function)
 
 df_user = run_query("SELECT creditos, plano FROM usuarios WHERE username = ?", (st.session_state.usuario_atual,), return_data=True)
 if not df_user.empty:
@@ -385,6 +391,17 @@ with st.sidebar:
 
     if "GOOGLE_API_KEY" not in st.secrets:
         st.text_input("🔑 API Key:", type="password", key="sidebar_api_key")
+
+    # --- NOVO DIAGNÓSTICO DE MODELOS ---
+    with st.expander("🛠️ SYSTEM CHECK"):
+        if st.button("Verificar Modelos"):
+            try:
+                genai.configure(api_key=api_key if api_key else st.session_state.get('sidebar_api_key'))
+                modelos = [m.name for m in genai.list_models()]
+                st.write(modelos)
+            except Exception as e:
+                st.error(f"Erro: {e}")
+    # -----------------------------------
 
     st.markdown("---")
     st.markdown("<h4 style='font-size:1rem; color:#94A3B8;'>CRÉDITOS</h4>", unsafe_allow_html=True)
@@ -562,7 +579,7 @@ elif menu_opcao == "✍️ Redator Jurídico":
     st.write("")
     if st.button("✨ GERAR MINUTA COMPLETA (1 CRÉDITO)", use_container_width=True):
         if creditos_atuais > 0 and fatos and cli_final:
-            with st.spinner(f"Redigindo {tipo}... Consultando bases oficiais: {'SIM' if web else 'NÃO'}"):
+            with st.spinner(f"Redigindo {tipo}... Consultando bases oficiais..."):
                 
                 contexto_pdf = ""
                 if upload_peticao:
@@ -1081,8 +1098,7 @@ elif menu_opcao == "🚦 Monitor de Prazos":
                                     if st.button("ANALISAR PRAZO (IA)", key=m['assunto']):
                                         api_key_to_use = api_key if api_key else st.session_state.get('sidebar_api_key')
                                         res = tentar_gerar_conteudo(f"Extraia prazos: {m['corpo']}", api_key_to_use)
-                                        if "❌" in res: st.warning(res)
-                                        else: st.warning(res)
+                                        st.warning(res)
                 else: st.error("Preencha credenciais.")
     else: tela_bloqueio("QUALQUER PLANO PAGO", "149")
 
