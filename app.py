@@ -58,52 +58,54 @@ def extrair_texto_pdf(arquivo):
     try: return "".join([p.extract_text() for p in PdfReader(arquivo).pages])
     except: return ""
 
-# --- FUNÇÃO DE IA ATUALIZADA PARA GEMINI 2.0 ---
+# --- FUNÇÃO DE IA ATUALIZADA (GEMINI 2.5 FLASH) ---
 def tentar_gerar_conteudo(prompt, api_key_val):
     """
-    Tenta gerar conteúdo priorizando o Gemini 2.0 conforme solicitado.
+    Tenta gerar conteúdo usando os modelos disponíveis na sua chave API.
     """
     if not api_key_val:
         return "⚠️ Erro: API Key não configurada. Insira na barra lateral."
     
     genai.configure(api_key=api_key_val)
     
-    # LISTA DE MODELOS ATUALIZADA (Prioridade para 2.0)
+    # LISTA DE MODELOS EXATOS DA SUA CONTA
     modelos_para_tentar = [
-        "gemini-2.0-flash-exp",  # <--- PRIORIDADE MÁXIMA (Versão 2.0)
-        "models/gemini-2.0-flash-exp",
-        "gemini-1.5-pro",        # Fallback potente
-        "gemini-1.5-flash",      # Fallback rápido
-        "gemini-1.0-pro"         # Legado
+        "gemini-2.5-flash",          # Prioridade 1: Rápido e Novo
+        "models/gemini-2.5-flash",   # Variação com prefixo
+        "gemini-3-flash",            # Prioridade 2: Mais novo ainda
+        "models/gemini-3-flash",
+        "gemini-2.5-flash-lite",     # Fallback leve
+        "models/gemini-2.5-flash-lite"
     ]
     
     erro_final = ""
     
+    # Tenta via Biblioteca Oficial (SDK)
     for modelo in modelos_para_tentar:
         try:
-            # Tenta via Biblioteca Oficial
             model = genai.GenerativeModel(modelo)
             response = model.generate_content(prompt)
             return response.text
         except Exception as e:
-            # Se der erro na lib, tenta via HTTP direto (Solução Nuclear) para o mesmo modelo
-            try:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={api_key_val}"
-                headers = {"Content-Type": "application/json"}
-                data = {"contents": [{"parts": [{"text": prompt}]}]}
-                
-                response_http = requests.post(url, headers=headers, json=data)
-                
-                if response_http.status_code == 200:
-                    return response_http.json()['candidates'][0]['content']['parts'][0]['text']
-                else:
-                    erro_final = str(e)
-                    continue # Vai para o próximo modelo da lista
-            except:
-                erro_final = str(e)
-                continue
-            
-    return f"❌ Falha ao gerar com Gemini 2.0 e anteriores. Erro: {erro_final}. Verifique sua API Key."
+            erro_final = str(e)
+            continue # Tenta o próximo
+
+    # Se a biblioteca falhar, tenta via HTTP direto (Solução Nuclear)
+    # Tenta especificamente o gemini-2.5-flash que sabemos que você tem
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key_val}"
+        headers = {"Content-Type": "application/json"}
+        data = {"contents": [{"parts": [{"text": prompt}]}]}
+        
+        response_http = requests.post(url, headers=headers, json=data)
+        
+        if response_http.status_code == 200:
+            return response_http.json()['candidates'][0]['content']['parts'][0]['text']
+        else:
+            return f"❌ Erro HTTP Direto ({response_http.status_code}): {response_http.text} | Erro anterior SDK: {erro_final}"
+
+    except Exception as e_req:
+        return f"❌ Falha Total. Nenhum modelo respondeu. Erro SDK: {erro_final} | Erro HTTP: {str(e_req)}"
 
 def buscar_intimacoes_email(user, pwd, server):
     """Busca emails via IMAP."""
@@ -364,7 +366,7 @@ if not st.session_state.logado:
 if "GOOGLE_API_KEY" in st.secrets: api_key = st.secrets["GOOGLE_API_KEY"]
 else: api_key = st.text_input("🔑 API Key (Salve no sidebar):", type="password")
 
-# (API Configuration now handled in trying function)
+# (A configuração da API agora é feita dentro da função tentar_gerar_conteudo)
 
 df_user = run_query("SELECT creditos, plano FROM usuarios WHERE username = ?", (st.session_state.usuario_atual,), return_data=True)
 if not df_user.empty:
