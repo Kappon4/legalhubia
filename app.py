@@ -18,12 +18,13 @@ import ssl
 from email.message import EmailMessage
 import plotly.express as px
 import base64
+import requests # Importante para a solução nuclear
 
-# --- IMPORT ERROR HANDLING ---
+# --- IMPORTAÇÃO DE ERROS ---
 from google.api_core.exceptions import ResourceExhausted, NotFound, InvalidArgument, PermissionDenied
 
 # ==========================================================
-# 1. VISUAL CONFIGURATION - CYBER FUTURE THEME
+# 1. CONFIGURAÇÃO VISUAL - TEMA CYBER FUTURE
 # ==========================================================
 st.set_page_config(
     page_title="LegalHub Elite | AI System", 
@@ -33,7 +34,7 @@ st.set_page_config(
 )
 
 # ==========================================================
-# 2. GENERAL FUNCTIONS AND DATABASE
+# 2. FUNÇÕES GERAIS E BANCO DE DADOS
 # ==========================================================
 def get_base64_of_bin_file(bin_file):
     try:
@@ -43,7 +44,6 @@ def get_base64_of_bin_file(bin_file):
     except FileNotFoundError: return None
 
 def gerar_word(texto):
-    """Generates a Word file from text."""
     doc = Document()
     for p in texto.split('\n'):
         if p.strip(): doc.add_paragraph(p)
@@ -53,51 +53,70 @@ def gerar_word(texto):
     return buf
 
 def extrair_texto_pdf(arquivo):
-    """Extracts text from a PDF."""
     try: return "".join([p.extract_text() for p in PdfReader(arquivo).pages])
     except: return ""
 
-# --- ROBUST AI FUNCTION (FIX FOR 404 ERROR) ---
+# --- FUNÇÃO DE IA BLINDADA (RESOLUÇÃO DO ERRO 404) ---
 def tentar_gerar_conteudo(prompt, api_key_val):
-    """
-    Attempts to generate content by iterating through multiple models to avoid 404 errors.
-    """
     if not api_key_val:
-        return "⚠️ Error: API Key not configured."
+        return "⚠️ Erro: API Key não configurada. Insira na barra lateral."
     
-    genai.configure(api_key=api_key_val)
-    
-    # List of models to try (from newest to oldest/most stable)
-    modelos_para_tentar = [
-        "gemini-1.5-flash",
-        "gemini-1.5-pro",
-        "gemini-1.0-pro",
-        "gemini-pro",
-        "models/gemini-1.5-flash", # Some libs require prefix
-        "models/gemini-pro"
-    ]
-    
-    erro_final = ""
-    
-    for modelo in modelos_para_tentar:
-        try:
-            model = genai.GenerativeModel(modelo)
+    # --- ESTRATÉGIA 1: DETECÇÃO AUTOMÁTICA VIA SDK ---
+    try:
+        genai.configure(api_key=api_key_val)
+        modelo_encontrado = None
+        
+        # Pergunta para a API quais modelos estão disponíveis para esta chave
+        for m in genai.list_models():
+            if 'generateContent' in m.supported_generation_methods:
+                # Prioriza modelos mais capazes se disponíveis
+                if 'gemini-1.5' in m.name:
+                    modelo_encontrado = m.name
+                    break
+                elif 'gemini-pro' in m.name:
+                    modelo_encontrado = m.name
+        
+        if modelo_encontrado:
+            model = genai.GenerativeModel(modelo_encontrado)
             response = model.generate_content(prompt)
             return response.text
-        except Exception as e:
-            erro_final = str(e)
-            continue # Try next model
             
-    return f"❌ Failed to generate with all available models. Final error: {erro_final}. Check if your API Key has permission in Google AI Studio."
+    except Exception as e_sdk:
+        print(f"Falha no SDK: {e_sdk}")
+        # Se o SDK falhar, passamos para a Estratégia 2 silenciosamente
+
+    # --- ESTRATÉGIA 2: REQUISIÇÃO HTTP DIRETA (NUCLEAR) ---
+    # Isso ignora a biblioteca instalada e fala direto com o servidor do Google
+    try:
+        # Tenta endpoint do Gemini 1.5 Flash (mais rápido e barato/gratis)
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key_val}"
+        headers = {"Content-Type": "application/json"}
+        data = {"contents": [{"parts": [{"text": prompt}]}]}
+        
+        response = requests.post(url, headers=headers, json=data)
+        
+        if response.status_code == 200:
+            return response.json()['candidates'][0]['content']['parts'][0]['text']
+        else:
+            # Se falhar, tenta o Gemini Pro (Legacy)
+            url_backup = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={api_key_val}"
+            response_backup = requests.post(url_backup, headers=headers, json=data)
+            
+            if response_backup.status_code == 200:
+                return response_backup.json()['candidates'][0]['content']['parts'][0]['text']
+            
+            return f"❌ Erro Crítico de API (HTTP {response.status_code}): {response.text}"
+
+    except Exception as e_req:
+        return f"❌ Falha Total (SDK e HTTP falharam). Verifique sua Internet e sua API Key. Erro: {str(e_req)}"
 
 def buscar_intimacoes_email(user, pwd, server):
-    """Fetches emails via IMAP."""
     try:
         mail = imaplib.IMAP4_SSL(server)
         mail.login(user, pwd)
         mail.select("inbox")
         status, msgs = mail.search(None, '(UNSEEN)')
-        if not msgs[0]: return [], "Nothing new."
+        if not msgs[0]: return [], "Nada novo."
         found = []
         for e_id in msgs[0].split()[-5:]:
             res, data = mail.fetch(e_id, "(RFC822)")
@@ -106,39 +125,31 @@ def buscar_intimacoes_email(user, pwd, server):
                     msg = email.message_from_bytes(response[1])
                     subj = decode_header(msg["Subject"])[0][0]
                     if isinstance(subj, bytes): subj = subj.decode()
-                    termos = ["intimação", "processo", "movimentação"]
-                    if any(t in str(subj).lower() for t in termos):
-                        found.append({"assunto": subj, "corpo": str(msg)[:2000]})
+                    found.append({"assunto": subj, "corpo": str(msg)[:2000]})
         return found, None
     except Exception as e: return [], str(e)
 
 def verificar_permissao(area_necessaria):
-    """Checks if user plan covers the requested area."""
     plano_atual = st.session_state.get('plano_atual', 'starter')
     if plano_atual == 'full': return True
     if plano_atual == area_necessaria: return True
-    
-    # Bancário is inside Civil package
     if area_necessaria == 'bancario' and plano_atual == 'civil': return True
-    
     return False
 
 def tela_bloqueio(area_necessaria, preco):
-    """Displays lock screen if plan doesn't allow access."""
     cor = "#FF0055"
-    msg = f"This feature is exclusive to the {area_necessaria.upper()} or FULL plan."
+    msg = f"Este recurso é exclusivo do plano {area_necessaria.upper()} ou FULL."
     st.markdown(f"""
     <div class='lock-screen' style='border-color:{cor};'>
         <div class='lock-icon'>🔒</div>
-        <div class='lock-title' style='color:{cor};'>ACCESS RESTRICTED</div>
+        <div class='lock-title' style='color:{cor};'>ACESSO RESTRITO</div>
         <p class='lock-desc'>{msg}</p>
     </div>
     """, unsafe_allow_html=True)
-    if st.button(f"🚀 UPGRADE", key=f"upg_{area_necessaria}"):
+    if st.button(f"🚀 FAZER UPGRADE", key=f"upg_{area_necessaria}"):
         st.session_state.navegacao_override = "💎 Planos & Upgrade"
         st.rerun()
 
-# --- INTELLIGENT LEGAL SEARCH (RAG) ---
 def buscar_jurisprudencia_oficial(tema, area):
     sites = ""
     if area == "Criminal": sites = "site:stf.jus.br OR site:stj.jus.br OR site:conjur.com.br"
@@ -148,11 +159,11 @@ def buscar_jurisprudencia_oficial(tema, area):
     query = f"{tema} {sites}"
     try:
         res = DDGS().text(query, region="br-pt", max_results=4)
-        if res: return "\n".join([f"- {r['body']} (Source: {r['href']})" for r in res])
-        return "No specific jurisprudence found in official databases."
-    except: return "Connection error with legal databases."
+        if res: return "\n".join([f"- {r['body']} (Fonte: {r['href']})" for r in res])
+        return "Nenhuma jurisprudência específica localizada."
+    except: return "Erro de conexão com bases jurídicas."
 
-# --- ADVANCED CSS WITH BACKGROUND ---
+# --- CSS AVANÇADO COM BACKGROUND ---
 def local_css():
     bg_image_b64 = get_base64_of_bin_file("unnamed.jpg")
     bg_css = ""
@@ -348,7 +359,7 @@ if not st.session_state.logado:
 if "GOOGLE_API_KEY" in st.secrets: api_key = st.secrets["GOOGLE_API_KEY"]
 else: api_key = st.text_input("🔑 API Key (Salve no sidebar):", type="password")
 
-# (API Configuration now handled in trying function)
+# (A configuração da API agora é feita dentro da função tentar_gerar_conteudo)
 
 df_user = run_query("SELECT creditos, plano FROM usuarios WHERE username = ?", (st.session_state.usuario_atual,), return_data=True)
 if not df_user.empty:
@@ -579,7 +590,7 @@ elif menu_opcao == "✍️ Redator Jurídico":
     st.write("")
     if st.button("✨ GERAR MINUTA COMPLETA (1 CRÉDITO)", use_container_width=True):
         if creditos_atuais > 0 and fatos and cli_final:
-            with st.spinner(f"Redigindo {tipo}... Consultando bases oficiais: {'SIM' if web else 'NÃO'}"):
+            with st.spinner(f"Redigindo {tipo}... Consultando bases oficiais..."):
                 
                 contexto_pdf = ""
                 if upload_peticao:
@@ -650,8 +661,9 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
             
             # --- CÍVEL (NOVO E APROFUNDADO) ---
             if area_calc == "Cível":
-                tab_debito, tab_aluguel, tab_rescisao, tab_bancario, tab_veiculo = st.tabs([
-                    "💸 Atualização Débitos", "🏠 Reajuste Aluguel", "🚫 Rescisão Aluguel", "🏦 Juros Bancários", "🚘 Financ. Veículos"
+                tab_debito, tab_aluguel, tab_rescisao, tab_bancario, tab_veiculo, tab_not = st.tabs([
+                    "💸 Atualização Débitos", "🏠 Reajuste Aluguel", "🚫 Rescisão Aluguel", 
+                    "🏦 Juros Bancários", "🚘 Financ. Veículos", "📢 Notificação Extrajud."
                 ])
                 
                 with tab_debito:
@@ -792,6 +804,35 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
                         
                         st.success(f"💰 Potencial de Economia: R$ {diff_total:,.2f}")
                         st.caption("Considerando a exclusão de tarifas acessórias e aplicação da taxa média de mercado.")
+
+                # --- NOVA ABA DE NOTIFICAÇÃO (RÁPIDA) ---
+                with tab_not:
+                    st.markdown("#### Gerador Rápido de Notificação Extrajudicial")
+                    c1, c2 = st.columns(2)
+                    notificante = c1.text_input("Nome do Notificante (Cliente)")
+                    notificado = c2.text_input("Nome do Notificado (Devedor/Parte)")
+                    endereco = st.text_input("Endereço do Imóvel/Objeto (Opcional)")
+                    motivo = st.text_area("Motivo (Ex: Cobrança aluguel, Desocupação, Vício Oculto)")
+                    prazo = st.number_input("Prazo (dias)", value=5)
+                    
+                    if st.button("GERAR NOTIFICAÇÃO RÁPIDA", key="btn_not"):
+                        if notificante and notificado and motivo:
+                            prompt = f"""
+                            Redija uma Notificação Extrajudicial formal.
+                            Notificante: {notificante}. Notificado: {notificado}.
+                            Endereço: {endereco}. Motivo: {motivo}.
+                            Prazo para cumprimento: {prazo} dias.
+                            Tom: Jurídico, formal e imperativo.
+                            """
+                            api_key_to_use = api_key if api_key else st.session_state.get('sidebar_api_key')
+                            res = tentar_gerar_conteudo(prompt, api_key_to_use)
+                            
+                            if "❌" not in res:
+                                st.markdown("### 📢 Minuta da Notificação")
+                                st.markdown(res)
+                                st.download_button("📥 Baixar Notificação (.docx)", gerar_word(res), "Notificacao_Extrajudicial.docx")
+                            else: st.error(res)
+                        else: st.error("Preencha os campos obrigatórios.")
 
             # --- FAMÍLIA (NOVO E APROFUNDADO) ---
             elif area_calc == "Família":
