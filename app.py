@@ -18,7 +18,7 @@ import ssl
 from email.message import EmailMessage
 import plotly.express as px
 import base64
-import requests # Importante para a solução nuclear
+import requests
 
 # --- IMPORTAÇÃO DE ERROS ---
 from google.api_core.exceptions import ResourceExhausted, NotFound, InvalidArgument, PermissionDenied
@@ -44,6 +44,7 @@ def get_base64_of_bin_file(bin_file):
     except FileNotFoundError: return None
 
 def gerar_word(texto):
+    """Gera um arquivo Word a partir de um texto."""
     doc = Document()
     for p in texto.split('\n'):
         if p.strip(): doc.add_paragraph(p)
@@ -53,64 +54,59 @@ def gerar_word(texto):
     return buf
 
 def extrair_texto_pdf(arquivo):
+    """Extrai texto de um PDF."""
     try: return "".join([p.extract_text() for p in PdfReader(arquivo).pages])
     except: return ""
 
-# --- FUNÇÃO DE IA BLINDADA (RESOLUÇÃO DO ERRO 404) ---
+# --- FUNÇÃO DE IA ATUALIZADA PARA GEMINI 2.0 ---
 def tentar_gerar_conteudo(prompt, api_key_val):
+    """
+    Tenta gerar conteúdo priorizando o Gemini 2.0 conforme solicitado.
+    """
     if not api_key_val:
         return "⚠️ Erro: API Key não configurada. Insira na barra lateral."
     
-    # --- ESTRATÉGIA 1: DETECÇÃO AUTOMÁTICA VIA SDK ---
-    try:
-        genai.configure(api_key=api_key_val)
-        modelo_encontrado = None
-        
-        # Pergunta para a API quais modelos estão disponíveis para esta chave
-        for m in genai.list_models():
-            if 'generateContent' in m.supported_generation_methods:
-                # Prioriza modelos mais capazes se disponíveis
-                if 'gemini-1.5' in m.name:
-                    modelo_encontrado = m.name
-                    break
-                elif 'gemini-pro' in m.name:
-                    modelo_encontrado = m.name
-        
-        if modelo_encontrado:
-            model = genai.GenerativeModel(modelo_encontrado)
+    genai.configure(api_key=api_key_val)
+    
+    # LISTA DE MODELOS ATUALIZADA (Prioridade para 2.0)
+    modelos_para_tentar = [
+        "gemini-2.0-flash-exp",  # <--- PRIORIDADE MÁXIMA (Versão 2.0)
+        "models/gemini-2.0-flash-exp",
+        "gemini-1.5-pro",        # Fallback potente
+        "gemini-1.5-flash",      # Fallback rápido
+        "gemini-1.0-pro"         # Legado
+    ]
+    
+    erro_final = ""
+    
+    for modelo in modelos_para_tentar:
+        try:
+            # Tenta via Biblioteca Oficial
+            model = genai.GenerativeModel(modelo)
             response = model.generate_content(prompt)
             return response.text
+        except Exception as e:
+            # Se der erro na lib, tenta via HTTP direto (Solução Nuclear) para o mesmo modelo
+            try:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={api_key_val}"
+                headers = {"Content-Type": "application/json"}
+                data = {"contents": [{"parts": [{"text": prompt}]}]}
+                
+                response_http = requests.post(url, headers=headers, json=data)
+                
+                if response_http.status_code == 200:
+                    return response_http.json()['candidates'][0]['content']['parts'][0]['text']
+                else:
+                    erro_final = str(e)
+                    continue # Vai para o próximo modelo da lista
+            except:
+                erro_final = str(e)
+                continue
             
-    except Exception as e_sdk:
-        print(f"Falha no SDK: {e_sdk}")
-        # Se o SDK falhar, passamos para a Estratégia 2 silenciosamente
-
-    # --- ESTRATÉGIA 2: REQUISIÇÃO HTTP DIRETA (NUCLEAR) ---
-    # Isso ignora a biblioteca instalada e fala direto com o servidor do Google
-    try:
-        # Tenta endpoint do Gemini 1.5 Flash (mais rápido e barato/gratis)
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key_val}"
-        headers = {"Content-Type": "application/json"}
-        data = {"contents": [{"parts": [{"text": prompt}]}]}
-        
-        response = requests.post(url, headers=headers, json=data)
-        
-        if response.status_code == 200:
-            return response.json()['candidates'][0]['content']['parts'][0]['text']
-        else:
-            # Se falhar, tenta o Gemini Pro (Legacy)
-            url_backup = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={api_key_val}"
-            response_backup = requests.post(url_backup, headers=headers, json=data)
-            
-            if response_backup.status_code == 200:
-                return response_backup.json()['candidates'][0]['content']['parts'][0]['text']
-            
-            return f"❌ Erro Crítico de API (HTTP {response.status_code}): {response.text}"
-
-    except Exception as e_req:
-        return f"❌ Falha Total (SDK e HTTP falharam). Verifique sua Internet e sua API Key. Erro: {str(e_req)}"
+    return f"❌ Falha ao gerar com Gemini 2.0 e anteriores. Erro: {erro_final}. Verifique sua API Key."
 
 def buscar_intimacoes_email(user, pwd, server):
+    """Busca emails via IMAP."""
     try:
         mail = imaplib.IMAP4_SSL(server)
         mail.login(user, pwd)
@@ -125,18 +121,25 @@ def buscar_intimacoes_email(user, pwd, server):
                     msg = email.message_from_bytes(response[1])
                     subj = decode_header(msg["Subject"])[0][0]
                     if isinstance(subj, bytes): subj = subj.decode()
-                    found.append({"assunto": subj, "corpo": str(msg)[:2000]})
+                    termos = ["intimação", "processo", "movimentação"]
+                    if any(t in str(subj).lower() for t in termos):
+                        found.append({"assunto": subj, "corpo": str(msg)[:2000]})
         return found, None
     except Exception as e: return [], str(e)
 
 def verificar_permissao(area_necessaria):
+    """Verifica se o plano do usuário cobre a área solicitada."""
     plano_atual = st.session_state.get('plano_atual', 'starter')
     if plano_atual == 'full': return True
     if plano_atual == area_necessaria: return True
+    
+    # Bancário está dentro do pacote Civil
     if area_necessaria == 'bancario' and plano_atual == 'civil': return True
+    
     return False
 
 def tela_bloqueio(area_necessaria, preco):
+    """Exibe tela de bloqueio se o plano não permitir."""
     cor = "#FF0055"
     msg = f"Este recurso é exclusivo do plano {area_necessaria.upper()} ou FULL."
     st.markdown(f"""
@@ -150,6 +153,7 @@ def tela_bloqueio(area_necessaria, preco):
         st.session_state.navegacao_override = "💎 Planos & Upgrade"
         st.rerun()
 
+# --- BUSCA JURÍDICA INTELIGENTE (RAG) ---
 def buscar_jurisprudencia_oficial(tema, area):
     sites = ""
     if area == "Criminal": sites = "site:stf.jus.br OR site:stj.jus.br OR site:conjur.com.br"
@@ -160,8 +164,9 @@ def buscar_jurisprudencia_oficial(tema, area):
     try:
         res = DDGS().text(query, region="br-pt", max_results=4)
         if res: return "\n".join([f"- {r['body']} (Fonte: {r['href']})" for r in res])
-        return "Nenhuma jurisprudência específica localizada."
+        return "Nenhuma jurisprudência específica localizada nas bases oficiais."
     except: return "Erro de conexão com bases jurídicas."
+# -----------------------------------------------------------
 
 # --- CSS AVANÇADO COM BACKGROUND ---
 def local_css():
@@ -359,7 +364,7 @@ if not st.session_state.logado:
 if "GOOGLE_API_KEY" in st.secrets: api_key = st.secrets["GOOGLE_API_KEY"]
 else: api_key = st.text_input("🔑 API Key (Salve no sidebar):", type="password")
 
-# (A configuração da API agora é feita dentro da função tentar_gerar_conteudo)
+# (API Configuration now handled in trying function)
 
 df_user = run_query("SELECT creditos, plano FROM usuarios WHERE username = ?", (st.session_state.usuario_atual,), return_data=True)
 if not df_user.empty:
@@ -590,7 +595,7 @@ elif menu_opcao == "✍️ Redator Jurídico":
     st.write("")
     if st.button("✨ GERAR MINUTA COMPLETA (1 CRÉDITO)", use_container_width=True):
         if creditos_atuais > 0 and fatos and cli_final:
-            with st.spinner(f"Redigindo {tipo}... Consultando bases oficiais..."):
+            with st.spinner(f"Redigindo {tipo}... Consultando bases oficiais: {'SIM' if web else 'NÃO'}"):
                 
                 contexto_pdf = ""
                 if upload_peticao:
