@@ -9,20 +9,13 @@ import time
 import pandas as pd
 import base64
 import sys
-import subprocess
-
-# --- SETUP E DEPENDÊNCIAS ---
-try:
-    import psycopg2
-except ImportError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "psycopg2-binary"])
-    import psycopg2
+import psycopg2 
 
 # ==========================================================
-# 1. CONFIGURAÇÃO VISUAL
+# 1. CONFIGURAÇÃO VISUAL - CYBER THEME
 # ==========================================================
 st.set_page_config(
-    page_title="LegalHub Elite v8.2.1", 
+    page_title="LegalHub Elite v8.4", 
     page_icon="⚖️", 
     layout="wide",
     initial_sidebar_state="expanded"
@@ -36,9 +29,9 @@ try:
     API_KEY_FIXA = st.secrets["GOOGLE_API_KEY"]
     USAR_SQLITE_BACKUP = False
 except:
-    DB_URI = "postgresql://postgres:0OquFTc7ovRHTBGM@db.qhcjfmzkwczjupkfpmdk.supabase.co:5432/postgres"
-    API_KEY_FIXA = "AIzaSyA5lMfeDUE71k6BOOxYRZDtOolPZaqCurA"
-    USAR_SQLITE_BACKUP = False
+    DB_URI = "" 
+    API_KEY_FIXA = ""
+    USAR_SQLITE_BACKUP = True
 
 def get_db_connection():
     if USAR_SQLITE_BACKUP:
@@ -48,34 +41,27 @@ def get_db_connection():
         return psycopg2.connect(DB_URI)
 
 def run_query(query, params=(), return_data=False):
-    """Executa queries com tratamento de erro visível."""
     conn = None
     try:
         conn = get_db_connection()
         c = conn.cursor()
-        
-        if not USAR_SQLITE_BACKUP: 
-            query = query.replace('?', '%s')
-            
+        if not USAR_SQLITE_BACKUP: query = query.replace('?', '%s')
         c.execute(query, params)
-        
         if return_data:
             data = c.fetchall()
             col_names = [desc[0] for desc in c.description] if c.description else []
             conn.close()
             return pd.DataFrame(data, columns=col_names)
         else:
-            conn.commit()
-            conn.close()
+            conn.commit(); conn.close()
             return True
-            
     except Exception as e:
         if conn: conn.close()
-        print(f"Erro DB: {e}") 
+        print(f"Erro DB: {e}")
         return None
 
 # ==========================================================
-# 3. FUNÇÕES (IA, PDF, WORD)
+# 3. FUNÇÕES (IA, PDF, WORD, ANTI-ALUCINAÇÃO)
 # ==========================================================
 def get_base64_of_bin_file(bin_file):
     try:
@@ -125,9 +111,7 @@ def tentar_gerar_conteudo(prompt, api_key_val):
         return model.generate_content(prompt).text
     except Exception as e: return f"❌ Erro IA: {str(e)}"
 
-# ==========================================================
-# 4. FUNÇÕES DE CÁLCULO (MANTIDAS)
-# ==========================================================
+# --- CÁLCULO TRABALHISTA COMPLETO ---
 def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_fgts, ferias_vencidas, aviso_tipo, grau_insalubridade, tem_periculosidade):
     formato = "%Y-%m-%d"
     d1 = datetime.strptime(str(admissao), formato)
@@ -177,34 +161,16 @@ def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_f
 # 5. CSS VISUAL
 # ==========================================================
 def local_css():
-    bg_image_b64 = get_base64_of_bin_file("unnamed.jpg")
-    bg_css = f"""
-    .stApp::before {{
-        content: ""; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-        width: 60%; height: 60%; background-image: url("data:image/jpeg;base64,{bg_image_b64}");
-        background-size: contain; background-repeat: no-repeat; background-position: center;
-        opacity: 0.08; z-index: 0; pointer-events: none; animation: float-logo 15s ease-in-out infinite;
-    }}
-    @keyframes float-logo {{ 0%, 100% {{ transform: translate(-50%, -50%) translateY(0px); }} 50% {{ transform: translate(-50%, -50%) translateY(-20px); }} }}
-    """ if bg_image_b64 else ""
-    
-    st.markdown(f"""
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;500;700&family=Inter:wght@300;400;600&display=swap');
-        :root {{ --bg-dark: #020617; --neon-blue: #00F3FF; --neon-red: #FF0055; --text-main: #FFFFFF; --bg-card: rgba(15, 23, 42, 0.6); }}
-        .stApp {{ background-color: var(--bg-dark); color: var(--text-main); font-family: 'Inter'; }}
-        {bg_css}
-        h1, h2, h3, h4, h5, h6 {{ font-family: 'Rajdhani'; color: #FFF !important; text-transform: uppercase; letter-spacing: 1.5px; z-index: 1; position: relative; }}
-        .tech-header {{ background: linear-gradient(90deg, #FFF, var(--neon-blue)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 700; }}
-        .plan-card {{ background: rgba(15,23,42,0.85); border: 1px solid rgba(255,255,255,0.1); padding: 20px; border-radius: 12px; text-align: center; }}
-        .lock-screen {{ border: 1px solid var(--neon-red); background: rgba(255, 0, 85, 0.05); border-radius: 10px; padding: 40px; text-align: center; margin-top: 20px; }}
-        .lock-title {{ color: var(--neon-red) !important; font-family: 'Rajdhani'; font-size: 2rem; font-weight: bold; }}
-    </style>
-    """, unsafe_allow_html=True)
+    st.markdown("""<style>
+        .stApp { background-color: #0e1117; color: white; }
+        .stButton>button { border: 1px solid #00F3FF; color: #00F3FF; background: transparent; width: 100%; }
+        .stButton>button:hover { background: #00F3FF; color: black; }
+        h1, h2, h3 { color: #00F3FF !important; font-family: sans-serif; }
+    </style>""", unsafe_allow_html=True)
 local_css()
 
 # ==========================================================
-# 6. LOGIN & CADASTRO (BLINDADO)
+# 6. LOGIN & CADASTRO (BLINDADO v8.3)
 # ==========================================================
 try:
     if USAR_SQLITE_BACKUP:
@@ -227,7 +193,7 @@ if not st.session_state.logado:
         st.markdown("<br><h1 style='text-align: center; font-size: 4rem;'>🛡️</h1>", unsafe_allow_html=True)
         st.markdown("""<div style='text-align: center;'><h1 class='tech-header' style='font-size: 2.5rem;'>LEGALHUB ELITE</h1></div>""", unsafe_allow_html=True)
 
-        if USAR_SQLITE_BACKUP: st.warning("⚠️ MODO OFFLINE")
+        if USAR_SQLITE_BACKUP: st.warning("⚠️ MODO OFFLINE (SQLITE). Configure Secrets.")
         else: st.success("☁️ CONEXÃO SEGURA ATIVA")
             
         with st.container(border=True):
@@ -236,21 +202,16 @@ if not st.session_state.logado:
             with tab_login:
                 user_input = st.text_input("Usuário", key="login_user")
                 pwd_input = st.text_input("Senha", type="password", key="login_pwd")
-                
                 c_entrar, c_reset = st.columns(2)
                 
                 if c_entrar.button("LOGIN", use_container_width=True):
-                    # --- NORMALIZAÇÃO: TUDO MINÚSCULO E SEM ESPAÇOS ---
                     u_clean = user_input.strip().lower()
                     p_clean = pwd_input.strip()
                     
-                    # 1. Verifica se usuário existe
                     user_check = run_query("SELECT * FROM usuarios WHERE username = %s", (u_clean,), return_data=True)
-                    
                     if user_check is None or user_check.empty:
                         st.error("❌ Usuário não encontrado.")
                     else:
-                        # 2. Verifica a senha
                         res = run_query("SELECT * FROM usuarios WHERE username = %s AND senha = %s", (u_clean, p_clean), return_data=True)
                         if res is not None and not res.empty:
                             st.session_state.logado = True
@@ -258,14 +219,12 @@ if not st.session_state.logado:
                             st.session_state.escritorio_atual = res.iloc[0]['escritorio']
                             st.session_state.plano_atual = res.iloc[0]['plano']
                             st.rerun()
-                        else:
-                            st.error("❌ Senha incorreta.")
+                        else: st.error("❌ Senha incorreta.")
                 
-                if c_reset.button("🆘 Resetar Admin", use_container_width=True):
+                if c_reset.button("🆘 Reset Admin", use_container_width=True):
                     if run_query("INSERT INTO usuarios (username, senha, escritorio, email_oab, creditos, plano) VALUES ('admin', 'admin', 'Master Office', 'adm@lh.com', 9999, 'full') ON CONFLICT (username) DO UPDATE SET senha = 'admin'"):
                         st.success("Admin resetado! Use: admin / admin")
-                    else:
-                        st.error("Erro ao resetar. Verifique conexão.")
+                    else: st.error("Erro ao resetar.")
 
             with tab_cadastro:
                 new_user = st.text_input("Novo Usuário", key="cad_user")
@@ -274,35 +233,27 @@ if not st.session_state.logado:
                 
                 if st.button("CADASTRAR", use_container_width=True):
                     if new_user and new_pwd and new_office:
-                        # NORMALIZAÇÃO NO CADASTRO
                         user_final = new_user.strip().lower()
                         pwd_final = new_pwd.strip()
                         
-                        # Verifica duplicidade
                         check = run_query("SELECT * FROM usuarios WHERE username = %s", (user_final,), return_data=True)
                         if check is not None and not check.empty:
-                            st.error("⚠️ Este usuário já existe!")
+                            st.error("⚠️ Usuário já existe!")
                         else:
-                            # Tenta inserir
                             sucesso = run_query("INSERT INTO usuarios (username, senha, escritorio, creditos, plano) VALUES (%s, %s, %s, 10, 'starter')", (user_final, pwd_final, new_office))
-                            
-                            # Verifica se gravou de verdade
                             double_check = run_query("SELECT * FROM usuarios WHERE username = %s", (user_final,), return_data=True)
                             
                             if sucesso and not double_check.empty:
-                                st.success(f"✅ Cadastro realizado! Usuário: {user_final}")
+                                st.success(f"✅ Cadastro ok: {user_final}")
                                 time.sleep(1)
-                                # Auto Login
                                 st.session_state.logado = True
                                 st.session_state.usuario_atual = user_final
                                 st.session_state.escritorio_atual = new_office
                                 st.session_state.plano_atual = 'starter'
                                 st.rerun()
-                            else:
-                                st.error("❌ Erro fatal ao salvar no banco. Tente novamente.")
-                    else:
-                        st.warning("Preencha todos os campos.")
-        st.markdown("<div style='text-align:center; margin-top:10px; color: #475569;'>SYSTEM V8.2 // SECURE</div>", unsafe_allow_html=True)
+                            else: st.error("❌ Erro ao salvar no banco.")
+                    else: st.warning("Preencha todos os campos.")
+        st.markdown("<div style='text-align:center; margin-top:10px; color: #475569;'>SYSTEM V8.4 // SECURE</div>", unsafe_allow_html=True)
     st.stop()
 
 # ==========================================================
@@ -317,9 +268,12 @@ if df_user is not None and not df_user.empty:
     st.session_state.plano_atual = df_user.iloc[0]['plano']
 else: creditos_atuais = 0
 
-col_logo, col_menu = st.columns([1, 4])
-with col_logo: st.markdown("""<div class='header-logo'><h1 class='tech-header'>LEGALHUB<span>ELITE</span></h1></div>""", unsafe_allow_html=True)
-with col_menu:
+with st.sidebar:
+    st.title("🛡️ MENU")
+    st.caption(f"Logado: {st.session_state.usuario_atual}")
+    
+    if "navegacao_override" not in st.session_state: st.session_state.navegacao_override = None
+    
     mapa_nav = {"Dashboard": "📊 Dashboard", "Redator IA": "✍️ Redator Jurídico", "Contratos": "📜 Contratos", "Calculos": "🧮 Cálculos Jurídicos", "Audiência": "🏛️ Estratégia de Audiência", "Gestão Casos": "📂 Gestão de Casos", "Monitor Prazos": "🚦 Monitor de Prazos", "Assinatura": "💎 Planos & Upgrade"}
     opcoes_menu = list(mapa_nav.keys())
     idx_radio = 0
@@ -330,23 +284,13 @@ with col_menu:
     escolha_menu = st.radio("Menu Navegação", options=opcoes_menu, index=idx_radio, horizontal=True, label_visibility="collapsed")
     menu_opcao = mapa_nav[escolha_menu]
 
-st.markdown("---")
-with st.sidebar:
-    st.markdown(f"<div style='font-size:0.8rem;'>User: {st.session_state.usuario_atual}<br>Banca: {st.session_state.escritorio_atual}</div>", unsafe_allow_html=True)
-    p_label = st.session_state.plano_atual.upper()
-    cor_p = "#FFD700" if p_label == "FULL" else "#00F3FF"
-    st.markdown(f"<div style='border:1px solid {cor_p}; padding:5px; border-radius:5px; text-align:center; color:{cor_p}; margin:10px 0; font-weight:bold;'>PLANO: {p_label}</div>", unsafe_allow_html=True)
-
-    # --- NOVO: PAINEL DE ADMINISTRAÇÃO (ADICIONADO AQUI) ---
-    with st.expander("⚙️ ADMIN: Gerenciar Conta"):
-        novo_plano = st.selectbox("Mudar Plano Para:", ["starter", "full", "criminal", "trabalhista", "civil"])
-        if st.button("Atualizar Plano"):
+    st.divider()
+    with st.expander("⚙️ ADMIN"):
+        novo_plano = st.selectbox("Mudar Plano", ["starter", "full", "criminal", "trabalhista", "civil"])
+        if st.button("Atualizar"):
             run_query("UPDATE usuarios SET plano = %s WHERE username = %s", (novo_plano, st.session_state.usuario_atual))
-            st.session_state.plano_atual = novo_plano
-            st.success("Plano atualizado! Recarregando...")
-            time.sleep(1)
             st.rerun()
-
+            
     st.markdown("<h4 style='font-size:1rem;'>CRÉDITOS</h4>", unsafe_allow_html=True)
     st.progress(min(creditos_atuais/100, 1.0))
     if st.button("LOGOUT"): st.session_state.logado = False; st.rerun()
@@ -357,7 +301,8 @@ if menu_opcao == "📊 Dashboard":
     st.header("📊 Visão Geral")
     c1, c2 = st.columns(2)
     docs = run_query("SELECT count(*) FROM documentos WHERE escritorio = %s", (st.session_state.escritorio_atual,), return_data=True)
-    c1.metric("Documentos", docs.iloc[0][0] if docs is not None else 0)
+    qtd = docs.iloc[0][0] if docs is not None else 0
+    c1.metric("Documentos", qtd)
     c2.metric("Plano", st.session_state.plano_atual.upper())
     
     st.subheader("Acesso Rápido")
@@ -365,16 +310,22 @@ if menu_opcao == "📊 Dashboard":
     if c1.button("Nova Petição"): st.session_state.navegacao_override = "✍️ Redator Jurídico"; st.rerun()
     if c2.button("Novo Cálculo"): st.session_state.navegacao_override = "🧮 Cálculos Jurídicos"; st.rerun()
 
+# === REDATOR IA TURBINADO (SUAS LISTAS ESPECÍFICAS) ===
 elif menu_opcao == "✍️ Redator Jurídico":
     st.header("✍️ Redator IA (Anti-Alucinação)")
     area = st.selectbox("Área", ["Cível", "Trabalhista", "Criminal", "Tributário", "Previdenciário"])
     
     pecas = []
-    if area == "Cível": pecas = ["Petição Inicial", "Contestação", "Réplica", "Agravo de Instrumento", "Apelação", "Embargos de Declaração", "Execução"]
-    elif area == "Trabalhista": pecas = ["Reclamação Trabalhista", "Contestação", "Recurso Ordinário", "Recurso de Revista", "Consignação"]
-    elif area == "Criminal": pecas = ["Resposta à Acusação", "Memoriais", "Habeas Corpus", "Relaxamento de Prisão", "Apelação", "RSE"]
-    elif area == "Tributário": pecas = ["Anulatória de Débito", "Mandado de Segurança", "Embargos à Execução Fiscal", "Repetição de Indébito"]
-    elif area == "Previdenciário": pecas = ["Petição Inicial (Concessão)", "Recurso Administrativo", "Aposentadoria Especial", "Auxílio-Doença"]
+    if area == "Cível": 
+        pecas = ["Petição Inicial", "Contestação", "Réplica", "Reconvenção", "Ação Rescisória", "Mandado de Segurança", "Ação Civil Pública", "Embargos à Execução", "Embargos de Terceiro", "Exceção de Incompetência", "Impugnação ao Valor da Causa", "Pedido de Tutela", "Impugnação ao Cumprimento", "Apelação", "Agravo de Instrumento", "Embargos de Declaração", "Recurso Especial", "Recurso Extraordinário"]
+    elif area == "Trabalhista": 
+        pecas = ["Reclamação Trabalhista", "Contestação", "Reconvenção", "Exceção de Incompetência", "Impugnação ao Valor", "Recurso Ordinário", "Recurso de Revista", "Embargos (TST)", "Agravo de Instrumento", "Agravo de Petição", "Embargos à Execução", "Consignação em Pagamento"]
+    elif area == "Criminal": 
+        pecas = ["Resposta à Acusação", "Memoriais", "Queixa-Crime", "Defesa Preliminar (Drogas)", "Apelação", "RSE", "Agravo em Execução", "Embargos de Declaração", "Recurso Especial", "Recurso Extraordinário", "ROC", "Habeas Corpus", "Revisão Criminal", "Pedido de Liberdade", "Relaxamento de Prisão", "Restituição de Coisas", "Representação"]
+    elif area == "Tributário": 
+        pecas = ["Declaratória de Inexistência", "Anulatória de Débito", "Repetição de Indébito", "Mandado de Segurança", "Consignação em Pagamento", "Embargos à Execução Fiscal", "Exceção de Pré-Executividade", "Apelação", "Agravo", "Recurso Especial", "Defesa Administrativa", "Recurso Administrativo"]
+    elif area == "Previdenciário": 
+        pecas = ["Requerimento Administrativo", "Petição Inicial Administrativa", "Recurso Administrativo", "Petição de Juntada", "Petição Inicial Judicial", "Contestação", "Réplica", "Recurso Inominado", "Apelação", "Pedido de Tutela", "Cumprimento de Sentença"]
     
     tipo = st.selectbox("Peça", pecas)
     c1, c2 = st.columns(2)
@@ -409,11 +360,11 @@ elif menu_opcao == "📜 Contratos":
         st.markdown(res)
         st.download_button("Baixar", gerar_word(res), "Contrato.docx")
 
-# === CÁLCULOS COMPLETOS (V7.8 +) ===
+# === CALCULADORA UNIFICADA COMPLETA (V8.4) ===
 elif menu_opcao == "🧮 Cálculos Jurídicos":
     st.header("🧮 Calculadoras Jurídicas")
     area_calc = st.selectbox("Área", ["Trabalhista (CLT)", "Cível (Art. 292/Liquidação)", "Família", "Tributária", "Criminal"])
-    st.divider()
+    st.markdown("---")
 
     if area_calc == "Trabalhista (CLT)":
         st.subheader("Rescisão CLT + Adicionais")
@@ -441,23 +392,42 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
         tab1, tab2, tab3 = st.tabs(["Liquidação de Sentença", "Valor da Causa", "Revisão Bancária"])
         
         with tab1: # Liquidação
-            val = st.number_input("Valor Condenação")
-            idx = st.number_input("Índice Correção", value=1.0)
-            juros = st.selectbox("Juros", ["1% a.m.", "Selic", "Sem"])
-            multa = st.checkbox("Multa Art. 523 (10%)")
-            hon = st.checkbox("Honorários Execução (10%)")
+            st.info("Atualização + Juros + Multa Art. 523 + Honorários")
+            c1, c2 = st.columns(2)
+            val = c1.number_input("Valor Condenação")
+            idx = c2.number_input("Índice Correção", value=1.0)
+            c3, c4 = st.columns(2)
+            juros = c3.selectbox("Juros", ["1% a.m.", "Selic", "Sem"])
+            meses = c4.number_input("Meses", value=12)
+            
+            c5, c6 = st.columns(2)
+            multa = c5.checkbox("Multa Art. 523 (10%)")
+            hon = c6.checkbox("Honorários Execução (10%)")
+            
             if st.button("LIQUIDAR"):
                 res = val * idx
-                if juros == "1% a.m.": res *= 1.12 
-                total = res + (res*0.1 if multa else 0) + (res*0.1 if hon else 0)
+                val_juros = 0
+                if juros == "1% a.m.": val_juros = res * (0.01 * meses)
+                elif juros == "Selic": val_juros = res * 0.12 # Est
+                
+                subtotal = res + val_juros
+                total = subtotal + (subtotal*0.1 if multa else 0) + (subtotal*0.1 if hon else 0)
                 st.success(f"Total Execução: R$ {total:,.2f}")
         
         with tab2: # Valor da Causa
+            st.info("Art. 292 CPC")
             tipo = st.radio("Ação", ["Cobrança", "Alimentos", "Indenização"])
-            base = st.number_input("Valor Base")
-            if st.button("CALCULAR CAUSA"):
-                final = base * 12 if tipo == "Alimentos" else base
-                st.info(f"Valor da Causa: R$ {final:,.2f}")
+            if tipo == "Alimentos":
+                m = st.number_input("Mensalidade")
+                st.metric("Valor (12x)", f"R$ {m*12:,.2f}")
+            elif tipo == "Cobrança":
+                p = st.number_input("Principal")
+                j = st.number_input("Juros Vencidos")
+                m = st.number_input("Multas")
+                st.metric("Valor Causa", f"R$ {p+j+m:,.2f}")
+            else:
+                d = st.number_input("Valor Pretendido")
+                st.metric("Valor Causa", f"R$ {d:,.2f}")
 
         with tab3: # Revisão
             emp = st.number_input("Empréstimo")
@@ -501,4 +471,4 @@ elif menu == "Audiência":
     st.info("Em breve: Simulação de perguntas cruzadas com IA.")
 
 st.markdown("---")
-st.markdown("<center>🔒 LEGALHUB ELITE v8.2.1 | POSTGRESQL SECURE</center>", unsafe_allow_html=True)
+st.markdown("<center>🔒 LEGALHUB ELITE v8.4 | POSTGRESQL SECURE</center>", unsafe_allow_html=True)
