@@ -557,9 +557,73 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
                 st.write(f"- Sucumbenciais ({pct_sucumbencia}%): **R$ {val_suc:,.2f}**")
 
     elif area_calc == "Família":
-        renda = st.number_input("Renda Líquida")
-        f = st.slider("Filhos", 1, 5)
-        if st.button("SUGERIR PENSÃO"): st.info(f"Sugerido: R$ {renda * (0.3 + (f-1)*0.05):,.2f}")
+        st.markdown("#### 👨‍👩‍👧‍👦 Cálculo Avançado de Pensão Alimentícia (Trinômio)")
+        st.caption("Baseado no Art. 1.694, §1º do Código Civil (Necessidade x Possibilidade x Proporcionalidade)")
+        
+        tab_fixacao, tab_revisao = st.tabs(["Fixação de Pensão", "Atualização/Revisão"])
+        
+        with tab_fixacao:
+            # 1. POSSIBILIDADE (Rendas)
+            st.markdown("##### 1. Possibilidade (Renda dos Pais)")
+            c1, c2 = st.columns(2)
+            renda_alimentante = c1.number_input("Renda Líquida do Alimentante (Quem paga)", value=3000.0, help="Salário menos descontos legais (INSS/IR).", key="fam_renda1")
+            renda_guardiao = c2.number_input("Renda Líquida do Guardião (Quem cuida)", value=2000.0, help="Renda de quem mora com a criança.", key="fam_renda2")
+            
+            renda_total_pais = renda_alimentante + renda_guardiao
+            if renda_total_pais > 0:
+                prop_alimentante = (renda_alimentante / renda_total_pais) * 100
+                st.progress(prop_alimentante / 100)
+                st.caption(f"O Alimentante contribui com **{prop_alimentante:.1f}%** da renda familiar total.")
+            else:
+                prop_alimentante = 0
+
+            # 2. NECESSIDADE (Despesas da Criança)
+            st.markdown("---")
+            st.markdown("##### 2. Necessidade (Despesas da Criança)")
+            
+            col_d1, col_d2 = st.columns(2)
+            with col_d1:
+                gastos_diretos = st.number_input("Gastos Diretos (Escola, Saúde, Lazer)", value=800.0, help="Mensalidade escolar, plano de saúde, natação, etc.", key="fam_gasto_dir")
+            with col_d2:
+                gastos_moradia = st.number_input("Total Gastos da Casa (Aluguel, Luz, Água)", value=1500.0, help="Total das contas da casa onde a criança mora.", key="fam_gasto_casa")
+                pessoas_casa = st.number_input("Total de Pessoas na Casa", value=3, min_value=2, key="fam_pessoas")
+            
+            # Rateio da moradia (Criança paga sua parte)
+            parte_crianca_moradia = gastos_moradia / pessoas_casa
+            necessidade_total = gastos_diretos + parte_crianca_moradia
+            
+            st.info(f"💰 Necessidade Mensal Apurada: **R$ {necessidade_total:,.2f}**")
+
+            # 3. CÁLCULO FINAL
+            st.markdown("---")
+            if st.button("CALCULAR PENSÃO SUGERIDA", key="btn_fam_calc"):
+                # A pensão deve ser a % da renda do pai aplicada sobre a necessidade do filho
+                valor_sugerido = necessidade_total * (prop_alimentante / 100)
+                
+                # Checagem de segurança (Jurisprudência costuma teto de 30% da renda)
+                teto_30 = renda_alimentante * 0.30
+                
+                c_res1, c_res2 = st.columns(2)
+                
+                c_res1.metric("Valor Sugerido (Proporcional)", f"R$ {valor_sugerido:,.2f}")
+                c_res1.caption(f"Equivale a {valor_sugerido/renda_alimentante*100:.1f}% da renda do pagador.")
+                
+                color = "green" if valor_sugerido <= teto_30 else "red"
+                c_res2.markdown(f"#### Teto de 30%: R$ {teto_30:,.2f}")
+                
+                if valor_sugerido > teto_30:
+                    st.warning("⚠️ O valor proporcional ultrapassa 30% da renda do alimentante. O juiz pode fixar o teto de 30% (R$ " + f"{teto_30:,.2f}" + ") se houver risco à subsistência dele.")
+                else:
+                    st.success("✅ O valor está dentro de uma margem segura (abaixo de 30% da renda).")
+
+        with tab_revisao:
+            st.markdown("##### Atualização de Valor Defasado")
+            val_antigo = st.number_input("Valor da Pensão Fixada", value=500.0, key="fam_val_antigo")
+            indice_rev = st.number_input("Índice de Reajuste Anual (IGPM/INPC) %", value=4.5, key="fam_idx_rev")
+            
+            if st.button("ATUALIZAR VALOR", key="btn_fam_upd"):
+                novo = val_antigo * (1 + indice_rev/100)
+                st.success(f"Novo Valor: R$ {novo:,.2f}")
 
     elif area_calc == "Tributária":
         p = st.number_input("Tributo")
@@ -614,6 +678,7 @@ elif menu_opcao == "🏛️ Simulador Audiência":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v9.8 | DEV MODE (NO LOGIN)</center>", unsafe_allow_html=True)
+
 
 
 
