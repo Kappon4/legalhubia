@@ -322,6 +322,7 @@ elif menu_opcao == "📜 Contratos":
             st.warning("Preencha pelo menos Nome, CPF e Objeto para gerar.")
 
 # --- CÁLCULOS ---
+# --- CÁLCULOS ---
 elif menu_opcao == "🧮 Cálculos Jurídicos":
     st.header("🧮 Calculadoras Jurídicas")
     area_calc = st.selectbox("Área", ["Trabalhista (CLT)", "Cível (Art. 292/Liquidação)", "Família", "Tributária", "Criminal"])
@@ -352,17 +353,21 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
     elif area_calc == "Cível (Art. 292/Liquidação)":
         tab1, tab2, tab3 = st.tabs(["Liquidação de Sentença", "Valor da Causa", "Revisão Bancária"])
         
-        with tab1:
+        with tab1: # Liquidação
             st.info("Atualização + Juros + Multa Art. 523")
             c1, c2 = st.columns(2)
             val = c1.number_input("Valor Condenação")
             idx = c2.number_input("Índice Correção", value=1.0)
+            
             c3, c4 = st.columns(2)
             juros = c3.selectbox("Juros", ["1% a.m.", "Selic", "Sem"])
-            meses = c4.number_input("Meses", value=12)
+            # AQUI ESTAVA O ERRO: Adicionei key="meses_liq"
+            meses = c4.number_input("Meses", value=12, key="meses_liq") 
+            
             c5, c6 = st.columns(2)
             multa = c5.checkbox("Multa Art. 523 (10%)")
             hon = c6.checkbox("Honorários Execução (10%)")
+            
             if st.button("LIQUIDAR"):
                 res = val * idx
                 val_juros = 0
@@ -371,7 +376,7 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
                 total = subtotal + (subtotal*0.1 if multa else 0) + (subtotal*0.1 if hon else 0)
                 st.success(f"Total Execução: R$ {total:,.2f}")
         
-        with tab2:
+        with tab2: # Valor da Causa
             st.info("Art. 292 CPC")
             tipo = st.radio("Ação", ["Cobrança", "Alimentos", "Indenização"])
             if tipo == "Alimentos":
@@ -386,10 +391,12 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
                 d = st.number_input("Valor Pretendido")
                 st.metric("Valor Causa", f"R$ {d:,.2f}")
 
-        with tab3:
+        with tab3: # Revisão
             emp = st.number_input("Empréstimo")
             tx = st.number_input("Taxa %")
-            m = st.number_input("Meses", value=12)
+            # AQUI ESTAVA O ERRO: Adicionei key="meses_rev"
+            m = st.number_input("Meses", value=12, key="meses_rev") 
+            
             if st.button("SIMULAR"):
                 price = emp * ((tx/100) * (1 + tx/100)**m) / ((1 + tx/100)**m - 1)
                 st.warning(f"Parcela Price: R$ {price:.2f} | Gauss (Est.): R$ {price*0.8:.2f}")
@@ -409,17 +416,7 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
         p_max = st.number_input("Pena Máxima")
         c = st.slider("Circunstâncias Ruins", 0, 8)
         if st.button("CALCULAR PENA"): st.error(f"Base: {p_min + ((p_max-p_min)/8 * c):.1f} anos")
-
-# --- COFRE (MEMÓRIA) ---
-elif menu_opcao == "📂 Cofre Digital":
-    st.header("📂 Cofre Digital (Sessão Atual)")
-    if len(st.session_state.meus_docs) > 0:
-        for i, doc in enumerate(st.session_state.meus_docs):
-            with st.expander(f"{doc['data']} - {doc['tipo']} - {doc['cliente']}"):
-                st.write(doc['conteudo'][:200])
-                st.download_button("Baixar", gerar_word(doc['conteudo']), "Doc.docx", key=f"d{i}")
-    else: st.info("Cofre vazio nesta sessão.")
-
+            
 # --- SIMULADOR DE AUDIÊNCIA (NOVO) ---
 elif menu_opcao == "🏛️ Simulador Audiência":
     st.markdown("<h2 class='tech-header'>🏛️ SIMULADOR DE AUDIÊNCIA (IA PREPARATÓRIA)</h2>", unsafe_allow_html=True)
@@ -462,4 +459,5 @@ elif menu_opcao == "🏛️ Simulador Audiência":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v9.8 | DEV MODE (NO LOGIN)</center>", unsafe_allow_html=True)
+
 
