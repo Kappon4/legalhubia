@@ -724,10 +724,161 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
                 st.success(f"Valor para Pagamento: R$ {total_pagar:,.2f}")
 
     elif area_calc == "Criminal":
-        p_min = st.number_input("Pena Mínima")
-        p_max = st.number_input("Pena Máxima")
-        c = st.slider("Circunstâncias Ruins", 0, 8)
-        if st.button("CALCULAR PENA"): st.error(f"Base: {p_min + ((p_max-p_min)/8 * c):.1f} anos")
+        st.markdown("#### ⚖️ Penal e Processo Penal (CP/CPP/LEP)")
+        
+        tab_dosimetria, tab_execucao, tab_prescricao, tab_detracao = st.tabs([
+            "Dosimetria (3 Fases)", 
+            "Execução & Progressão", 
+            "Calculadora de Prescrição",
+            "Detração e Remição"
+        ])
+        
+        # --- TAB 1: DOSIMETRIA DA PENA (SISTEMA TRIFÁSICO) ---
+        with tab_dosimetria:
+            st.info("Simulação do Sistema Trifásico (Art. 68 CP)")
+            
+            c1, c2 = st.columns(2)
+            pena_min = c1.number_input("Pena Mínima (Anos)", value=5.0, step=0.5, key="crim_min")
+            pena_max = c2.number_input("Pena Máxima (Anos)", value=15.0, step=0.5, key="crim_max")
+            
+            # FASE 1
+            st.markdown("**1ª Fase: Circunstâncias Judiciais (Art. 59 CP)**")
+            circunstancias = st.slider("Circunstâncias Desfavoráveis", 0, 8, 0, help="Culpabilidade, antecedentes, conduta social, personalidade, motivos, circunstâncias, consequências, comportamento da vítima.", key="crim_circ")
+            
+            # FASE 2
+            st.markdown("**2ª Fase: Agravantes e Atenuantes**")
+            col_f2a, col_f2b = st.columns(2)
+            agravantes = col_f2a.number_input("Qtd. Agravantes (Ex: Reincidência)", value=0, key="crim_agrav")
+            atenuantes = col_f2b.number_input("Qtd. Atenuantes (Ex: Confissão)", value=0, key="crim_aten")
+            
+            # FASE 3
+            st.markdown("**3ª Fase: Causas de Aumento e Diminuição**")
+            col_f3a, col_f3b = st.columns(2)
+            fracao_aumento = col_f3a.selectbox("Aumento de Pena", ["Nenhum", "1/6", "1/3", "1/2", "2/3"], key="crim_aum")
+            fracao_diminuicao = col_f3b.selectbox("Diminuição de Pena", ["Nenhum", "1/6", "1/3", "1/2", "2/3"], key="crim_dim")
+            
+            if st.button("CALCULAR PENA DEFINITIVA", key="btn_dosimetria"):
+                # Cálculo 1ª Fase (Jurisprudência: 1/8 do intervalo entre min e max por circunstância)
+                intervalo = pena_max - pena_min
+                aumento_base = (intervalo / 8) * circunstancias
+                pena_base = pena_min + aumento_base
+                
+                # Cálculo 2ª Fase (Jurisprudência: 1/6 sobre a pena base para cada)
+                # O Código não fixa fração, mas 1/6 é padrão STJ
+                valor_fracao_f2 = pena_base / 6
+                pena_interm = pena_base + (agravantes * valor_fracao_f2) - (atenuantes * valor_fracao_f2)
+                
+                # Súmula 231 STJ: Pena intermediária não pode ficar abaixo do mínimo legal
+                if pena_interm < pena_min: pena_interm = pena_min
+                if pena_interm > pena_max: pena_interm = pena_max # Teto máximo abstrato (discutível, mas comum)
+
+                # Cálculo 3ª Fase
+                pena_final = pena_interm
+                
+                # Aumento
+                if fracao_aumento != "Nenhum":
+                    num, den = map(int, fracao_aumento.split('/'))
+                    pena_final += (pena_final * num / den)
+                
+                # Diminuição
+                if fracao_diminuicao != "Nenhum":
+                    num, den = map(int, fracao_diminuicao.split('/'))
+                    pena_final -= (pena_final * num / den)
+
+                st.write("---")
+                c_res1, c_res2, c_res3 = st.columns(3)
+                c_res1.metric("1ª Fase (Pena Base)", f"{pena_base:.2f} anos")
+                c_res2.metric("2ª Fase (Intermediária)", f"{pena_interm:.2f} anos")
+                c_res3.metric("3ª Fase (Definitiva)", f"{pena_final:.2f} anos")
+                
+                # Conversão para Anos e Meses
+                anos = int(pena_final)
+                meses = int((pena_final - anos) * 12)
+                dias = int(((pena_final - anos) * 12 - meses) * 30)
+                
+                st.success(f"⚖️ **Pena Final Estimada:** {anos} anos, {meses} meses e {dias} dias.")
+                
+                regime = "Fechado"
+                if pena_final <= 4: regime = "Aberto"
+                elif pena_final <= 8: regime = "Semiaberto"
+                
+                if circunstancias > 0 or agravantes > 0:
+                    st.warning(f"Regime inicial sugerido: **{regime}**. (Atenção: Circunstâncias ruins ou reincidência podem agravar o regime).")
+                else:
+                    st.info(f"Regime inicial sugerido: **{regime}**")
+
+        # --- TAB 2: EXECUÇÃO PENAL (PROGRESSÃO) ---
+        with tab_execucao:
+            st.info("Calculadora de Progressão de Regime (Lei 13.964/19 - Pacote Anticrime)")
+            
+            c_exec1, c_exec2 = st.columns(2)
+            pena_total_anos = c_exec1.number_input("Pena Total (Anos)", value=8, key="exec_anos")
+            data_prisao = c_exec2.date_input("Data da Prisão/Início", date(2023, 1, 1), key="exec_data")
+            
+            tipo_crime = st.selectbox("Tipo de Delito (Art. 112 LEP)", [
+                "16% - Primário, Sem Violência",
+                "20% - Reincidente, Sem Violência",
+                "25% - Primário, Com Violência/Grave Ameaça",
+                "30% - Reincidente, Com Violência/Grave Ameaça",
+                "40% - Primário, Hediondo ou Equiparado",
+                "50% - Primário, Hediondo c/ Morte (ou Milícia/Comando)",
+                "60% - Reincidente, Hediondo",
+                "70% - Reincidente, Hediondo c/ Morte"
+            ], key="exec_tipo")
+            
+            if st.button("CALCULAR PROGRESSÃO", key="btn_progressao"):
+                pct = int(tipo_crime.split('%')[0])
+                pena_dias = pena_total_anos * 365
+                dias_para_progredir = pena_dias * (pct / 100)
+                
+                data_progressao = data_prisao + timedelta(days=dias_para_progredir)
+                
+                st.metric("Fração Necessária", f"{pct}% ({int(dias_para_progredir)} dias)")
+                
+                # Verifica se já alcançou
+                hoje = date.today()
+                if data_progressao <= hoje:
+                    st.success(f"✅ DATA DO BENEFÍCIO: **{data_progressao.strftime('%d/%m/%Y')}** (Já alcançado!)")
+                else:
+                    st.warning(f"⏳ DATA DO BENEFÍCIO: **{data_progressao.strftime('%d/%m/%Y')}**")
+                    
+                st.caption("Nota: O cálculo considera ano comercial de 365 dias e não computa remição automaticamente nesta aba.")
+
+        # --- TAB 3: PRESCRIÇÃO ---
+        with tab_prescricao:
+            st.info("Prescrição da Pretensão Punitiva (Art. 109 CP)")
+            st.markdown("Verifica em quanto tempo o Estado perde o direito de punir baseada na pena máxima.")
+            
+            pena_max_abstrato = st.number_input("Pena Máxima do Crime (Anos)", value=4.0, key="presc_pena")
+            
+            if st.button("VERIFICAR PRAZO PRESCRICIONAL", key="btn_presc"):
+                prazo = 0
+                if pena_max_abstrato < 1: prazo = 3
+                elif pena_max_abstrato < 2: prazo = 4
+                elif pena_max_abstrato < 4: prazo = 8
+                elif pena_max_abstrato < 8: prazo = 12
+                elif pena_max_abstrato < 12: prazo = 16
+                else: prazo = 20
+                
+                st.error(f"⏱️ O crime prescreve em **{prazo} ANOS**.")
+                st.caption("Art. 109 do Código Penal. Verifique causas interruptivas (recebimento da denúncia, sentença, etc).")
+
+        # --- TAB 4: DETRAÇÃO E REMIÇÃO ---
+        with tab_detracao:
+            st.info("Abatimento de Pena (LEP)")
+            
+            c_det1, c_det2 = st.columns(2)
+            dias_preso_prov = c_det1.number_input("Dias Preso Provisoriamente (Detração)", value=0, key="det_prov")
+            dias_trabalhados = c_det2.number_input("Dias Trabalhados/Estudados", value=0, key="det_trab")
+            
+            if st.button("CALCULAR ABATIMENTO", key="btn_det"):
+                # Remição: 1 dia de pena a cada 3 trabalhados/estudados
+                dias_remicao = dias_trabalhados // 3
+                total_abatimento = dias_preso_prov + dias_remicao
+                
+                st.success(f"📉 Total a abater da pena: **{total_abatimento} dias**")
+                st.write(f"- Pela prisão provisória: {dias_preso_prov} dias")
+                st.write(f"- Pelo trabalho/estudo (1 p/ 3): {dias_remicao} dias")
             
 # --- SIMULADOR DE AUDIÊNCIA (NOVO) ---
 elif menu_opcao == "🏛️ Simulador Audiência":
@@ -771,6 +922,7 @@ elif menu_opcao == "🏛️ Simulador Audiência":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v9.8 | DEV MODE (NO LOGIN)</center>", unsafe_allow_html=True)
+
 
 
 
