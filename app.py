@@ -45,13 +45,12 @@ st.set_page_config(
 # 🛑 DATABASE CONFIGURATION (SUPABASE/POSTGRES)
 # ==========================================================
 try:
-    # Tenta pegar as senhas configuradas no site do Streamlit (Nuvem)
+    # Tenta pegar dos secrets (Nuvem)
     DB_URI = st.secrets["DB_URI"]
     API_KEY_FIXA = st.secrets["GOOGLE_API_KEY"]
     USAR_SQLITE_BACKUP = False
 except:
-    # Fallback local (Seu PC)
-    # Senha corrigida (apenas um @)
+    # Fallback local (Seu PC) - CORRIGIDO O ERRO DOS DOIS @@
     DB_URI = "postgresql://postgres:0OquFTc7ovRHTBGM@db.qhcjfmzkwczjupkfpmdk.supabase.co:5432/postgres"
     API_KEY_FIXA = "AIzaSyA5lMfeDUE71k6BOOxYRZDtOolPZaqCurA"
     USAR_SQLITE_BACKUP = False
@@ -117,22 +116,41 @@ def extrair_texto_pdf(arquivo):
     try: return "".join([p.extract_text() for p in PdfReader(arquivo).pages])
     except: return ""
 
-# --- NOVA FUNÇÃO DE CÁLCULO TRABALHISTA (CLT) ---
-def calcular_rescisao_completa(admissao, demissao, salario, motivo, saldo_fgts, ferias_vencidas, aviso_tipo):
+# --- ATUALIZADO: CÁLCULO COM INSALUBRIDADE E PERICULOSIDADE ---
+def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_fgts, ferias_vencidas, aviso_tipo, grau_insalubridade, tem_periculosidade, sal_minimo=1412.00):
     # Converte para objetos de data
     formato_data = "%Y-%m-%d"
     d1 = datetime.strptime(str(admissao), formato_data)
     d2 = datetime.strptime(str(demissao), formato_data)
+    
+    verbas = {}
+    
+    # --- CÁLCULO DOS ADICIONAIS ---
+    # Insalubridade (base: salário mínimo)
+    val_insalubridade = 0.0
+    if grau_insalubridade == "Mínimo (10%)": val_insalubridade = sal_minimo * 0.10
+    elif grau_insalubridade == "Médio (20%)": val_insalubridade = sal_minimo * 0.20
+    elif grau_insalubridade == "Máximo (40%)": val_insalubridade = sal_minimo * 0.40
+    
+    # Periculosidade (base: salário contratual)
+    val_periculosidade = 0.0
+    if tem_periculosidade:
+        val_periculosidade = salario_base * 0.30
+        val_insalubridade = 0 # Não acumula (regra geral, escolhe o maior, aqui priorizamos periculosidade ou o que o user marcar)
+    
+    # Remuneração para fins rescisórios (Salário + Adicionais)
+    remuneracao = salario_base + val_insalubridade + val_periculosidade
+    
+    if val_insalubridade > 0: verbas[f"Adicional Insalubridade (Reflexo Mensal)"] = val_insalubridade
+    if val_periculosidade > 0: verbas[f"Adicional Periculosidade (Reflexo Mensal)"] = val_periculosidade
     
     # Cálculo do tempo de serviço
     meses_trabalhados = (d2.year - d1.year) * 12 + d2.month - d1.month
     anos_completo = meses_trabalhados // 12
     dias_no_mes = d2.day
     
-    verbas = {}
-    
-    # 1. Saldo de Salário
-    saldo_salario = (salario / 30) * dias_no_mes
+    # 1. Saldo de Salário (Baseado na Remuneração)
+    saldo_salario = (remuneracao / 30) * dias_no_mes
     verbas["Saldo de Salário"] = saldo_salario
     
     # 2. Aviso Prévio (Lei 12.506/2011 - 3 dias por ano)
@@ -141,31 +159,31 @@ def calcular_rescisao_completa(admissao, demissao, salario, motivo, saldo_fgts, 
     
     if motivo == "Demissão sem Justa Causa":
         if aviso_tipo == "Indenizado":
-            valor_aviso = (salario / 30) * dias_aviso
+            valor_aviso = (remuneracao / 30) * dias_aviso
             verbas[f"Aviso Prévio Indenizado ({dias_aviso} dias)"] = valor_aviso
             # Projeta data para 13o e Férias
             d2 = d2 + timedelta(days=dias_aviso)
     elif motivo == "Pedido de Demissão" and aviso_tipo == "Não Trabalhado":
-        verbas["Desconto Aviso Prévio"] = -salario
+        verbas["Desconto Aviso Prévio"] = -remuneracao
         
     # Recalcula meses proporcionais com a projeção
     meses_ano_atual = d2.month
-    if d2.day < 15: meses_ano_atual -= 1 # Fração inferior a 15 dias não conta
-    if meses_ano_atual == 0: meses_ano_atual = 12 # Ajuste virada de ano
+    if d2.day < 15: meses_ano_atual -= 1 
+    if meses_ano_atual == 0: meses_ano_atual = 12 
     
-    # 3. 13º Salário Proporcional
+    # 3. 13º Salário Proporcional (Baseado na Remuneração)
     if motivo != "Justa Causa":
-        decimo = (salario / 12) * meses_ano_atual
+        decimo = (remuneracao / 12) * meses_ano_atual
         verbas[f"13º Salário Proporcional ({meses_ano_atual}/12)"] = decimo
         
-    # 4. Férias
+    # 4. Férias (Baseado na Remuneração)
     if motivo != "Justa Causa":
         # Vencidas
         if ferias_vencidas:
-            verbas["Férias Vencidas + 1/3"] = salario + (salario/3)
+            verbas["Férias Vencidas + 1/3"] = remuneracao + (remuneracao/3)
         
         # Proporcionais
-        val_ferias_prop = (salario / 12) * meses_ano_atual
+        val_ferias_prop = (remuneracao / 12) * meses_ano_atual
         verbas[f"Férias Proporcionais ({meses_ano_atual}/12) + 1/3"] = val_ferias_prop + (val_ferias_prop/3)
 
     # 5. Multa FGTS
@@ -609,25 +627,30 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
 
     # === CALCULADORA TRABALHISTA ROBUSTA ===
     if tipo_calc == "Trabalhista (Rescisão CLT)":
-        st.info("Cálculo completo de Verbas Rescisórias (Lei 12.506/2011).")
+        st.info("Cálculo completo de Verbas Rescisórias (Lei 12.506/2011) + Adicionais.")
         
         with st.container(border=True):
+            st.markdown("##### 📅 Dados do Contrato")
             c1, c2, c3 = st.columns(3)
             dt_adm = c1.date_input("Data de Admissão", date(2022, 1, 1))
             dt_dem = c2.date_input("Data de Demissão", date.today())
             motivo = c3.selectbox("Motivo", ["Demissão sem Justa Causa", "Pedido de Demissão", "Justa Causa", "Acordo (Comum)"])
             
+            st.markdown("##### 💰 Remuneração e Adicionais")
             c4, c5, c6 = st.columns(3)
             salario = c4.number_input("Salário Base (R$)", min_value=0.0, value=2500.0)
             saldo_fgts = c5.number_input("Saldo FGTS (p/ Multa)", min_value=0.0)
             aviso = c6.selectbox("Aviso Prévio", ["Indenizado", "Trabalhado", "Não Trabalhado"])
             
-            ferias_venc = st.checkbox("Possui Férias Vencidas (1 ano completo sem tirar)?")
+            c7, c8, c9 = st.columns(3)
+            insalubridade = c7.selectbox("Insalubridade", ["Não", "Mínimo (10%)", "Médio (20%)", "Máximo (40%)"])
+            periculosidade = c8.checkbox("Periculosidade (30%)")
+            ferias_venc = c9.checkbox("Possui Férias Vencidas?")
             
             if st.button("CALCULAR RESCISÃO", use_container_width=True):
                 if dt_dem > dt_adm:
                     # Chama a função que criamos no Passo 1
-                    verbas = calcular_rescisao_completa(dt_adm, dt_dem, salario, motivo, saldo_fgts, ferias_venc, aviso)
+                    verbas = calcular_rescisao_completa(dt_adm, dt_dem, salario, motivo, saldo_fgts, ferias_venc, aviso, insalubridade, periculosidade)
                     
                     # Exibe Resultado
                     total = sum(verbas.values())
@@ -642,8 +665,9 @@ elif menu_opcao == "🧮 Calculadoras & Perícia":
                         Atue como Contador Perito Trabalhista.
                         Gere um PARECER TÉCNICO formal explicando este cálculo de rescisão.
                         Dados: Admissão {dt_adm}, Demissão {dt_dem}, Motivo: {motivo}.
+                        Adicionais: Insalubridade {insalubridade}, Periculosidade {periculosidade}.
                         Verbas: {verbas}. Total: {total}.
-                        Explique o aviso prévio proporcional e a multa do FGTS se houver.
+                        Explique os reflexos dos adicionais nas verbas rescisórias.
                         """
                         # Tenta pegar a chave API (seja do secrets ou input manual)
                         api_key_to_use = api_key if api_key else st.session_state.get('sidebar_api_key')
