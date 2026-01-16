@@ -323,6 +323,7 @@ elif menu_opcao == "📜 Contratos":
 
 # --- CÁLCULOS ---
 # --- CÁLCULOS ---
+# --- CÁLCULOS ---
 elif menu_opcao == "🧮 Cálculos Jurídicos":
     st.header("🧮 Calculadoras Jurídicas")
     area_calc = st.selectbox("Área", ["Trabalhista (CLT)", "Cível (Art. 292/Liquidação)", "Família", "Tributária", "Criminal"])
@@ -351,55 +352,209 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
                 st.success(f"Total: R$ {sum(v.values()):,.2f}")
 
     elif area_calc == "Cível (Art. 292/Liquidação)":
-        tab1, tab2, tab3 = st.tabs(["Liquidação de Sentença", "Valor da Causa", "Revisão Bancária"])
+        st.markdown("#### ⚖️ Cálculos Cíveis Completos")
         
-        with tab1: # Liquidação
-            st.info("Atualização + Juros + Multa Art. 523")
+        # Criação das sub-abas para organizar as funcionalidades pedidas
+        tab_divida, tab_banco, tab_imob, tab_causa, tab_hon = st.tabs([
+            "Atualização de Dívidas", 
+            "Bancário & Contratos", 
+            "Imobiliário & Aluguel",
+            "Valor da Causa (CPC)",
+            "Honorários"
+        ])
+        
+        # --- TAB 1: ATUALIZAÇÃO DE DÍVIDAS E LIQUIDAÇÃO ---
+        with tab_divida:
+            st.info("Correção Monetária + Juros de Mora + Danos (Liquidação)")
+            
             c1, c2 = st.columns(2)
-            val = c1.number_input("Valor Condenação")
-            idx = c2.number_input("Índice Correção", value=1.0)
+            val_origem = c1.number_input("Valor Original da Dívida/Indenização", value=0.0, format="%.2f", key="civ_val_origem")
+            data_inicio = c2.date_input("Data do Evento/Vencimento", date(2023, 1, 1), key="civ_dt_ini")
+            data_fim = date.today()
             
-            c3, c4 = st.columns(2)
-            juros = c3.selectbox("Juros", ["1% a.m.", "Selic", "Sem"])
-            # AQUI ESTAVA O ERRO: Adicionei key="meses_liq"
-            meses = c4.number_input("Meses", value=12, key="meses_liq") 
+            # Cálculo de meses
+            dias = (data_fim - data_inicio).days
+            meses = dias // 30
             
-            c5, c6 = st.columns(2)
-            multa = c5.checkbox("Multa Art. 523 (10%)")
-            hon = c6.checkbox("Honorários Execução (10%)")
+            st.write(f"📅 Tempo decorrido: **{meses} meses** ({dias} dias)")
             
-            if st.button("LIQUIDAR"):
-                res = val * idx
-                val_juros = 0
-                if juros == "1% a.m.": val_juros = res * (0.01 * meses)
-                subtotal = res + val_juros
-                total = subtotal + (subtotal*0.1 if multa else 0) + (subtotal*0.1 if hon else 0)
-                st.success(f"Total Execução: R$ {total:,.2f}")
-        
-        with tab2: # Valor da Causa
-            st.info("Art. 292 CPC")
-            tipo = st.radio("Ação", ["Cobrança", "Alimentos", "Indenização"])
-            if tipo == "Alimentos":
-                m = st.number_input("Mensalidade")
-                st.metric("Valor (12x)", f"R$ {m*12:,.2f}")
-            elif tipo == "Cobrança":
-                p = st.number_input("Principal")
-                j = st.number_input("Juros Vencidos")
-                m = st.number_input("Multas")
-                st.metric("Valor Causa", f"R$ {p+j+m:,.2f}")
-            else:
-                d = st.number_input("Valor Pretendido")
-                st.metric("Valor Causa", f"R$ {d:,.2f}")
+            c3, c4, c5 = st.columns(3)
+            indice = c3.number_input("Índice Acumulado (Ex: 1.05 para 5%)", value=1.0, help="Consulte a tabela TJ/INPC/IGPM e insira o fator acumulado.", key="civ_indice")
+            juros_tipo = c4.selectbox("Juros de Mora", ["1% ao mês (Simples)", "0.5% ao mês", "Selic", "Sem Juros"], key="civ_juros_tipo")
+            multa_pct = c5.number_input("Multa (%)", value=0.0, key="civ_multa")
+            
+            st.markdown("---")
+            st.markdown("**Adicionais (Liquidação de Sentença):**")
+            k1, k2, k3 = st.columns(3)
+            danos_morais = k1.number_input("Danos Morais", value=0.0, key="civ_dm")
+            danos_materiais = k2.number_input("Lucros Cessantes/Emergentes", value=0.0, key="civ_lucros")
+            hon_sucumb = k3.number_input("Honorários Sucumbenciais (%)", value=10.0, key="civ_sucumb")
 
-        with tab3: # Revisão
-            emp = st.number_input("Empréstimo")
-            tx = st.number_input("Taxa %")
-            # AQUI ESTAVA O ERRO: Adicionei key="meses_rev"
-            m = st.number_input("Meses", value=12, key="meses_rev") 
+            if st.button("CALCULAR ATUALIZAÇÃO", key="btn_calc_divida"):
+                # 1. Correção Monetária
+                valor_corrigido = val_origem * indice
+                
+                # 2. Juros
+                val_juros = 0.0
+                if juros_tipo == "1% ao mês (Simples)":
+                    val_juros = valor_corrigido * (0.01 * meses)
+                elif juros_tipo == "0.5% ao mês":
+                    val_juros = valor_corrigido * (0.005 * meses)
+                elif juros_tipo == "Selic":
+                    val_juros = valor_corrigido * 0.15  # Estimativa fixa para exemplo
+                
+                # 3. Multa
+                val_multa = valor_corrigido * (multa_pct / 100)
+                
+                # 4. Subtotal da Dívida Principal
+                subtotal = valor_corrigido + val_juros + val_multa
+                
+                # 5. Adicionais
+                total_geral = subtotal + danos_morais + danos_materiais
+                val_honorarios = total_geral * (hon_sucumb / 100)
+                total_final = total_geral + val_honorarios
+                
+                st.success(f"💰 TOTAL FINAL: R$ {total_final:,.2f}")
+                
+                # Tabela detalhada
+                df_res = pd.DataFrame([
+                    ("Principal Corrigido", f"R$ {valor_corrigido:,.2f}"),
+                    (f"Juros ({meses} meses)", f"R$ {val_juros:,.2f}"),
+                    ("Multa Contratual", f"R$ {val_multa:,.2f}"),
+                    ("Danos Morais/Materiais", f"R$ {danos_morais + danos_materiais:,.2f}"),
+                    ("Honorários Sucumbenciais", f"R$ {val_honorarios:,.2f}")
+                ], columns=["Item", "Valor"])
+                st.table(df_res)
+
+        # --- TAB 2: BANCÁRIO & CONTRATOS ---
+        with tab_banco:
+            st.info("Revisional, Anatocismo e Financiamentos (SFH/Leasing)")
             
-            if st.button("SIMULAR"):
-                price = emp * ((tx/100) * (1 + tx/100)**m) / ((1 + tx/100)**m - 1)
-                st.warning(f"Parcela Price: R$ {price:.2f} | Gauss (Est.): R$ {price*0.8:.2f}")
+            b1, b2 = st.columns(2)
+            divida_banc = b1.number_input("Valor Financiado/Empréstimo", value=50000.0, key="banc_valor")
+            prazo_meses = b2.number_input("Prazo (Meses)", value=60, key="banc_prazo")
+            
+            b3, b4 = st.columns(2)
+            taxa_mensal = b3.number_input("Taxa de Juros Mensal (%)", value=1.5, key="banc_taxa")
+            sistema = b4.radio("Sistema de Amortização", ["Tabela Price (Juros Compostos)", "SAC", "Método de Gauss (Juros Simples - Tese Jurídica)"], key="banc_sistema")
+            
+            if st.button("SIMULAR REVISIONAL", key="btn_bancario"):
+                i = taxa_mensal / 100
+                n = prazo_meses
+                
+                # Cálculo Price (Composto)
+                parcela_price = divida_banc * (i * (1+i)**n) / ((1+i)**n - 1)
+                total_price = parcela_price * n
+                
+                # Cálculo Gauss (Simples - Tese Revisional)
+                fator_gauss = (n * i) + 1
+                parcela_gauss = (divida_banc * fator_gauss) / n 
+                total_gauss = parcela_gauss * n
+                
+                # Cálculo SAC (Primeira Parcela)
+                amort = divida_banc / n
+                juros_sac = divida_banc * i
+                parcela_sac = amort + juros_sac
+                
+                st.write("---")
+                col_res1, col_res2 = st.columns(2)
+                
+                if sistema == "Tabela Price (Juros Compostos)":
+                    col_res1.metric("Parcela Mensal (Price)", f"R$ {parcela_price:,.2f}")
+                    col_res1.metric("Total ao Final", f"R$ {total_price:,.2f}")
+                    st.warning("Este sistema utiliza capitalização de juros (Anatocismo).")
+                    
+                elif sistema == "Método de Gauss (Juros Simples - Tese Jurídica)":
+                    col_res2.metric("Parcela Recalculada (Gauss)", f"R$ {parcela_gauss:,.2f}")
+                    col_res2.metric("Total Recalculado", f"R$ {total_gauss:,.2f}")
+                    col_res2.metric("Economia Estimada (Indébito)", f"R$ {total_price - total_gauss:,.2f}")
+                    st.success("Cálculo utilizado para teses de afastamento de anatocismo.")
+                    
+                else: # SAC
+                    st.metric("Primeira Parcela (SAC)", f"R$ {parcela_sac:,.2f}")
+                    st.info("No SAC as parcelas são decrescentes.")
+
+        # --- TAB 3: IMOBILIÁRIO ---
+        with tab_imob:
+            st.info("Reajuste de Aluguel, Despejo e Multas")
+            acao_imob = st.radio("Tipo de Cálculo", ["Reajuste Anual", "Cobrança de Aluguéis Atrasados (Despejo)", "Multa por Rescisão Antecipada"], horizontal=True, key="imob_tipo")
+            
+            val_aluguel = st.number_input("Valor do Aluguel Atual", value=2000.0, key="imob_val")
+            
+            if acao_imob == "Reajuste Anual":
+                idx_imob = st.number_input("Índice Acumulado (IGPM/IPCA) em %", value=4.5, key="imob_idx")
+                if st.button("Calcular Novo Aluguel"):
+                    novo_val = val_aluguel * (1 + idx_imob/100)
+                    st.success(f"Novo Aluguel: R$ {novo_val:,.2f}")
+            
+            elif acao_imob == "Cobrança de Aluguéis Atrasados (Despejo)":
+                meses_atraso = st.number_input("Meses em Atraso", value=3, key="imob_meses")
+                multa_moratoria = st.checkbox("Aplicar Multa Moratória (10% ou 20%)", value=True, key="imob_check_multa")
+                multa_pct_imob = 10.0 if multa_moratoria else 0.0
+                hon_despejo = st.checkbox("Honorários Contratuais no Despejo (10-20%)", value=True, key="imob_hon")
+                
+                if st.button("Calcular Débito Total"):
+                    sub_aluguel = val_aluguel * meses_atraso
+                    val_multa_imob = sub_aluguel * (multa_pct_imob/100)
+                    juros_imob = sub_aluguel * 0.01 * meses_atraso # 1% ao mês
+                    
+                    total_imob = sub_aluguel + val_multa_imob + juros_imob
+                    if hon_despejo: total_imob *= 1.20 # +20%
+                    
+                    st.error(f"Total da Ação de Despejo: R$ {total_imob:,.2f}")
+                    st.caption("Inclui: Parcelas vencidas + Multa moratória + Juros 1% a.m. + Honorários (se marcado)")
+
+            elif acao_imob == "Multa por Rescisão Antecipada":
+                st.caption("Cálculo Proporcional (Lei do Inquilinato)")
+                multa_contrato = st.number_input("Valor da Multa Cheia (Ex: 3 aluguéis)", value=6000.0, key="imob_multa_cheia")
+                prazo_total = st.number_input("Prazo Total do Contrato (meses)", value=30, key="imob_prazo_total")
+                meses_cumpridos = st.number_input("Meses Cumpridos", value=10, key="imob_meses_cump")
+                
+                if st.button("Calcular Multa Proporcional"):
+                    meses_restantes = prazo_total - meses_cumpridos
+                    multa_devida = (multa_contrato / prazo_total) * meses_restantes
+                    st.warning(f"Multa Devida: R$ {multa_devida:,.2f}")
+
+        # --- TAB 4: VALOR DA CAUSA ---
+        with tab_causa:
+            st.info("Art. 292 CPC - Parcelas Vencidas e Vincendas")
+            
+            tipo_acao_causa = st.selectbox("Tipo de Ação", ["Cobrança / Indenizatória", "Alimentos", "Obrigação de Pagar (Vencidas + Vincendas)"], key="causa_tipo")
+            
+            if tipo_acao_causa == "Alimentos":
+                mensalidade = st.number_input("Valor da Prestação Mensal", key="causa_alim")
+                st.metric("Valor da Causa (12x)", f"R$ {mensalidade * 12:,.2f}")
+            
+            elif tipo_acao_causa == "Cobrança / Indenizatória":
+                dano_material = st.number_input("Dano Material / Dívida", key="causa_mat")
+                dano_moral = st.number_input("Dano Moral Pretendido", key="causa_moral")
+                st.metric("Valor da Causa", f"R$ {dano_material + dano_moral:,.2f}")
+                
+            else: # Vencidas + Vincendas
+                vencidas = st.number_input("Soma das Parcelas Vencidas (com juros/correção)", key="causa_venc")
+                vincendas_val = st.number_input("Valor da Parcela Vincenda", key="causa_vinc_val")
+                qtd_vincendas = st.number_input("Quantidade de Vincendas (Máx 12 p/ cálculo)", value=12, max_value=12, help="Art. 292 § 2º: Até uma prestação anual")
+                
+                if st.button("Calcular Valor da Causa"):
+                    total_causa = vencidas + (vincendas_val * qtd_vincendas)
+                    st.success(f"Valor da Causa: R$ {total_causa:,.2f}")
+
+        # --- TAB 5: HONORÁRIOS ---
+        with tab_hon:
+            st.info("Cálculo de Honorários Advocatícios")
+            base_calc = st.number_input("Base de Cálculo (Valor da Causa/Condenação/Proveito)", value=10000.0, key="hon_base")
+            
+            h1, h2 = st.columns(2)
+            pct_contratual = h1.number_input("% Contratual", value=30.0, key="hon_pct_cont")
+            pct_sucumbencia = h2.number_input("% Sucumbência", value=10.0, key="hon_pct_suc")
+            
+            if st.button("CALCULAR HONORÁRIOS", key="btn_hon"):
+                val_cont = base_calc * (pct_contratual / 100)
+                val_suc = base_calc * (pct_sucumbencia / 100)
+                
+                st.markdown(f"### 💼 Total: R$ {val_cont + val_suc:,.2f}")
+                st.write(f"- Contratuais ({pct_contratual}%): **R$ {val_cont:,.2f}**")
+                st.write(f"- Sucumbenciais ({pct_sucumbencia}%): **R$ {val_suc:,.2f}**")
 
     elif area_calc == "Família":
         renda = st.number_input("Renda Líquida")
@@ -459,5 +614,6 @@ elif menu_opcao == "🏛️ Simulador Audiência":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v9.8 | DEV MODE (NO LOGIN)</center>", unsafe_allow_html=True)
+
 
 
