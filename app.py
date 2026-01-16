@@ -65,10 +65,23 @@ except:
 def tentar_gerar_conteudo(prompt, api_key_val):
     chave = api_key_val if api_key_val else API_KEY_FIXA
     if not chave: return "⚠️ Erro: API Key não configurada."
+    
     genai.configure(api_key=chave)
-    try:
-        return genai.GenerativeModel("gemini-1.5-flash").generate_content(prompt).text
-    except Exception as e: return f"❌ Erro IA: {str(e)}"
+    
+    # Lista de modelos para tentar (do mais novo para o mais estável)
+    modelos_para_tentar = ["gemini-1.5-flash", "gemini-pro"]
+    
+    for nome_modelo in modelos_para_tentar:
+        try:
+            # Tenta gerar com o modelo atual da lista
+            model = genai.GenerativeModel(nome_modelo)
+            return model.generate_content(prompt).text
+        except Exception:
+            # Se der erro, o loop continua para o próximo modelo da lista
+            continue
+            
+    # Se todos falharem, retorna o erro
+    return "❌ Erro IA: Não foi possível gerar resposta com nenhum modelo disponível. Verifique sua API Key."
 
 # --- CÁLCULO TRABALHISTA COMPLETO ---
 def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_fgts, ferias_vencidas, aviso_tipo, grau_insalubridade, tem_periculosidade):
@@ -957,6 +970,7 @@ elif menu_opcao == "🏛️ Simulador Audiência":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v9.8 | DEV MODE (NO LOGIN)</center>", unsafe_allow_html=True)
+
 
 
 
