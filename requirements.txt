@@ -1,8 +1,9 @@
 streamlit
 google-generativeai
+psycopg2-binary
+pandas
 pypdf
 python-docx
 duckduckgo-search
-pandas
 plotly
-streamlit-option-menu
+requests
