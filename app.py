@@ -83,7 +83,7 @@ def tentar_gerar_conteudo(prompt, ignored_param=None):
         genai.configure(api_key=chave)
         
         # Foca nos modelos Gemini 2.0 que você confirmou serem os únicos compatíveis
-        modelos = ["gemini-2.0-flash-exp", "gemini-2.0-flash"]
+        modelos = ["gemini-2.5-flash-exp", "gemini-2.5-flash"]
         
         for nome_modelo in modelos:
             try:
@@ -701,6 +701,7 @@ elif menu_opcao == "📂 Cofre Digital":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v10.0 | AUTO-AUTH MODE</center>", unsafe_allow_html=True)
+
 
 
 
