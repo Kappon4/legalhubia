@@ -13,20 +13,20 @@ import base64
 # 1. CONFIGURAÇÃO VISUAL - CYBER THEME
 # ==========================================================
 st.set_page_config(
-    page_title="LegalHub Elite v9.7", 
+    page_title="LegalHub Elite v9.8", 
     page_icon="⚖️", 
     layout="wide",
     initial_sidebar_state="collapsed" 
 )
 
 # ==========================================================
-# 2. FUNÇÕES RESTAURADAS (DO SEU BACKUP)
+# 2. FUNÇÕES RESTAURADAS & UTILITÁRIAS
 # ==========================================================
 def get_base64_of_bin_file(bin_file):
     try:
         with open(bin_file, 'rb') as f: data = f.read()
         return base64.b64encode(data).decode()
-    except FileNotFoundError: return None
+    except: return None
 
 def gerar_word(texto):
     doc = Document()
@@ -43,24 +43,20 @@ def extrair_texto_pdf(arquivo):
 
 def buscar_contexto_juridico(tema, area):
     fontes = {
-        "Criminal": "site:stj.jus.br OR site:stf.jus.br OR site:conjur.com.br",
-        "Trabalhista": "site:tst.jus.br OR site:csjt.jus.br OR site:trtsp.jus.br",
-        "Tributário": "site:carf.fazenda.gov.br OR site:stj.jus.br",
-        "Previdenciário": "site:gov.br/inss OR site:trf3.jus.br",
-        "Cível": "site:stj.jus.br OR site:tjsp.jus.br OR site:ibdfam.org.br"
+        "Criminal": "site:stj.jus.br OR site:stf.jus.br",
+        "Trabalhista": "site:tst.jus.br OR site:trtsp.jus.br",
+        "Tributário": "site:carf.fazenda.gov.br",
+        "Cível": "site:stj.jus.br OR site:tjsp.jus.br"
     }
-    site_query = fontes.get(area, "site:jusbrasil.com.br")
-    query = f"{tema} jurisprudência {site_query}"
+    query = f"{tema} jurisprudência {fontes.get(area, 'site:jusbrasil.com.br')}"
     try:
         with DDGS() as ddgs:
-            results = list(ddgs.text(query, region="br-pt", max_results=3))
-            if results:
-                texto_res = "\n".join([f"- {r['title']}: {r['body']} (Fonte: {r['href']})" for r in results])
-                return f"\n\n[JURISPRUDÊNCIA REAL ENCONTRADA]:\n{texto_res}"
+            res = list(ddgs.text(query, region="br-pt", max_results=3))
+            if res: return "\n\n[JURISPRUDÊNCIA REAL ENCONTRADA]:\n" + "\n".join([f"- {r['body']}" for r in res])
     except: pass
-    return "\n\n[NENHUMA JURISPRUDÊNCIA ESPECÍFICA ENCONTRADA NOS CANAIS OFICIAIS]"
+    return "\n\n[NENHUMA JURISPRUDÊNCIA ESPECÍFICA ENCONTRADA]"
 
-# Configuração da API Key (Tenta Secrets ou Vazio)
+# Configuração API Key
 try:
     API_KEY_FIXA = st.secrets["GOOGLE_API_KEY"]
 except:
@@ -71,11 +67,10 @@ def tentar_gerar_conteudo(prompt, api_key_val):
     if not chave: return "⚠️ Erro: API Key não configurada."
     genai.configure(api_key=chave)
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        return model.generate_content(prompt).text
+        return genai.GenerativeModel("gemini-1.5-flash").generate_content(prompt).text
     except Exception as e: return f"❌ Erro IA: {str(e)}"
 
-# --- CÁLCULO TRABALHISTA COMPLETO (DO BACKUP) ---
+# --- CÁLCULO TRABALHISTA COMPLETO ---
 def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_fgts, ferias_vencidas, aviso_tipo, grau_insalubridade, tem_periculosidade):
     formato = "%Y-%m-%d"
     d1 = datetime.strptime(str(admissao), formato)
@@ -95,10 +90,12 @@ def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_f
     if adic_peric > 0: verbas["Adicional Periculosidade"] = adic_peric
 
     meses_trab = (d2.year - d1.year) * 12 + d2.month - d1.month
-    anos_completos = meses_trab // 12
-    verbas["Saldo Salário"] = (remuneracao/30) * d2.day
     
+    # Aviso Prévio Proporcional
+    anos_completos = meses_trab // 12
     dias_aviso = min(90, 30 + (3 * anos_completos))
+    
+    verbas["Saldo Salário"] = (remuneracao/30) * d2.day
     
     if motivo == "Demissão sem Justa Causa":
         if aviso_tipo == "Indenizado":
@@ -151,7 +148,7 @@ def local_css():
 local_css()
 
 # ==========================================================
-# 4. MEMÓRIA TEMPORÁRIA
+# 4. MEMÓRIA TEMPORÁRIA (DEV MODE)
 # ==========================================================
 if "meus_docs" not in st.session_state:
     st.session_state.meus_docs = []
@@ -210,12 +207,11 @@ if menu_opcao == "📊 Dashboard":
     with r3:
         if st.button("📜 NOVO CONTRATO", use_container_width=True): st.session_state.navegacao_override = "📜 Contratos"; st.rerun()
 
-# --- REDATOR IA ---
+# --- REDATOR IA (COM UPLOAD PDF) ---
 elif menu_opcao == "✍️ Redator Jurídico":
     st.markdown("<h2 class='tech-header'>✍️ REDATOR IA AVANÇADO</h2>", unsafe_allow_html=True)
     area = st.selectbox("Área", ["Cível", "Trabalhista", "Criminal", "Tributário", "Previdenciário"])
     
-    # LISTAS RESTAURADAS DO BACKUP
     pecas = []
     if area == "Cível": 
         pecas = ["Petição Inicial", "Contestação", "Réplica", "Reconvenção", "Ação Rescisória", "Mandado de Segurança", "Ação Civil Pública", "Embargos à Execução", "Embargos de Terceiro", "Exceção de Incompetência", "Impugnação ao Valor da Causa", "Pedido de Tutela", "Impugnação ao Cumprimento", "Apelação", "Agravo de Instrumento", "Embargos de Declaração", "Recurso Especial", "Recurso Extraordinário"]
@@ -232,7 +228,19 @@ elif menu_opcao == "✍️ Redator Jurídico":
     c1, c2 = st.columns(2)
     cli = c1.text_input("Cliente")
     adv = c2.text_input("Parte Contrária")
-    fatos = st.text_area("Fatos", height=150)
+    
+    # NOVA FUNÇÃO: UPLOAD DE PDF
+    st.write("---")
+    uploaded_file = st.file_uploader("📂 Carregar PDF (Opcional - Extrai fatos automaticamente)", type="pdf")
+    
+    fatos_iniciais = ""
+    if uploaded_file is not None:
+        with st.spinner("Lendo PDF..."):
+            fatos_iniciais = extrair_texto_pdf(uploaded_file)
+            st.success("Texto extraído do PDF com sucesso! Edite abaixo se necessário.")
+
+    fatos = st.text_area("Fatos", value=fatos_iniciais, height=150, placeholder="Descreva os fatos ou use o PDF acima...")
+    
     busca_real = st.checkbox("🔍 Buscar Jurisprudência Real (STF/STJ/TST)", value=True)
     
     if st.button("GERAR PEÇA", use_container_width=True):
@@ -248,21 +256,35 @@ elif menu_opcao == "✍️ Redator Jurídico":
                     salvar_documento_memoria(tipo, cli, res)
                     st.download_button("Baixar DOCX", gerar_word(res), f"{tipo}.docx")
 
-# --- CONTRATOS ---
+# --- CONTRATOS (+ PROCURAÇÃO) ---
 elif menu_opcao == "📜 Contratos":
-    st.header("📜 Fábrica de Contratos")
+    st.header("📜 Fábrica de Contratos & Procurações")
     c1, c2 = st.columns(2)
     cli = c1.text_input("Contratante")
     cpf = c2.text_input("CPF/CNPJ")
-    obj = st.text_area("Objeto")
-    val = st.number_input("Valor", step=100.0)
-    if st.button("GERAR CONTRATO"):
-        res = tentar_gerar_conteudo(f"Contrato honorários. Cliente {cli}, CPF {cpf}. Objeto: {obj}. Valor R$ {val}. Contratado: LBA Advocacia", None)
-        st.markdown(res)
-        salvar_documento_memoria("Contrato", cli, res)
-        st.download_button("Baixar", gerar_word(res), "Contrato.docx")
+    obj = st.text_area("Objeto do Contrato (Ex: Ação Trabalhista contra X)")
+    val = st.number_input("Valor Honorários (R$)", step=100.0)
+    
+    if st.button("GERAR CONTRATO + PROCURAÇÃO", use_container_width=True):
+        if cli and obj:
+            with st.spinner("Redigindo documentos..."):
+                # Prompt atualizado para pedir os dois documentos
+                prompt = f"""
+                Atue como advogado. Redija dois documentos completos em sequência:
+                1. CONTRATO DE HONORÁRIOS ADVOCATÍCIOS. Cliente: {cli}, CPF {cpf}. Objeto: {obj}. Valor: R$ {val}. Contratado: LBA Advocacia.
+                
+                --- QUEBRA DE PÁGINA ---
+                
+                2. PROCURAÇÃO AD JUDICIA. Outorgante: {cli}, CPF {cpf}. Outorgado: LBA Advocacia. Poderes: Gerais e Especiais para transigir, firmar acordos, receber e dar quitação.
+                """
+                res = tentar_gerar_conteudo(prompt, None)
+                st.markdown(res)
+                salvar_documento_memoria("Contrato+Proc", cli, res)
+                st.download_button("Baixar", gerar_word(res), "Contrato_Procuracao.docx")
+        else:
+            st.warning("Preencha o cliente e o objeto.")
 
-# --- CÁLCULOS RESTAURADOS ---
+# --- CÁLCULOS ---
 elif menu_opcao == "🧮 Cálculos Jurídicos":
     st.header("🧮 Calculadoras Jurídicas")
     area_calc = st.selectbox("Área", ["Trabalhista (CLT)", "Cível (Art. 292/Liquidação)", "Família", "Tributária", "Criminal"])
@@ -293,30 +315,26 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
     elif area_calc == "Cível (Art. 292/Liquidação)":
         tab1, tab2, tab3 = st.tabs(["Liquidação de Sentença", "Valor da Causa", "Revisão Bancária"])
         
-        with tab1: # Liquidação
-            st.info("Atualização + Juros + Multa Art. 523 + Honorários")
+        with tab1:
+            st.info("Atualização + Juros + Multa Art. 523")
             c1, c2 = st.columns(2)
             val = c1.number_input("Valor Condenação")
             idx = c2.number_input("Índice Correção", value=1.0)
             c3, c4 = st.columns(2)
             juros = c3.selectbox("Juros", ["1% a.m.", "Selic", "Sem"])
             meses = c4.number_input("Meses", value=12)
-            
             c5, c6 = st.columns(2)
             multa = c5.checkbox("Multa Art. 523 (10%)")
             hon = c6.checkbox("Honorários Execução (10%)")
-            
             if st.button("LIQUIDAR"):
                 res = val * idx
                 val_juros = 0
                 if juros == "1% a.m.": val_juros = res * (0.01 * meses)
-                elif juros == "Selic": val_juros = res * 0.12 
-                
                 subtotal = res + val_juros
                 total = subtotal + (subtotal*0.1 if multa else 0) + (subtotal*0.1 if hon else 0)
                 st.success(f"Total Execução: R$ {total:,.2f}")
         
-        with tab2: # Valor da Causa
+        with tab2:
             st.info("Art. 292 CPC")
             tipo = st.radio("Ação", ["Cobrança", "Alimentos", "Indenização"])
             if tipo == "Alimentos":
@@ -331,7 +349,7 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
                 d = st.number_input("Valor Pretendido")
                 st.metric("Valor Causa", f"R$ {d:,.2f}")
 
-        with tab3: # Revisão
+        with tab3:
             emp = st.number_input("Empréstimo")
             tx = st.number_input("Taxa %")
             m = st.number_input("Meses", value=12)
@@ -360,15 +378,50 @@ elif menu_opcao == "📂 Cofre Digital":
     st.header("📂 Cofre Digital (Sessão Atual)")
     if len(st.session_state.meus_docs) > 0:
         for i, doc in enumerate(st.session_state.meus_docs):
-            with st.expander(f"{doc['tipo']} - {doc['cliente']}"):
+            with st.expander(f"{doc['data']} - {doc['tipo']} - {doc['cliente']}"):
                 st.write(doc['conteudo'][:200])
                 st.download_button("Baixar", gerar_word(doc['conteudo']), "Doc.docx", key=f"d{i}")
     else: st.info("Cofre vazio nesta sessão.")
 
-# --- SIMULADOR (Placeholder) ---
-elif menu_opcao == "🏛️ Simulador de Audiência":
-    st.header("🏛️ Simulador de Audiência")
-    st.info("Em breve: Simulação de perguntas cruzadas com IA.")
+# --- SIMULADOR DE AUDIÊNCIA (NOVO) ---
+elif menu_opcao == "🏛️ Simulador Audiência":
+    st.markdown("<h2 class='tech-header'>🏛️ SIMULADOR DE AUDIÊNCIA (IA PREPARATÓRIA)</h2>", unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("#### 🛡️ Minha Defesa")
+        meu_cli = st.text_area("O que meu cliente alega?", height=150, placeholder="Ex: Meu cliente afirma que não recebeu horas extras...")
+    
+    with col2:
+        st.markdown("#### ⚔️ Parte Contrária")
+        outra_parte = st.text_area("O que a outra parte alega?", height=150, placeholder="Ex: A empresa diz que ele tinha cargo de confiança...")
+    
+    tipo_aud = st.selectbox("Tipo de Audiência", ["Instrução Trabalhista", "Cível (Conciliação/Instrução)", "Criminal", "Família"])
+    
+    if st.button("GERAR PREPARAÇÃO PARA AUDIÊNCIA", use_container_width=True):
+        if meu_cli and outra_parte:
+            with st.spinner("IA Analisando estratégia e gerando perguntas..."):
+                prompt = f"""
+                Atue como um Advogado Sênior experiente em audiências de {tipo_aud}.
+                Prepare um roteiro de audiência para mim.
+                
+                CASO:
+                - Minha tese: {meu_cli}
+                - Tese da parte contrária: {outra_parte}
+                
+                GERE:
+                1. Lista de 5 Perguntas CRUZADAS para fazer à parte contrária (para derrubar a tese deles).
+                2. Lista de 3 Perguntas para fazer ao meu cliente (para reforçar nossa tese).
+                3. Possíveis "Pegadinhas" que o outro advogado pode tentar fazer.
+                """
+                res = tentar_gerar_conteudo(prompt, None)
+                st.markdown(res)
+                
+                if "❌" not in res:
+                    salvar_documento_memoria("Audiencia", "Simulação", res)
+                    st.download_button("Baixar Roteiro", gerar_word(res), "Roteiro_Audiencia.docx")
+        else:
+            st.warning("Preencha as teses de ambas as partes para gerar a simulação.")
 
 st.markdown("---")
-st.markdown("<center>🔒 LEGALHUB ELITE v9.7 | DEV MODE (NO LOGIN)</center>", unsafe_allow_html=True)
+st.markdown("<center>🔒 LEGALHUB ELITE v9.8 | DEV MODE (NO LOGIN)</center>", unsafe_allow_html=True)
