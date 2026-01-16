@@ -21,13 +21,13 @@ except ImportError:
     psycopg2 = None
 
 st.set_page_config(
-    page_title="LegalHub Elite v8.7", 
+    page_title="LegalHub Elite v8.7.1", 
     page_icon="⚖️", 
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Verifica se os Secrets existem (agora sem [general])
+# Verifica se os Secrets existem
 try:
     DB_URI = st.secrets["DB_URI"]
     API_KEY_FIXA = st.secrets["GOOGLE_API_KEY"]
@@ -146,26 +146,15 @@ def calcular_rescisao_completa(admissao, demissao, salario, motivo, saldo_fgts, 
 
 # --- CSS ---
 def local_css():
-    bg_image_b64 = get_base64_of_bin_file("unnamed.jpg")
-    bg_css = f"""
-    .stApp::before {{
-        content: ""; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-        width: 60%; height: 60%; background-image: url("data:image/jpeg;base64,{bg_image_b64}");
-        background-size: contain; background-repeat: no-repeat; background-position: center;
-        opacity: 0.08; z-index: 0; pointer-events: none; animation: float-logo 15s ease-in-out infinite;
-    }}
-    """ if bg_image_b64 else ""
-
-    st.markdown(f"""<style>
-        {bg_css}
-        .stApp {{ background-color: #0e1117; color: white; }}
-        .stButton>button {{ border: 1px solid #00F3FF; color: #00F3FF; background: transparent; width: 100%; }}
-        h1, h2, h3 {{ color: #00F3FF !important; }}
+    st.markdown("""<style>
+        .stApp { background-color: #0e1117; color: white; }
+        .stButton>button { border: 1px solid #00F3FF; color: #00F3FF; background: transparent; width: 100%; }
+        h1, h2 { color: #00F3FF !important; }
     </style>""", unsafe_allow_html=True)
 local_css()
 
 # ==========================================================
-# 4. TELA DE LOGIN (COM DIAGNÓSTICO)
+# 4. TELA DE LOGIN
 # ==========================================================
 if "logado" not in st.session_state: st.session_state.logado = False
 if "usuario_atual" not in st.session_state: st.session_state.usuario_atual = ""
@@ -180,7 +169,7 @@ if not st.session_state.logado:
         elif not SECRETS_OK:
             st.error("❌ ERRO: Secrets vazios ou com [general].")
         elif not CONEXAO_NUVEM:
-             st.warning("⚠️ MODO OFFLINE (Conexão falhou)")
+             st.warning("⚠️ MODO OFFLINE (Dados não serão salvos)")
         else:
              st.success("☁️ ONLINE E SEGURO")
 
@@ -201,7 +190,7 @@ if not st.session_state.logado:
                 
                 if st.button("🆘 Resetar Admin"):
                     run_query("INSERT INTO usuarios (username, senha, escritorio, email_oab, creditos, plano) VALUES ('admin', 'admin', 'Master', 'adm', 99, 'full') ON CONFLICT (username) DO UPDATE SET senha='admin'")
-                    st.success("Admin resetado!")
+                    st.success("Admin resetado! Login: admin / admin")
             
             with tab2:
                 nu = st.text_input("Novo Usuário").strip().lower()
@@ -216,7 +205,7 @@ if not st.session_state.logado:
     st.stop()
 
 # ==========================================================
-# 5. SISTEMA PRINCIPAL (COM TODAS AS FUNÇÕES)
+# 5. SISTEMA PRINCIPAL
 # ==========================================================
 df_user = run_query("SELECT creditos, plano FROM usuarios WHERE username = %s", (st.session_state.usuario_atual,), return_data=True)
 creditos = df_user.iloc[0]['creditos'] if df_user is not None else 0
@@ -239,12 +228,28 @@ with st.sidebar:
     menu = mapa[escolha]
     
     st.divider()
-    with st.expander("⚙️ ADMIN"):
-        np = st.selectbox("Plano", ["starter", "full", "civil"])
-        if st.button("Alterar"):
-            run_query("UPDATE usuarios SET plano = %s WHERE username = %s", (np, st.session_state.usuario_atual))
-            st.rerun()
-            
+    
+    # --- NOVA FUNÇÃO AGREGADA: PAINEL DE ADMINISTRAÇÃO ---
+    # Só aparece se o usuário logado for 'admin'
+    if st.session_state.usuario_atual == 'admin':
+        with st.expander("⚙️ ADMIN & USUÁRIOS"):
+            st.write("### Gerenciar Planos")
+            # Lista de usuários para editar
+            all_users = run_query("SELECT username, senha, plano FROM usuarios", return_data=True)
+            if all_users is not None:
+                st.dataframe(all_users, height=150) # Mostra a tabela
+                
+                user_to_edit = st.selectbox("Editar Usuário", all_users['username'].unique())
+                new_plan = st.selectbox("Novo Plano", ["starter", "full", "civil", "trabalhista"])
+                
+                if st.button("Salvar Alteração"):
+                    run_query("UPDATE usuarios SET plano = %s WHERE username = %s", (new_plan, user_to_edit))
+                    st.success("Atualizado!")
+                    time.sleep(1)
+                    st.rerun()
+            else:
+                st.info("Nenhum usuário encontrado.")
+
     st.markdown(f"💎 Créditos: **{creditos}**")
     if st.button("SAIR"): st.session_state.logado = False; st.rerun()
 
@@ -265,9 +270,9 @@ elif menu == "✍️ Redator Jurídico":
     st.header("✍️ Redator IA (Anti-Alucinação)")
     area = st.selectbox("Área", ["Cível", "Trabalhista", "Criminal", "Tributário", "Previdenciário"])
     
-    # LISTAS DO SEU PEDIDO
+    # LISTAS ESPECÍFICAS (MANTIDAS)
     pecas = []
-    if area == "Cível": pecas = ["Petição Inicial", "Contestação", "Réplica", "Reconvenção", "Agravo", "Apelação", "Embargos", "Mandado Segurança"]
+    if area == "Cível": pecas = ["Petição Inicial", "Contestação", "Réplica", "Reconvenção", "Agravo", "Apelação", "Embargos"]
     elif area == "Trabalhista": pecas = ["Reclamação", "Contestação", "Recurso Ordinário", "Consignação"]
     elif area == "Criminal": pecas = ["Resposta à Acusação", "Memoriais", "Habeas Corpus", "Relaxamento Prisão"]
     elif area == "Tributário": pecas = ["Anulatória", "Mandado Segurança", "Embargos Execução"]
