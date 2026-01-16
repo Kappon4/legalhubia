@@ -35,7 +35,7 @@ from google.api_core.exceptions import ResourceExhausted, NotFound, InvalidArgum
 # 1. VISUAL CONFIGURATION - CYBER FUTURE THEME
 # ==========================================================
 st.set_page_config(
-    page_title="LegalHub Elite | AI System", 
+    page_title="LegalHub Elite v7.3", 
     page_icon="⚖️", 
     layout="wide",
     initial_sidebar_state="expanded"
@@ -50,7 +50,7 @@ try:
     API_KEY_FIXA = st.secrets["GOOGLE_API_KEY"]
     USAR_SQLITE_BACKUP = False
 except:
-    # Fallback local (Seu PC) - CORRIGIDO O ERRO DOS DOIS @@
+    # Fallback local (Seu PC)
     DB_URI = "postgresql://postgres:0OquFTc7ovRHTBGM@db.qhcjfmzkwczjupkfpmdk.supabase.co:5432/postgres"
     API_KEY_FIXA = "AIzaSyA5lMfeDUE71k6BOOxYRZDtOolPZaqCurA"
     USAR_SQLITE_BACKUP = False
@@ -116,9 +116,8 @@ def extrair_texto_pdf(arquivo):
     try: return "".join([p.extract_text() for p in PdfReader(arquivo).pages])
     except: return ""
 
-# --- ATUALIZADO: CÁLCULO COM INSALUBRIDADE E PERICULOSIDADE ---
+# --- CÁLCULO TRABALHISTA (Mantido) ---
 def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_fgts, ferias_vencidas, aviso_tipo, grau_insalubridade, tem_periculosidade, sal_minimo=1412.00):
-    # Converte para objetos de data
     formato_data = "%Y-%m-%d"
     d1 = datetime.strptime(str(admissao), formato_data)
     d2 = datetime.strptime(str(demissao), formato_data)
@@ -126,34 +125,28 @@ def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_f
     verbas = {}
     
     # --- CÁLCULO DOS ADICIONAIS ---
-    # Insalubridade (base: salário mínimo)
     val_insalubridade = 0.0
     if grau_insalubridade == "Mínimo (10%)": val_insalubridade = sal_minimo * 0.10
     elif grau_insalubridade == "Médio (20%)": val_insalubridade = sal_minimo * 0.20
     elif grau_insalubridade == "Máximo (40%)": val_insalubridade = sal_minimo * 0.40
     
-    # Periculosidade (base: salário contratual)
     val_periculosidade = 0.0
     if tem_periculosidade:
         val_periculosidade = salario_base * 0.30
-        val_insalubridade = 0 # Não acumula (regra geral, escolhe o maior, aqui priorizamos periculosidade ou o que o user marcar)
+        val_insalubridade = 0 
     
-    # Remuneração para fins rescisórios (Salário + Adicionais)
     remuneracao = salario_base + val_insalubridade + val_periculosidade
     
     if val_insalubridade > 0: verbas[f"Adicional Insalubridade (Reflexo Mensal)"] = val_insalubridade
     if val_periculosidade > 0: verbas[f"Adicional Periculosidade (Reflexo Mensal)"] = val_periculosidade
     
-    # Cálculo do tempo de serviço
     meses_trabalhados = (d2.year - d1.year) * 12 + d2.month - d1.month
     anos_completo = meses_trabalhados // 12
     dias_no_mes = d2.day
     
-    # 1. Saldo de Salário (Baseado na Remuneração)
     saldo_salario = (remuneracao / 30) * dias_no_mes
     verbas["Saldo de Salário"] = saldo_salario
     
-    # 2. Aviso Prévio (Lei 12.506/2011 - 3 dias por ano)
     dias_aviso = 30 + (3 * anos_completo)
     if dias_aviso > 90: dias_aviso = 90
     
@@ -161,32 +154,24 @@ def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_f
         if aviso_tipo == "Indenizado":
             valor_aviso = (remuneracao / 30) * dias_aviso
             verbas[f"Aviso Prévio Indenizado ({dias_aviso} dias)"] = valor_aviso
-            # Projeta data para 13o e Férias
             d2 = d2 + timedelta(days=dias_aviso)
     elif motivo == "Pedido de Demissão" and aviso_tipo == "Não Trabalhado":
         verbas["Desconto Aviso Prévio"] = -remuneracao
         
-    # Recalcula meses proporcionais com a projeção
     meses_ano_atual = d2.month
     if d2.day < 15: meses_ano_atual -= 1 
     if meses_ano_atual == 0: meses_ano_atual = 12 
     
-    # 3. 13º Salário Proporcional (Baseado na Remuneração)
     if motivo != "Justa Causa":
         decimo = (remuneracao / 12) * meses_ano_atual
         verbas[f"13º Salário Proporcional ({meses_ano_atual}/12)"] = decimo
         
-    # 4. Férias (Baseado na Remuneração)
     if motivo != "Justa Causa":
-        # Vencidas
         if ferias_vencidas:
             verbas["Férias Vencidas + 1/3"] = remuneracao + (remuneracao/3)
-        
-        # Proporcionais
         val_ferias_prop = (remuneracao / 12) * meses_ano_atual
         verbas[f"Férias Proporcionais ({meses_ano_atual}/12) + 1/3"] = val_ferias_prop + (val_ferias_prop/3)
 
-    # 5. Multa FGTS
     if motivo == "Demissão sem Justa Causa" or motivo == "Rescisão Indireta":
         verbas["Multa 40% FGTS"] = saldo_fgts * 0.4
     elif motivo == "Acordo (Comum)":
@@ -197,16 +182,10 @@ def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_f
 # --- ROBUST AI FUNCTION ---
 def tentar_gerar_conteudo(prompt, api_key_val):
     chave = api_key_val if api_key_val else API_KEY_FIXA
-    
-    if not chave:
-        return "⚠️ Error: API Key not configured. Insert in sidebar."
-    
+    if not chave: return "⚠️ Error: API Key not configured. Insert in sidebar."
     genai.configure(api_key=chave)
-    
     modelos_para_tentar = ["gemini-2.5-flash", "gemini-1.5-pro", "gemini-1.5-flash"]
-    
     erro_final = ""
-    
     for modelo in modelos_para_tentar:
         try:
             model = genai.GenerativeModel(modelo)
@@ -215,7 +194,6 @@ def tentar_gerar_conteudo(prompt, api_key_val):
         except Exception as e:
             erro_final = str(e)
             continue 
-
     return f"❌ Falha na IA. Verifique sua chave API. Erro: {erro_final}"
 
 def buscar_intimacoes_email(user, pwd, server):
@@ -298,7 +276,6 @@ local_css()
 # ==========================================================
 # 4. LOGIN
 # ==========================================================
-# Garante tabelas criadas
 try:
     if USAR_SQLITE_BACKUP:
         run_query("CREATE TABLE IF NOT EXISTS usuarios (username TEXT PRIMARY KEY, senha TEXT, escritorio TEXT, email_oab TEXT, creditos INTEGER DEFAULT 10, plano TEXT DEFAULT 'starter')")
@@ -306,7 +283,6 @@ try:
     else:
         run_query("CREATE TABLE IF NOT EXISTS usuarios (username TEXT PRIMARY KEY, senha TEXT, escritorio TEXT, email_oab TEXT, creditos INTEGER DEFAULT 10, plano TEXT DEFAULT 'starter')")
         run_query("CREATE TABLE IF NOT EXISTS documentos (id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY, escritorio TEXT, data_criacao TEXT, cliente TEXT, area TEXT, tipo TEXT, conteudo TEXT)")
-    
     run_query("INSERT INTO usuarios (username, senha, escritorio, email_oab, creditos, plano) VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING", ('admin', 'admin', 'Master Office', 'adm@lh.com', 9999, 'full'))
 except: pass
 
@@ -363,7 +339,7 @@ if "navegacao_override" not in st.session_state: st.session_state.navegacao_over
 col_logo, col_menu = st.columns([1, 4])
 with col_logo: st.markdown("""<div class='header-logo'><h1 class='tech-header'>LEGALHUB<span>ELITE</span></h1></div>""", unsafe_allow_html=True)
 with col_menu:
-    mapa_nav = {"Dashboard": "📊 Dashboard", "Redator IA": "✍️ Redator Jurídico", "Contratos": "📜 Contratos", "Perícia & Calc": "🧮 Calculadoras & Perícia", "Audiência": "🏛️ Estratégia de Audiência", "Gestão Casos": "📂 Gestão de Casos", "Monitor Prazos": "🚦 Monitor de Prazos", "Assinatura": "💎 Planos & Upgrade"}
+    mapa_nav = {"Dashboard": "📊 Dashboard", "Redator IA": "✍️ Redator Jurídico", "Contratos": "📜 Contratos", "Perícia & Calc": "🧮 Perícia Trabalhista", "Calculadora Civel": "⚖️ Calculadoras Cíveis", "Audiência": "🏛️ Estratégia de Audiência", "Gestão Casos": "📂 Gestão de Casos", "Monitor Prazos": "🚦 Monitor de Prazos", "Assinatura": "💎 Planos & Upgrade"}
     opcoes_menu = list(mapa_nav.keys())
     idx_radio = 0
     if st.session_state.navegacao_override:
@@ -429,7 +405,7 @@ if menu_opcao == "📊 Dashboard":
             st.markdown("#### 🧮 PERÍCIA & CÁLCULOS")
             st.markdown("<div style='height: 60px; font-size: 0.85rem; color: #cbd5e1;'>Calculadoras especializadas (Trabalhista, Cível, Penal) e gerador de laudos técnicos instantâneos.</div>", unsafe_allow_html=True)
             if st.button("ABRIR CÁLCULOS", key="d_pericia", use_container_width=True): 
-                st.session_state.navegacao_override = "🧮 Calculadoras & Perícia"
+                st.session_state.navegacao_override = "🧮 Perícia Trabalhista"
                 st.rerun()
 
     with row1_c3:
@@ -617,83 +593,200 @@ elif menu_opcao == "✍️ Redator Jurídico":
                 else: st.error(res)
         else: st.error("Créditos insuficientes ou dados incompletos.")
 
-# --- NOVA ABA SUBSTITUÍDA: CÁLCULADORA ROBUSTA ---
-elif menu_opcao == "🧮 Calculadoras & Perícia":
+# --- ABA: CÁLCULADORA TRABALHISTA ROBUSTA ---
+elif menu_opcao == "🧮 Perícia Trabalhista":
     st.header("🧮 Central de Cálculos & Perícia")
+    st.info("Cálculo completo de Verbas Rescisórias (Lei 12.506/2011) + Adicionais.")
     
-    # Seletor de Tipo de Calculadora
-    tipo_calc = st.selectbox("Selecione a Calculadora:", ["Trabalhista (Rescisão CLT)", "Cível (Atualização)", "Família (Pensão)"])
-    st.markdown("---")
-
-    # === CALCULADORA TRABALHISTA ROBUSTA ===
-    if tipo_calc == "Trabalhista (Rescisão CLT)":
-        st.info("Cálculo completo de Verbas Rescisórias (Lei 12.506/2011) + Adicionais.")
+    with st.container(border=True):
+        st.markdown("##### 📅 Dados do Contrato")
+        c1, c2, c3 = st.columns(3)
+        dt_adm = c1.date_input("Data de Admissão", date(2022, 1, 1))
+        dt_dem = c2.date_input("Data de Demissão", date.today())
+        motivo = c3.selectbox("Motivo", ["Demissão sem Justa Causa", "Pedido de Demissão", "Justa Causa", "Acordo (Comum)"])
         
+        st.markdown("##### 💰 Remuneração e Adicionais")
+        c4, c5, c6 = st.columns(3)
+        salario = c4.number_input("Salário Base (R$)", min_value=0.0, value=2500.0)
+        saldo_fgts = c5.number_input("Saldo FGTS (p/ Multa)", min_value=0.0)
+        aviso = c6.selectbox("Aviso Prévio", ["Indenizado", "Trabalhado", "Não Trabalhado"])
+        
+        c7, c8, c9 = st.columns(3)
+        insalubridade = c7.selectbox("Insalubridade", ["Não", "Mínimo (10%)", "Médio (20%)", "Máximo (40%)"])
+        periculosidade = c8.checkbox("Periculosidade (30%)")
+        ferias_venc = c9.checkbox("Possui Férias Vencidas?")
+        
+        if st.button("CALCULAR RESCISÃO", use_container_width=True):
+            if dt_dem > dt_adm:
+                verbas = calcular_rescisao_completa(dt_adm, dt_dem, salario, motivo, saldo_fgts, ferias_venc, aviso, insalubridade, periculosidade)
+                
+                total = sum(verbas.values())
+                st.subheader(f"💰 Total Estimado: R$ {total:,.2f}")
+                
+                df_res = pd.DataFrame(list(verbas.items()), columns=["Verba", "Valor (R$)"])
+                st.dataframe(df_res, use_container_width=True)
+                
+                with st.spinner("Gerando Laudo Técnico..."):
+                    prompt_laudo = f"""
+                    Atue como Contador Perito Trabalhista.
+                    Gere um PARECER TÉCNICO formal explicando este cálculo de rescisão.
+                    Dados: Admissão {dt_adm}, Demissão {dt_dem}, Motivo: {motivo}.
+                    Adicionais: Insalubridade {insalubridade}, Periculosidade {periculosidade}.
+                    Verbas: {verbas}. Total: {total}.
+                    Explique os reflexos dos adicionais nas verbas rescisórias.
+                    """
+                    api_key_to_use = api_key if api_key else st.session_state.get('sidebar_api_key')
+                    if not api_key_to_use and 'API_KEY_FIXA' in globals(): api_key_to_use = API_KEY_FIXA
+                    
+                    parecer = tentar_gerar_conteudo(prompt_laudo, api_key_to_use)
+                    
+                    with st.expander("📄 Ver Parecer Técnico", expanded=True):
+                        st.markdown(parecer)
+                        st.download_button("Baixar Laudo (.docx)", gerar_word(parecer), "Laudo_Rescisao.docx")
+            else:
+                st.error("A Data de Demissão deve ser posterior à Admissão.")
+
+# === NOVA ABA: CALCULADORAS CÍVEIS ROBUSTAS (CPC/CIVIL) ===
+elif menu_opcao == "⚖️ Calculadoras Cíveis":
+    st.header("⚖️ Calculadoras Cíveis & Processuais")
+    st.info("Ferramentas baseadas no CPC/2015 e Código Civil.")
+
+    tab_liq, tab_causa, tab_fam, tab_rev = st.tabs([
+        "💸 Liquidação de Sentença",
+        "⚖️ Valor da Causa (Art. 292 CPC)",
+        "👨‍👩‍👧‍👦 Família & Sucessões",
+        "🏦 Revisão Bancária"
+    ])
+
+    # --- 1. LIQUIDAÇÃO DE SENTENÇA ---
+    with tab_liq:
+        st.markdown("#### Atualização Monetária e Juros de Mora")
         with st.container(border=True):
-            st.markdown("##### 📅 Dados do Contrato")
-            c1, c2, c3 = st.columns(3)
-            dt_adm = c1.date_input("Data de Admissão", date(2022, 1, 1))
-            dt_dem = c2.date_input("Data de Demissão", date.today())
-            motivo = c3.selectbox("Motivo", ["Demissão sem Justa Causa", "Pedido de Demissão", "Justa Causa", "Acordo (Comum)"])
+            col_l1, col_l2 = st.columns(2)
+            valor_orig = col_l1.number_input("Valor Original da Condenação", 0.0, step=100.0)
+            data_citacao = col_l2.date_input("Data Inicial (Vencimento/Citação)", value=date(2020,1,1))
             
-            st.markdown("##### 💰 Remuneração e Adicionais")
-            c4, c5, c6 = st.columns(3)
-            salario = c4.number_input("Salário Base (R$)", min_value=0.0, value=2500.0)
-            saldo_fgts = c5.number_input("Saldo FGTS (p/ Multa)", min_value=0.0)
-            aviso = c6.selectbox("Aviso Prévio", ["Indenizado", "Trabalhado", "Não Trabalhado"])
+            col_l3, col_l4 = st.columns(2)
+            indice = col_l3.number_input("Fator de Correção Acumulado (Ex: Tabela TJSP)", value=1.000, min_value=1.000, format="%.4f", help="Insira o fator acumulado da tabela prática do tribunal.")
+            juros_tipo = col_l4.selectbox("Juros de Mora", ["1% ao Mês (Simples)", "Selic (Composta)", "Sem Juros"])
             
-            c7, c8, c9 = st.columns(3)
-            insalubridade = c7.selectbox("Insalubridade", ["Não", "Mínimo (10%)", "Médio (20%)", "Máximo (40%)"])
-            periculosidade = c8.checkbox("Periculosidade (30%)")
-            ferias_venc = c9.checkbox("Possui Férias Vencidas?")
-            
-            if st.button("CALCULAR RESCISÃO", use_container_width=True):
-                if dt_dem > dt_adm:
-                    # Chama a função que criamos no Passo 1
-                    verbas = calcular_rescisao_completa(dt_adm, dt_dem, salario, motivo, saldo_fgts, ferias_venc, aviso, insalubridade, periculosidade)
-                    
-                    # Exibe Resultado
-                    total = sum(verbas.values())
-                    st.subheader(f"💰 Total Estimado: R$ {total:,.2f}")
-                    
-                    df_res = pd.DataFrame(list(verbas.items()), columns=["Verba", "Valor (R$)"])
-                    st.dataframe(df_res, use_container_width=True)
-                    
-                    # Gera Parecer com IA
-                    with st.spinner("Gerando Laudo Técnico..."):
-                        prompt_laudo = f"""
-                        Atue como Contador Perito Trabalhista.
-                        Gere um PARECER TÉCNICO formal explicando este cálculo de rescisão.
-                        Dados: Admissão {dt_adm}, Demissão {dt_dem}, Motivo: {motivo}.
-                        Adicionais: Insalubridade {insalubridade}, Periculosidade {periculosidade}.
-                        Verbas: {verbas}. Total: {total}.
-                        Explique os reflexos dos adicionais nas verbas rescisórias.
-                        """
-                        # Tenta pegar a chave API (seja do secrets ou input manual)
-                        api_key_to_use = api_key if api_key else st.session_state.get('sidebar_api_key')
-                        if not api_key_to_use and 'API_KEY_FIXA' in globals(): api_key_to_use = API_KEY_FIXA
-                        
-                        parecer = tentar_gerar_conteudo(prompt_laudo, api_key_to_use)
-                        
-                        with st.expander("📄 Ver Parecer Técnico", expanded=True):
-                            st.markdown(parecer)
-                            st.download_button("Baixar Laudo (.docx)", gerar_word(parecer), "Laudo_Rescisao.docx")
-                else:
-                    st.error("A Data de Demissão deve ser posterior à Admissão.")
+            c_m1, c_m2 = st.columns(2)
+            multa_pct = c_m1.checkbox("Incluir Multa Art. 523 CPC (10%)")
+            hon_pct = c_m2.checkbox("Incluir Honorários Execução (10%)")
 
-    # === CALCULADORA CÍVEL ===
-    elif tipo_calc == "Cível (Atualização)":
-        valor = st.number_input("Valor da Causa")
-        if st.button("Atualizar"):
-            st.success(f"Valor com Juros (1% a.m) e Correção: R$ {valor * 1.05:.2f} (Estimativa)")
+            if st.button("CALCULAR LIQUIDAÇÃO", use_container_width=True):
+                hj = date.today()
+                meses = (hj.year - data_citacao.year) * 12 + hj.month - data_citacao.month
+                if meses < 0: meses = 0
+                
+                val_corrigido = valor_orig * indice
+                
+                val_juros = 0.0
+                if juros_tipo == "1% ao Mês (Simples)":
+                    val_juros = val_corrigido * (0.01 * meses)
+                elif juros_tipo == "Selic (Composta)":
+                    val_juros = val_corrigido * 0.40 
+                
+                subtotal = val_corrigido + val_juros
+                
+                multa_val = subtotal * 0.10 if multa_pct else 0.0
+                hon_val = subtotal * 0.10 if hon_pct else 0.0
+                
+                final = subtotal + multa_val + hon_val
+                
+                st.divider()
+                st.subheader(f"💰 Total Execução: R$ {final:,.2f}")
+                
+                detalhes = {
+                    "Principal Corrigido": val_corrigido,
+                    f"Juros de Mora ({meses} meses)": val_juros,
+                    "Multa Art. 523 CPC (10%)": multa_val,
+                    "Honorários Execução (10%)": hon_val
+                }
+                st.table(pd.DataFrame(list(detalhes.items()), columns=["Item", "Valor (R$)"]))
 
-    # === CALCULADORA FAMÍLIA ===
-    elif tipo_calc == "Família (Pensão)":
-        renda = st.number_input("Renda Líquida do Alimentante")
-        filhos = st.slider("Número de Filhos", 1, 5, 1)
-        if st.button("Calcular"):
-            perc = 0.3 if filhos == 1 else 0.3 + (filhos * 0.05) # Lógica simples
-            st.info(f"Pensão Sugerida ({int(perc*100)}%): R$ {renda * perc:.2f}")
+    # --- 2. VALOR DA CAUSA (ART 292 CPC) ---
+    with tab_causa:
+        st.markdown("#### Cálculo do Valor da Causa (CPC)")
+        tipo_acao = st.radio("Tipo de Ação", ["Cobrança de Dívida", "Alimentos (Pensão)", "Indenização/Danos Morais"], horizontal=True)
+        
+        val_causa = 0.0
+        if tipo_acao == "Alimentos (Pensão)":
+            mensal = st.number_input("Valor da Prestação Mensal Pretendida")
+            val_causa = mensal * 12
+            if st.button("Calcular Causa"): 
+                st.info(f"Valor da Causa (12 prestações): R$ {val_causa:,.2f}")
+        
+        elif tipo_acao == "Cobrança de Dívida":
+            c_c1, c_c2, c_c3 = st.columns(3)
+            principal = c_c1.number_input("Valor Principal")
+            juros = c_c2.number_input("Juros Vencidos")
+            multas = c_c3.number_input("Multas Contratuais")
+            val_causa = principal + juros + multas
+            if st.button("Calcular Causa"):
+                st.info(f"Valor da Causa (Principal + Acessórios): R$ {val_causa:,.2f}")
+                
+        elif tipo_acao == "Indenização/Danos Morais":
+            val_causa = st.number_input("Valor Pretendido (Danos Morais + Materiais)")
+            if st.button("Confirmar"):
+                st.info(f"Valor da Causa: R$ {val_causa:,.2f}")
+
+    # --- 3. FAMÍLIA & SUCESSÕES ---
+    with tab_fam:
+        st.markdown("#### Partilha de Bens e Pensão")
+        col_f1, col_f2 = st.columns(2)
+        
+        with col_f1:
+            st.markdown("**Simulador de Partilha**")
+            patrimonio = st.number_input("Patrimônio Total (R$)", min_value=0.0)
+            meeeiro = st.checkbox("Existe Meeiro (Cônjuge)?", value=True)
+            herdeiros = st.number_input("Número de Herdeiros", min_value=1, value=2)
+            
+            if st.button("Simular Partilha"):
+                parte_meeiro = patrimonio * 0.5 if meeeiro else 0.0
+                saldo_heranca = patrimonio - parte_meeiro
+                cota_herdeiro = saldo_heranca / herdeiros
+                
+                st.success(f"Cota por Herdeiro: R$ {cota_herdeiro:,.2f}")
+                if meeeiro: st.write(f"Parte do Meeiro: R$ {parte_meeiro:,.2f}")
+
+        with col_f2:
+            st.markdown("**Cálculo de Pensão Alimentícia**")
+            renda_liquida = st.number_input("Renda Líquida do Alimentante")
+            perc = st.slider("Percentual (%)", 10, 50, 30)
+            st.warning(f"Valor da Pensão ({perc}%): R$ {renda_liquida * (perc/100):,.2f}")
+
+    # --- 4. REVISÃO BANCÁRIA ---
+    with tab_rev:
+        st.markdown("#### Análise Preliminar de Juros Abusivos")
+        st.caption("Comparativo simples entre Sistema PRICE (Composto) e GAUSS (Simples - Tese Jurídica).")
+        
+        cr1, cr2, cr3 = st.columns(3)
+        emp_valor = cr1.number_input("Valor Financiado", value=50000.0)
+        emp_meses = cr2.number_input("Prazo (Meses)", value=48)
+        emp_taxa = cr3.number_input("Taxa de Juros Mensal (%)", value=2.5)
+        
+        if st.button("SIMULAR REVISÃO"):
+            i = emp_taxa / 100
+            
+            # Cálculo PRICE (Juros Compostos - Prática Bancária)
+            parcela_price = emp_valor * (i * (1 + i)**emp_meses) / ((1 + i)**emp_meses - 1)
+            total_price = parcela_price * emp_meses
+            
+            # Cálculo GAUSS/Linear (Juros Simples - Tese Advogado)
+            juros_simples_total = emp_valor * i * emp_meses
+            total_gauss = emp_valor + juros_simples_total
+            parcela_gauss = total_gauss / emp_meses
+            
+            st.table(pd.DataFrame({
+                "Sistema": ["Banco (PRICE)", "Tese Revisão (Linear/Gauss)"],
+                "Parcela Mensal": [f"R$ {parcela_price:,.2f}", f"R$ {parcela_gauss:,.2f}"],
+                "Total Final": [f"R$ {total_price:,.2f}", f"R$ {total_gauss:,.2f}"],
+                "Juros Totais": [f"R$ {total_price - emp_valor:,.2f}", f"R$ {total_gauss - emp_valor:,.2f}"]
+            }))
+            
+            economia = total_price - total_gauss
+            st.success(f"📉 Redução Potencial da Dívida: R$ {economia:,.2f}")
 
 elif menu_opcao == "📂 Gestão de Casos":
     st.markdown("<h2 class='tech-header'>📂 COFRE DIGITAL</h2>", unsafe_allow_html=True)
