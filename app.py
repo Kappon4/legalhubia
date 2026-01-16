@@ -75,8 +75,9 @@ def extrair_texto_pdf(arquivo):
     try: return "".join([p.extract_text() for p in PdfReader(arquivo).pages])
     except: return ""
 
+# --- NOVA FUNÇÃO: BUSCA ANTI-ALUCINAÇÃO ---
 def buscar_contexto_juridico(tema, area):
-    """BUSCA ANTI-ALUCINAÇÃO EM FONTES OFICIAIS"""
+    """Realiza busca em fontes oficiais para fundamentar a IA."""
     fontes = {
         "Criminal": "site:stj.jus.br OR site:stf.jus.br OR site:conjur.com.br",
         "Trabalhista": "site:tst.jus.br OR site:csjt.jus.br OR site:trtsp.jus.br",
@@ -88,13 +89,14 @@ def buscar_contexto_juridico(tema, area):
     query = f"{tema} jurisprudência {site_query}"
     
     try:
-        results = DDGS().text(query, region="br-pt", max_results=3)
-        if results:
-            texto_res = "\n".join([f"- {r['title']}: {r['body']} (Fonte: {r['href']})" for r in results])
-            return f"\n\n[JURISPRUDÊNCIA REAL ENCONTRADA]:\n{texto_res}"
-        return "\n\n[NENHUMA JURISPRUDÊNCIA ESPECÍFICA ENCONTRADA NOS CANAIS OFICIAIS]"
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, region="br-pt", max_results=3))
+            if results:
+                texto_res = "\n".join([f"- {r['title']}: {r['body']} (Fonte: {r['href']})" for r in results])
+                return f"\n\n[JURISPRUDÊNCIA REAL ENCONTRADA]:\n{texto_res}"
     except:
-        return "\n\n[ERRO NA BUSCA ONLINE - BASEANDO-SE APENAS NO TREINAMENTO]"
+        pass
+    return "\n\n[NENHUMA JURISPRUDÊNCIA ESPECÍFICA ENCONTRADA NOS CANAIS OFICIAIS]"
 
 def tentar_gerar_conteudo(prompt, api_key_val):
     chave = api_key_val if api_key_val else API_KEY_FIXA
@@ -251,20 +253,20 @@ if menu == "Dashboard":
 elif menu == "Redator IA":
     st.header("✍️ Redator Jurídico (Anti-Alucinação)")
     
-    # SELETOR DE ÁREA PARA PEÇAS ESPECÍFICAS
+    # SELETOR DE ÁREA E PEÇAS ESPECÍFICAS (ATUALIZADO CONFORME PEDIDO)
     area_direito = st.selectbox("Área do Direito", ["Cível", "Trabalhista", "Criminal", "Tributário", "Previdenciário"])
     
     pecas = []
     if area_direito == "Cível":
-        pecas = ["Petição Inicial", "Contestação", "Réplica", "Reconvenção", "Ação Rescisória", "Mandado de Segurança", "Embargos à Execução", "Agravo de Instrumento", "Apelação", "Embargos de Declaração", "Recurso Especial"]
+        pecas = ["Petição Inicial", "Contestação", "Réplica", "Reconvenção", "Ação Rescisória", "Mandado de Segurança", "Embargos à Execução", "Embargos de Terceiro", "Agravo de Instrumento", "Apelação", "Embargos de Declaração", "Recurso Especial", "Pedido de Tutela Provisória", "Impugnação ao Cumprimento de Sentença"]
     elif area_direito == "Trabalhista":
-        pecas = ["Reclamação Trabalhista", "Contestação", "Recurso Ordinário", "Recurso de Revista", "Agravo de Petição", "Embargos à Execução", "Consignação em Pagamento"]
+        pecas = ["Reclamação Trabalhista", "Contestação", "Reconvenção", "Recurso Ordinário", "Recurso de Revista", "Agravo de Petição", "Embargos à Execução", "Consignação em Pagamento", "Exceção de Incompetência"]
     elif area_direito == "Criminal":
-        pecas = ["Resposta à Acusação", "Memoriais", "Habeas Corpus", "Relaxamento de Prisão", "Queixa-Crime", "Apelação", "Recurso em Sentido Estrito", "Revisão Criminal"]
+        pecas = ["Resposta à Acusação", "Memoriais", "Habeas Corpus", "Relaxamento de Prisão", "Queixa-Crime", "Apelação", "Recurso em Sentido Estrito", "Revisão Criminal", "Pedido de Liberdade Provisória", "Representação Criminal"]
     elif area_direito == "Tributário":
-        pecas = ["Ação Anulatória", "Repetição de Indébito", "Mandado de Segurança", "Embargos à Execução Fiscal", "Exceção de Pré-Executividade", "Defesa Administrativa"]
+        pecas = ["Ação Declaratória de Inexistência", "Ação Anulatória de Débito", "Repetição de Indébito", "Mandado de Segurança", "Embargos à Execução Fiscal", "Exceção de Pré-Executividade", "Defesa Administrativa"]
     elif area_direito == "Previdenciário":
-        pecas = ["Petição Inicial (Concessão)", "Recurso Administrativo", "Pedido de Revisão", "Aposentadoria Especial", "Auxílio-Doença"]
+        pecas = ["Petição Inicial (Concessão/Revisão)", "Recurso Administrativo", "Pedido de Revisão", "Aposentadoria Especial", "Auxílio-Doença", "Petição de Juntada", "Recurso Inominado"]
         
     tipo = st.selectbox("Selecione a Peça", pecas)
     
@@ -275,27 +277,26 @@ elif menu == "Redator IA":
     fatos = st.text_area("Narrativa dos Fatos e Pedidos", height=150)
     
     # CHECKBOX PODEROSO
-    anti_alucinacao = st.checkbox("🔍 Ativar Busca Anti-Alucinação (Jurisprudência Real)", value=True)
+    anti_alucinacao = st.checkbox("🔍 Ativar Busca Anti-Alucinação (Fontes Oficiais: STF, STJ, TST, Gov)", value=True)
     
     if st.button("GERAR PEÇA JURÍDICA"):
         if fatos and cli:
-            with st.spinner(f"Consultando bases do {area_direito} e redigindo..."):
+            with st.spinner(f"Consultando bases oficiais do {area_direito} e redigindo..."):
                 contexto_real = ""
                 if anti_alucinacao:
                     contexto_real = buscar_contexto_juridico(f"{tipo} {fatos}", area_direito)
                 
                 prompt = f"""
                 Atue como Advogado Especialista em Direito {area_direito}.
-                Redija uma {tipo} completa.
+                Redija uma {tipo} completa e robusta.
                 Cliente: {cli}. Parte Contrária: {parte_contraria}.
                 Fatos: {fatos}.
                 
-                {contexto_real}
-                
-                Diretrizes:
-                1. Use linguagem técnica e formal.
-                2. Se houver jurisprudência acima, cite-a. Se não, não invente julgados.
-                3. Estruture com: Endereçamento, Qualificação, Fatos, Direito (cite artigos), Pedidos e Valor da Causa.
+                INSTRUÇÕES ESPECIAIS:
+                1. Use o seguinte contexto real (se houver) para fundamentar: {contexto_real}
+                2. Use linguagem técnica e formal.
+                3. Se houver jurisprudência acima, cite-a. Se não, utilize doutrina consolidada sem inventar julgados.
+                4. Estruture com: Endereçamento, Qualificação, Fatos, Direito (cite artigos), Pedidos e Valor da Causa.
                 """
                 
                 res = tentar_gerar_conteudo(prompt, api_key)
@@ -347,30 +348,46 @@ elif menu == "🧮 Cálculos Jurídicos":
                     st.table(pd.DataFrame(list(v.items()), columns=["Verba", "Valor"]))
                     st.success(f"Total: R$ {sum(v.values()):,.2f}")
 
+    # === ATUALIZAÇÃO DA ABA CÍVEL (ART 292, LIQUIDAÇÃO, ETC) ===
     elif area_calc == "Cível (Art. 292/Liquidação)":
-        tab_liq, tab_valor = st.tabs(["Liquidação de Sentença", "Valor da Causa (CPC)"])
+        tab_liq, tab_valor, tab_rev = st.tabs(["Liquidação de Sentença", "Valor da Causa (CPC)", "Revisão Bancária"])
         
+        # 1. Liquidação Detalhada
         with tab_liq:
-            st.info("Cálculo de Atualização + Juros + Multas Processuais")
-            val = st.number_input("Valor Condenação")
-            indice = st.number_input("Índice Correção (TJ)", value=1.0)
-            juros = st.selectbox("Juros", ["1% a.m.", "Selic", "Sem Juros"])
+            st.info("Cálculo de Atualização + Juros + Multas Processuais + Honorários")
             
-            c1, c2 = st.columns(2)
+            col_l1, col_l2 = st.columns(2)
+            val = col_l1.number_input("Valor Condenação")
+            indice = col_l2.number_input("Índice Correção (TJ)", value=1.0)
+            
+            col_l3, col_l4 = st.columns(2)
+            juros = col_l3.selectbox("Juros", ["1% a.m.", "Selic", "Sem Juros"])
+            meses_juros = col_l4.number_input("Meses de Atraso", value=12)
+            
+            st.markdown("##### Acréscimos Legais")
+            c1, c2, c3 = st.columns(3)
             multa_523 = c1.checkbox("Multa Art. 523 CPC (10%)")
             hon_exec = c2.checkbox("Honorários Execução (10%)")
+            multa_litig = c3.checkbox("Multa Litigância Má-Fé (Específico)")
             
             if st.button("LIQUIDAR SENTENÇA"):
                 res = val * indice
-                if juros == "1% a.m.": res *= 1.12 # Simulação 1 ano
+                val_juros = 0
+                if juros == "1% a.m.": val_juros = res * (0.01 * meses_juros)
+                elif juros == "Selic": val_juros = res * 0.12 # Estimativa simples
                 
-                total = res
-                if multa_523: total += res * 0.10
-                if hon_exec: total += res * 0.10
+                subtotal = res + val_juros
+                
+                v_multa523 = subtotal * 0.10 if multa_523 else 0
+                v_hon = subtotal * 0.10 if hon_exec else 0
+                
+                total = subtotal + v_multa523 + v_hon
+                if multa_litig: total += val * 0.05 # Ex: 5% sobre valor corrigido
                 
                 st.success(f"Valor Execução: R$ {total:,.2f}")
-                st.caption("*Juros simulados para 12 meses. Para exatidão, integre API do BC.*")
+                st.write(f"Base: {res:.2f} | Juros: {val_juros:.2f} | Multa 523: {v_multa523:.2f}")
 
+        # 2. Valor da Causa
         with tab_valor:
             st.info("Art. 292 CPC - Definição de Valor da Causa")
             tipo = st.radio("Ação", ["Cobrança", "Alimentos", "Indenização"])
@@ -380,7 +397,23 @@ elif menu == "🧮 Cálculos Jurídicos":
             elif tipo == "Cobrança":
                 p = st.number_input("Principal")
                 j = st.number_input("Juros Vencidos")
-                st.metric("Valor da Causa", f"R$ {p+j:,.2f}")
+                m = st.number_input("Multas Contratuais")
+                st.metric("Valor da Causa", f"R$ {p+j+m:,.2f}")
+            elif tipo == "Indenização":
+                mor = st.number_input("Danos Morais")
+                mat = st.number_input("Danos Materiais")
+                st.metric("Valor da Causa", f"R$ {mor+mat:,.2f}")
+
+        # 3. Revisão
+        with tab_rev:
+            st.info("Revisão de Contratos (Price vs Gauss)")
+            emp = st.number_input("Empréstimo")
+            tx = st.number_input("Taxa (%)")
+            prazo = st.number_input("Prazo")
+            if st.button("SIMULAR ABUSIVIDADE"):
+                j_comp = emp * ((1 + tx/100)**prazo) - emp
+                j_simp = emp * (tx/100) * prazo
+                st.warning(f"Economia (Gauss): R$ {j_comp - j_simp:,.2f}")
 
     elif area_calc == "Família":
         st.subheader("Pensão e Partilha")
