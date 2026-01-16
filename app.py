@@ -626,9 +626,102 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
                 st.success(f"Novo Valor: R$ {novo:,.2f}")
 
     elif area_calc == "Tributária":
-        p = st.number_input("Tributo")
-        m = st.number_input("Multa %")
-        if st.button("ATUALIZAR TRIBUTO"): st.metric("Total", f"R$ {p * (1+m/100):,.2f}")
+        st.markdown("#### 🏛️ Cálculos e Teses Tributárias")
+        
+        tab_fed, tab_tese, tab_mora = st.tabs([
+            "Atualização Débito Federal (CDA)", 
+            "Tese do Século (PIS/COFINS)", 
+            "Cálculo de Multa de Mora"
+        ])
+        
+        # --- TAB 1: ATUALIZAÇÃO FEDERAL (SELIC) ---
+        with tab_fed:
+            st.info("Atualização pela Taxa SELIC (Lei 9.430/96)")
+            st.caption("A SELIC engloba juros e correção monetária. Não deve ser cumulada com outro índice.")
+            
+            c1, c2 = st.columns(2)
+            principal = c1.number_input("Valor Principal do Débito (R$)", value=10000.0, key="trib_principal")
+            selic_acum = c2.number_input("Taxa SELIC Acumulada no Período (%)", value=15.5, help="Consulte a tabela da Receita Federal para o período.", key="trib_selic")
+            
+            c3, c4 = st.columns(2)
+            multa_oficio = c3.number_input("Multa de Ofício/Punitiva (%)", value=75.0, help="Padrão: 75% em lançamentos de ofício.", key="trib_multa_oficio")
+            encargo_legal = c4.checkbox("Incluir Encargo Legal (20% - DL 1.025/69)?", value=True, key="trib_encargo")
+            
+            if st.button("CALCULAR DÉBITO FISCAL", key="btn_trib_cda"):
+                val_juros = principal * (selic_acum / 100)
+                val_multa = principal * (multa_oficio / 100)
+                base_parcial = principal + val_juros + val_multa
+                
+                val_encargo = 0
+                if encargo_legal:
+                    val_encargo = base_parcial * 0.20
+                
+                total_divida = base_parcial + val_encargo
+                
+                st.write("---")
+                col_res1, col_res2 = st.columns(2)
+                col_res1.metric("Valor Atualizado (Principal + SELIC)", f"R$ {principal + val_juros:,.2f}")
+                col_res2.metric("TOTAL DA CDA (Com Encargos)", f"R$ {total_divida:,.2f}")
+                
+                st.table(pd.DataFrame([
+                    ("Principal", f"R$ {principal:,.2f}"),
+                    ("Juros (SELIC)", f"R$ {val_juros:,.2f}"),
+                    ("Multa de Ofício", f"R$ {val_multa:,.2f}"),
+                    ("Encargo Legal (20%)", f"R$ {val_encargo:,.2f}")
+                ], columns=["Item", "Valor"]))
+
+        # --- TAB 2: TESE DO SÉCULO (RECUPERAÇÃO) ---
+        with tab_tese:
+            st.info("Estimativa de Crédito: Exclusão do ICMS da Base do PIS/COFINS (RE 574.706/STF)")
+            
+            faturamento = st.number_input("Faturamento Mensal Médio (R$)", value=100000.0, key="tese_fat")
+            
+            t1, t2, t3 = st.columns(3)
+            aliq_icms = t1.number_input("Alíquota ICMS (%)", value=18.0, key="tese_icms")
+            aliq_pis = t2.number_input("Alíquota PIS (%)", value=1.65, key="tese_pis")
+            aliq_cofins = t3.number_input("Alíquota COFINS (%)", value=7.60, key="tese_cofins")
+            
+            meses_recup = st.slider("Meses para Recuperar (Ex: 60 meses = 5 anos)", 12, 60, 60, key="tese_meses")
+            
+            if st.button("SIMULAR CRÉDITO A RECUPERAR", key="btn_trib_tese"):
+                # 1. Cálculo do PIS/COFINS Pago (Base Cheia)
+                total_aliq = (aliq_pis + aliq_cofins) / 100
+                pago_mensal = faturamento * total_aliq
+                
+                # 2. Cálculo da Base Correta (Sem ICMS)
+                valor_icms = faturamento * (aliq_icms / 100)
+                base_correta = faturamento - valor_icms
+                devido_mensal = base_correta * total_aliq
+                
+                # 3. Diferença (Crédito)
+                credito_mensal = pago_mensal - devido_mensal
+                credito_total = credito_mensal * meses_recup
+                
+                st.success(f"💰 Crédito Estimado Total: R$ {credito_total:,.2f}")
+                st.write(f"Pagamento Mensal Indevido: **R$ {credito_mensal:,.2f}**")
+                st.warning("Nota: Este é um cálculo estimativo linear. O cálculo real exige análise nota a nota.")
+
+        # --- TAB 3: MULTA DE MORA ---
+        with tab_mora:
+            st.info("Cálculo de Multa de Mora (Atraso de Pagamento)")
+            st.caption("Regra Federal: 0,33% ao dia, limitado a 20% (a partir do 61º dia).")
+            
+            val_guia = st.number_input("Valor da Guia (Principal)", value=1000.0, key="mora_val")
+            dias_atraso = st.number_input("Dias de Atraso", value=15, min_value=1, key="mora_dias")
+            
+            if st.button("CALCULAR GUIA EM ATRASO", key="btn_trib_mora"):
+                # Regra: 0.33% por dia, teto 20%
+                percentual_multa = dias_atraso * 0.33
+                if percentual_multa > 20.0:
+                    percentual_multa = 20.0
+                
+                valor_multa = val_guia * (percentual_multa / 100)
+                total_pagar = val_guia + valor_multa
+                
+                col_m1, col_m2 = st.columns(2)
+                col_m1.metric("Percentual Aplicado", f"{percentual_multa:.2f}%")
+                col_m2.metric("Valor da Multa", f"R$ {valor_multa:,.2f}")
+                st.success(f"Valor para Pagamento: R$ {total_pagar:,.2f}")
 
     elif area_calc == "Criminal":
         p_min = st.number_input("Pena Mínima")
@@ -678,6 +771,7 @@ elif menu_opcao == "🏛️ Simulador Audiência":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v9.8 | DEV MODE (NO LOGIN)</center>", unsafe_allow_html=True)
+
 
 
 
