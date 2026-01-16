@@ -72,26 +72,31 @@ def buscar_contexto_juridico(tema, area):
     return "\n\n[NENHUMA JURISPRUDÊNCIA ESPECÍFICA ENCONTRADA]"
 
 def tentar_gerar_conteudo(prompt, ignored_param=None):
-    # Usa a chave automática definida no início
+    # Usa a chave definitiva definida no topo do seu código
     chave = API_KEY_FINAL
     
-    # Validação
-    if not chave or chave == "AIzaSyA5lMfeDUE71k6BOOxYRZDtOolPZaqCurA": 
-        return "⚠️ CONFIGURAÇÃO NECESSÁRIA: Edite o código na linha 21 e cole sua Google API Key na variável CHAVE_MESTRA."
+    # Verifica se a chave foi preenchida (se não é o texto padrão)
+    if not chave or "COLE_SUA_CHAVE" in chave: 
+        return "⚠️ CONFIGURAÇÃO NECESSÁRIA: Verifique se a variável CHAVE_MESTRA no topo do código contém sua chave válida."
     
-    genai.configure(api_key=chave)
+    try:
+        genai.configure(api_key=chave)
+        
+        # Foca nos modelos Gemini 2.0 que você confirmou serem os únicos compatíveis
+        modelos = ["gemini-2.0-flash-exp", "gemini-2.0-flash"]
+        
+        for nome_modelo in modelos:
+            try:
+                model = genai.GenerativeModel(nome_modelo)
+                response = model.generate_content(prompt)
+                return response.text
+            except Exception:
+                continue
+                
+        return "❌ Erro: Não foi possível conectar aos modelos Gemini 2.0. Verifique se sua chave está ativa no Google AI Studio."
     
-    # ATUALIZAÇÃO v10.1: Focando exclusivamente em modelos 2.0 (compatíveis com sua chave)
-    modelos = ["gemini-2.0-flash-exp", "gemini-2.0-flash"]
-    
-    for nome_modelo in modelos:
-        try:
-            model = genai.GenerativeModel(nome_modelo)
-            return model.generate_content(prompt).text
-        except Exception:
-            continue
-            
-    return "❌ Erro: Sua chave não permitiu acesso aos modelos Gemini 2.0. Verifique se o plano da API está ativo."
+    except Exception as e:
+        return f"❌ Erro de Configuração: {str(e)}"
 
 # --- CÁLCULO TRABALHISTA COMPLETO ---
 def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_fgts, ferias_vencidas, aviso_tipo, grau_insalubridade, tem_periculosidade):
@@ -696,5 +701,6 @@ elif menu_opcao == "📂 Cofre Digital":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v10.0 | AUTO-AUTH MODE</center>", unsafe_allow_html=True)
+
 
 
