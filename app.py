@@ -82,8 +82,14 @@ def tentar_gerar_conteudo(prompt, ignored_param=None):
     try:
         genai.configure(api_key=chave)
         
-        # Foca nos modelos Gemini 2.0 que você confirmou serem os únicos compatíveis
-        modelos = ["gemini-2.5-flash-exp", "gemini-2.5-flash"]
+        # Foca nos modelos Gemini 2.5 e superiores (incluindo versões experimentais e pro)
+        # Nota: O Google atualiza esses IDs no Google AI Studio conforme novas versões são lançadas
+        modelos = [
+            "gemini-2.5-flash",      # Versão estável 2.5 (se disponível)
+            "gemini-2.5-flash-exp",  # Versão experimental 2.5
+            "gemini-2.5-pro-exp",    # Versão Pro experimental 2.5
+            "gemini-3.0-flash-exp"   # Preparação para versões futuras
+        ]
         
         for nome_modelo in modelos:
             try:
@@ -91,12 +97,13 @@ def tentar_gerar_conteudo(prompt, ignored_param=None):
                 response = model.generate_content(prompt)
                 return response.text
             except Exception:
+                # Se o modelo não existir ou não for suportado pela chave, tenta o próximo
                 continue
                 
-        return "❌ Erro: Não foi possível conectar aos modelos Gemini 2.0. Verifique se sua chave está ativa no Google AI Studio."
-    
+        return "❌ Erro: Sua chave não tem acesso aos modelos Gemini 2.5+ ou os IDs dos modelos mudaram. Verifique os nomes disponíveis no Google AI Studio."
+
     except Exception as e:
-        return f"❌ Erro de Configuração: {str(e)}"
+        return f"❌ Erro de configuração da API: {str(e)}"
 
 # --- CÁLCULO TRABALHISTA COMPLETO ---
 def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_fgts, ferias_vencidas, aviso_tipo, grau_insalubridade, tem_periculosidade):
@@ -701,6 +708,7 @@ elif menu_opcao == "📂 Cofre Digital":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v10.0 | AUTO-AUTH MODE</center>", unsafe_allow_html=True)
+
 
 
 
