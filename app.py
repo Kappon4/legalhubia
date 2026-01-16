@@ -23,7 +23,7 @@ st.set_page_config(
 # 2. AUTOMAÇÃO DE ACESSO (AUTO-AUTH)
 # ==========================================================
 # ⚠️ COLE SUA CHAVE ABAIXO UMA ÚNICA VEZ. O SISTEMA FARÁ O RESTO.
-CHAVE_MESTRA = AIzaSyA5lMfeDUE71k6BOOxYRZDtOolPZaqCurA 
+CHAVE_MESTRA = "AIzaSyA5lMfeDUE71k6BOOxYRZDtOolPZaqCurA" 
 
 # Lógica de Prioridade: Secrets (Nuvem) > Chave Mestra (Código)
 try:
@@ -699,3 +699,4 @@ elif menu_opcao == "📂 Cofre Digital":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v10.0 | AUTO-AUTH MODE</center>", unsafe_allow_html=True)
+
