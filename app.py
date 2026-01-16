@@ -259,30 +259,67 @@ elif menu_opcao == "✍️ Redator Jurídico":
 # --- CONTRATOS (+ PROCURAÇÃO) ---
 elif menu_opcao == "📜 Contratos":
     st.header("📜 Fábrica de Contratos & Procurações")
-    c1, c2 = st.columns(2)
-    cli = c1.text_input("Contratante")
-    cpf = c2.text_input("CPF/CNPJ")
-    obj = st.text_area("Objeto do Contrato (Ex: Ação Trabalhista contra X)")
-    val = st.number_input("Valor Honorários (R$)", step=100.0)
+    st.info("Preencha a qualificação completa para gerar documentos prontos.")
     
+    with st.container(border=True):
+        st.subheader("👤 Dados do Contratante (Cliente)")
+        
+        # Linha 1
+        c1, c2, c3 = st.columns(3)
+        nome = c1.text_input("Nome Completo")
+        nacionalidade = c2.text_input("Nacionalidade", value="Brasileiro(a)")
+        est_civil = c3.selectbox("Estado Civil", ["Solteiro(a)", "Casado(a)", "Divorciado(a)", "Viúvo(a)", "União Estável"])
+        
+        # Linha 2
+        c4, c5, c6 = st.columns(3)
+        prof = c4.text_input("Profissão")
+        rg = c5.text_input("RG")
+        cpf = c6.text_input("CPF")
+        
+        # Linha 3
+        c7, c8, c9 = st.columns([2, 1, 1])
+        end = c7.text_input("Endereço de Residência (Rua, nº, Bairro, Cidade/UF)")
+        cep = c8.text_input("CEP")
+        email = c9.text_input("E-mail")
+
+    with st.container(border=True):
+        st.subheader("📄 Dados do Contrato")
+        obj = st.text_area("Objeto do Contrato (Ex: Ação Trabalhista contra Empresa X)", height=100)
+        
+        c_val, c_forma = st.columns(2)
+        val = c_val.number_input("Valor Honorários (R$)", step=100.0, format="%.2f")
+        forma_pag = c_forma.text_input("Forma de Pagamento (Ex: À vista / 3x no cartão)")
+
     if st.button("GERAR CONTRATO + PROCURAÇÃO", use_container_width=True):
-        if cli and obj:
-            with st.spinner("Redigindo documentos..."):
-                # Prompt atualizado para pedir os dois documentos
+        if nome and cpf and obj:
+            with st.spinner("Redigindo documentos com qualificação completa..."):
+                # Monta a string de qualificação para o Prompt
+                qualificacao = f"{nome}, {nacionalidade}, {est_civil}, {prof}, portador do RG nº {rg} e CPF nº {cpf}, residente e domiciliado em {end}, CEP {cep}, e-mail {email}"
+                
                 prompt = f"""
-                Atue como advogado. Redija dois documentos completos em sequência:
-                1. CONTRATO DE HONORÁRIOS ADVOCATÍCIOS. Cliente: {cli}, CPF {cpf}. Objeto: {obj}. Valor: R$ {val}. Contratado: LBA Advocacia.
+                Atue como advogado. Redija dois documentos formais em sequência:
+                
+                1. CONTRATO DE HONORÁRIOS ADVOCATÍCIOS.
+                CONTRATANTE: {qualificacao}.
+                CONTRATADO: LBA Advocacia (Sociedade de Advogados).
+                OBJETO: {obj}.
+                VALOR: R$ {val} ({forma_pag}).
+                CLÁUSULAS: Padrão da OAB, foro da comarca do cliente.
                 
                 --- QUEBRA DE PÁGINA ---
                 
-                2. PROCURAÇÃO AD JUDICIA. Outorgante: {cli}, CPF {cpf}. Outorgado: LBA Advocacia. Poderes: Gerais e Especiais para transigir, firmar acordos, receber e dar quitação.
+                2. PROCURAÇÃO AD JUDICIA.
+                OUTORGANTE: {qualificacao}.
+                OUTORGADO: LBA Advocacia.
+                PODERES: Gerais para o foro e Especiais para transigir, firmar acordos, receber e dar quitação.
                 """
+                
                 res = tentar_gerar_conteudo(prompt, None)
                 st.markdown(res)
-                salvar_documento_memoria("Contrato+Proc", cli, res)
-                st.download_button("Baixar", gerar_word(res), "Contrato_Procuracao.docx")
+                salvar_documento_memoria("Contrato+Proc", nome, res)
+                st.download_button("Baixar Documentos", gerar_word(res), f"Contrato_{nome}.docx")
         else:
-            st.warning("Preencha o cliente e o objeto.")
+            st.warning("Preencha pelo menos Nome, CPF e Objeto para gerar.")
 
 # --- CÁLCULOS ---
 elif menu_opcao == "🧮 Cálculos Jurídicos":
@@ -425,3 +462,4 @@ elif menu_opcao == "🏛️ Simulador Audiência":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v9.8 | DEV MODE (NO LOGIN)</center>", unsafe_allow_html=True)
+
