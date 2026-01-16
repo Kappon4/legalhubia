@@ -9,7 +9,10 @@ import time
 import pandas as pd
 import base64
 import sys
-import psycopg2 
+try:
+    import psycopg2
+except ImportError:
+    psycopg2 = None
 
 # ==========================================================
 # 1. CONFIGURAÇÃO VISUAL - CYBER THEME
@@ -24,12 +27,13 @@ st.set_page_config(
 # ==========================================================
 # 2. CONEXÃO COM BANCO DE DADOS (CORRIGIDA E BLINDADA)
 # ==========================================================
+
 try:
     DB_URI = st.secrets["DB_URI"]
     API_KEY_FIXA = st.secrets["GOOGLE_API_KEY"]
-    CONEXAO_NUVEM = True
+    # Só considera online se tiver a URI E a biblioteca instalada
+    CONEXAO_NUVEM = True if (DB_URI and psycopg2) else False
 except:
-    # Se não tiver secrets, avisa o modo offline mas não quebra
     DB_URI = "" 
     API_KEY_FIXA = ""
     CONEXAO_NUVEM = False
@@ -483,3 +487,4 @@ elif menu == "Audiência":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v8.5 | POSTGRESQL SECURE</center>", unsafe_allow_html=True)
+
