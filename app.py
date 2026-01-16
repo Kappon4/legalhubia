@@ -72,29 +72,26 @@ def buscar_contexto_juridico(tema, area):
     return "\n\n[NENHUMA JURISPRUDÊNCIA ESPECÍFICA ENCONTRADA]"
 
 def tentar_gerar_conteudo(prompt, ignored_param=None):
-    # Usa a chave automática definida no início (ignora parâmetros antigos)
+    # Usa a chave automática definida no início
     chave = API_KEY_FINAL
     
     # Validação
-    if not chave or chave == "COLE_SUA_CHAVE_AQUI_UMA_VEZ": 
+    if not chave or chave == "AIzaSyA5lMfeDUE71k6BOOxYRZDtOolPZaqCurA": 
         return "⚠️ CONFIGURAÇÃO NECESSÁRIA: Edite o código na linha 21 e cole sua Google API Key na variável CHAVE_MESTRA."
     
     genai.configure(api_key=chave)
     
-    # Tentativa Multi-Modelo (Blindagem contra erro 404/Limit)
-    # Tenta do mais rápido para o mais estável
-    modelos = ["gemini-1.5-flash", "gemini-pro", "gemini-1.5-pro-latest"]
+    # ATUALIZAÇÃO v10.1: Focando exclusivamente em modelos 2.0 (compatíveis com sua chave)
+    modelos = ["gemini-2.0-flash-exp", "gemini-2.0-flash"]
     
-    erros = []
     for nome_modelo in modelos:
         try:
             model = genai.GenerativeModel(nome_modelo)
             return model.generate_content(prompt).text
-        except Exception as e:
-            erros.append(f"{nome_modelo}: {str(e)}")
+        except Exception:
             continue
             
-    return f"❌ Erro de Conexão com IA. Detalhes: {erros[0] if erros else 'Desconhecido'}"
+    return "❌ Erro: Sua chave não permitiu acesso aos modelos Gemini 2.0. Verifique se o plano da API está ativo."
 
 # --- CÁLCULO TRABALHISTA COMPLETO ---
 def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_fgts, ferias_vencidas, aviso_tipo, grau_insalubridade, tem_periculosidade):
@@ -699,4 +696,5 @@ elif menu_opcao == "📂 Cofre Digital":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v10.0 | AUTO-AUTH MODE</center>", unsafe_allow_html=True)
+
 
