@@ -54,11 +54,10 @@ def get_connection_string_ipv4(uri):
         hostname = parsed.hostname
         # O segredo: socket.AF_INET obriga a retornar apenas IPv4
         ipv4 = socket.getaddrinfo(hostname, None, family=socket.AF_INET)[0][4][0]
-        # Reconstrói a URI trocando o nome (db.supabase...) pelo número (ex: 54.12.34.56)
+        # Reconstrói a URI trocando o nome (db.supabase...) pelo número
         new_netloc = parsed.netloc.replace(hostname, ipv4)
         return urlunparse(parsed._replace(netloc=new_netloc))
     except Exception:
-        # Se falhar, retorna o original para não travar
         return uri
 
 def get_db_connection():
@@ -71,8 +70,7 @@ def get_db_connection():
         uri_v4 = get_connection_string_ipv4(DB_URI)
         return psycopg2.connect(uri_v4, sslmode='require', connect_timeout=10)
     except Exception as e:
-        # Se falhar, mostra o erro real para sabermos o que é
-        st.toast(f"Erro de Conexão: {str(e)}", icon="⚠️")
+        st.toast(f"Erro Conexão: {str(e)[:50]}...", icon="⚠️")
         return None
 
 def run_query(query, params=(), return_data=False):
@@ -99,7 +97,7 @@ def run_query(query, params=(), return_data=False):
             return True
     except Exception as e:
         if conn: conn.close()
-        # Log discreto para não assustar o usuário, mas visível se precisar
+        # Log discreto para debug
         print(f"Erro SQL: {e}") 
         return None
 
@@ -181,7 +179,7 @@ def local_css():
 local_css()
 
 # ==========================================================
-# 4. TELA DE LOGIN (COM DIAGNÓSTICO)
+# 4. TELA DE LOGIN (COM DIAGNÓSTICO E FORÇA IPv4)
 # ==========================================================
 if "logado" not in st.session_state: st.session_state.logado = False
 if "usuario_atual" not in st.session_state: st.session_state.usuario_atual = ""
@@ -194,9 +192,9 @@ if not st.session_state.logado:
         if CONEXAO_NUVEM:
              # Testa a conexão real para dar feedback
              if get_db_connection():
-                 st.success("☁️ CONEXÃO SEGURA (IPv4 Forçado)")
+                 st.success("☁️ CONEXÃO SEGURA (ONLINE - IPv4)")
              else:
-                 st.error("⚠️ Erro de Rede: Supabase inacessível.")
+                 st.error("⚠️ ERRO DE REDE: O Streamlit não conseguiu alcançar o Supabase (Timeout).")
         else:
              st.warning("⚠️ MODO OFFLINE")
 
@@ -227,13 +225,16 @@ if not st.session_state.logado:
                 ne = st.text_input("Escritório")
                 if st.button("CADASTRAR", use_container_width=True):
                     res = run_query("INSERT INTO usuarios (username, senha, escritorio, creditos, plano) VALUES (%s, %s, %s, 10, 'starter')", (nu, np, ne))
-                    if res: st.success("Sucesso! Faça login.")
-                    else: st.error("Erro ao salvar (Usuário já existe?)")
+                    if res:
+                        st.success("Sucesso! Faça login.")
+                    else: 
+                        # Mensagem de erro mais detalhada
+                        st.error("Erro ao salvar! Verifique se a senha do banco contém caracteres especiais (ex: @, /) que quebram o link.")
 
             with tab3:
-                st.info("Use se tiver problemas de 'Dados Inválidos' após resetar.")
+                st.info("Use isso para resetar a conexão em caso de erros persistentes.")
                 if st.button("🛠️ REPARAR BANCO (RESET TOTAL)", use_container_width=True):
-                    with st.spinner("Limpando e recriando tabelas..."):
+                    with st.spinner("Forçando IPv4 e recriando tabelas..."):
                         run_query("DROP TABLE IF EXISTS usuarios")
                         run_query("DROP TABLE IF EXISTS documentos")
                         run_query("CREATE TABLE usuarios (username TEXT PRIMARY KEY, senha TEXT, escritorio TEXT, email_oab TEXT, creditos INTEGER DEFAULT 10, plano TEXT DEFAULT 'starter')")
