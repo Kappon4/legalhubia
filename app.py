@@ -32,7 +32,7 @@ except ImportError:
 # 1. VISUAL CONFIGURATION - CYBER FUTURE THEME
 # ==========================================================
 st.set_page_config(
-    page_title="LegalHub Elite v7.9", 
+    page_title="LegalHub Elite v8.0", 
     page_icon="⚖️", 
     layout="wide",
     initial_sidebar_state="collapsed" 
@@ -273,7 +273,11 @@ if "GOOGLE_API_KEY" in st.secrets: api_key = st.secrets["GOOGLE_API_KEY"]
 else: api_key = st.text_input("🔑 API Key:", type="password", key="sidebar_api_key")
 
 df_user = run_query("SELECT creditos, plano FROM usuarios WHERE username = %s", (st.session_state.usuario_atual,), return_data=True)
-creditos_atuais = df_user.iloc[0]['creditos'] if df_user is not None and not df_user.empty else 0
+if df_user is not None and not df_user.empty:
+    creditos_atuais = df_user.iloc[0]['creditos']
+    st.session_state.plano_atual = df_user.iloc[0]['plano']
+else:
+    creditos_atuais = 0
 
 if "navegacao_override" not in st.session_state: st.session_state.navegacao_override = None
 
@@ -299,6 +303,16 @@ with st.sidebar:
     p_label = st.session_state.plano_atual.upper()
     cor_p = "#FFD700" if p_label == "FULL" else "#00F3FF"
     st.markdown(f"<div style='border:1px solid {cor_p}; padding:5px; border-radius:5px; text-align:center; color:{cor_p}; margin:10px 0; font-weight:bold;'>PLANO: {p_label}</div>", unsafe_allow_html=True)
+
+    # --- NOVO: PAINEL DE ADMINISTRAÇÃO (ADICIONADO AQUI) ---
+    with st.expander("⚙️ ADMIN: Gerenciar Conta"):
+        novo_plano = st.selectbox("Mudar Plano Para:", ["starter", "full", "criminal", "trabalhista", "civil"])
+        if st.button("Atualizar Plano"):
+            run_query("UPDATE usuarios SET plano = %s WHERE username = %s", (novo_plano, st.session_state.usuario_atual))
+            st.session_state.plano_atual = novo_plano
+            st.success("Plano atualizado! Recarregando...")
+            time.sleep(1)
+            st.rerun()
 
     st.markdown("<h4 style='font-size:1rem; color:#94A3B8;'>CRÉDITOS</h4>", unsafe_allow_html=True)
     c_cr1, c_cr2 = st.columns([1, 3])
@@ -392,24 +406,18 @@ elif menu_opcao == "✍️ Redator Jurídico":
                              (st.session_state.escritorio_atual, str(date.today()), cli, area_direito, tipo, res))
 
 elif menu_opcao == "📜 Contratos":
-    st.header("📜 Gerador de Contratos")
-    tab_cont, tab_proc = st.tabs(["📝 Contrato de Honorários", "⚖️ Procuração Ad Judicia"])
-    with tab_cont:
-        c1, c2 = st.columns(2)
-        contratante = c1.text_input("Contratante")
-        cpf_cnpj = c2.text_input("CPF/CNPJ")
-        valor = c1.number_input("Valor (R$)", step=100.0)
-        exito = c2.number_input("Taxa Êxito (%)", 30)
-        objeto = st.text_area("Objeto do Contrato")
-        if st.button("GERAR CONTRATO"):
-            with st.spinner("Redigindo..."):
-                res = tentar_gerar_conteudo(f"Contrato honorários. Cliente: {contratante}. Valor R$ {valor}. Exito {exito}%. Objeto: {objeto}. Contratado: {st.session_state.escritorio_atual}.", api_key)
-                st.download_button("Baixar Contrato", gerar_word(res), "Contrato.docx")
-    with tab_proc:
-        out = st.text_input("Outorgante")
-        if st.button("GERAR PROCURAÇÃO"):
-            res = tentar_gerar_conteudo(f"Procuração Ad Judicia. Outorgante: {out}. Outorgado: {st.session_state.escritorio_atual}", api_key)
-            st.download_button("Baixar Procuração", gerar_word(res), "Procuracao.docx")
+    st.header("📜 Fábrica de Contratos")
+    c1, c2 = st.columns(2)
+    cli = c1.text_input("Contratante")
+    cpf = c2.text_input("CPF/CNPJ")
+    obj = st.text_area("Objeto")
+    val = st.number_input("Valor", step=100.0)
+    
+    if st.button("GERAR CONTRATO"):
+        prompt = f"Contrato de Honorários. Cliente: {cli}, CPF {cpf}. Objeto: {obj}. Valor: {val}. Contratado: {st.session_state.escritorio_atual}. Incluir cláusulas de inadimplência e foro."
+        res = tentar_gerar_conteudo(prompt, api_key)
+        st.markdown(res)
+        st.download_button("Baixar", gerar_word(res), "Contrato.docx")
 
 # === CALCULADORA UNIFICADA (NOVO CONTEÚDO) ===
 elif menu_opcao == "🧮 Cálculos Jurídicos":
@@ -515,4 +523,4 @@ elif menu_opcao == "📂 Gestão de Casos":
     else: st.info("Cofre vazio.")
 
 st.markdown("---")
-st.markdown("<center>🔒 LEGALHUB ELITE v7.9 | POSTGRESQL SECURE</center>", unsafe_allow_html=True)
+st.markdown("<center>🔒 LEGALHUB ELITE v8.0 | POSTGRESQL SECURE</center>", unsafe_allow_html=True)
