@@ -36,22 +36,23 @@ from google.api_core.exceptions import ResourceExhausted, NotFound, InvalidArgum
 # ==========================================================
 st.set_page_config(
     page_title="LegalHub Elite | AI System", 
-    page_icon="🛡️", 
+    page_icon="⚖️", 
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
 # ==========================================================
 # 🛑 DATABASE CONFIGURATION (SUPABASE/POSTGRES)
 # ==========================================================
 try:
-    # Tenta pegar dos secrets (Nuvem)
+    # Tenta pegar as senhas configuradas no site do Streamlit (Nuvem)
     DB_URI = st.secrets["DB_URI"]
     API_KEY_FIXA = st.secrets["GOOGLE_API_KEY"]
     USAR_SQLITE_BACKUP = False
 except:
-    # Fallback local (Seu PC) - CORRIGIDO O ERRO DOS DOIS @@
-    DB_URI = "postgresql://postgres:BritoeLucas123@db.qhcjfmzkwczjupkfpmdk.supabase.co:5432/postgres"
+    # Fallback local (Seu PC)
+    # Senha corrigida (apenas um @)
+    DB_URI = "postgresql://postgres:0OquFTc7ovRHTBGM@db.qhcjfmzkwczjupkfpmdk.supabase.co:5432/postgres"
     API_KEY_FIXA = "AIzaSyA5lMfeDUE71k6BOOxYRZDtOolPZaqCurA"
     USAR_SQLITE_BACKUP = False
 
@@ -91,7 +92,6 @@ def run_query(query, params=(), return_data=False):
             return True
     except Exception as e:
         if conn: conn.close()
-        # st.error(f"Database Error: {e}") # Uncomment to debug
         return None
 
 # ==========================================================
@@ -116,6 +116,65 @@ def gerar_word(texto):
 def extrair_texto_pdf(arquivo):
     try: return "".join([p.extract_text() for p in PdfReader(arquivo).pages])
     except: return ""
+
+# --- NOVA FUNÇÃO DE CÁLCULO TRABALHISTA (CLT) ---
+def calcular_rescisao_completa(admissao, demissao, salario, motivo, saldo_fgts, ferias_vencidas, aviso_tipo):
+    # Converte para objetos de data
+    formato_data = "%Y-%m-%d"
+    d1 = datetime.strptime(str(admissao), formato_data)
+    d2 = datetime.strptime(str(demissao), formato_data)
+    
+    # Cálculo do tempo de serviço
+    meses_trabalhados = (d2.year - d1.year) * 12 + d2.month - d1.month
+    anos_completo = meses_trabalhados // 12
+    dias_no_mes = d2.day
+    
+    verbas = {}
+    
+    # 1. Saldo de Salário
+    saldo_salario = (salario / 30) * dias_no_mes
+    verbas["Saldo de Salário"] = saldo_salario
+    
+    # 2. Aviso Prévio (Lei 12.506/2011 - 3 dias por ano)
+    dias_aviso = 30 + (3 * anos_completo)
+    if dias_aviso > 90: dias_aviso = 90
+    
+    if motivo == "Demissão sem Justa Causa":
+        if aviso_tipo == "Indenizado":
+            valor_aviso = (salario / 30) * dias_aviso
+            verbas[f"Aviso Prévio Indenizado ({dias_aviso} dias)"] = valor_aviso
+            # Projeta data para 13o e Férias
+            d2 = d2 + timedelta(days=dias_aviso)
+    elif motivo == "Pedido de Demissão" and aviso_tipo == "Não Trabalhado":
+        verbas["Desconto Aviso Prévio"] = -salario
+        
+    # Recalcula meses proporcionais com a projeção
+    meses_ano_atual = d2.month
+    if d2.day < 15: meses_ano_atual -= 1 # Fração inferior a 15 dias não conta
+    if meses_ano_atual == 0: meses_ano_atual = 12 # Ajuste virada de ano
+    
+    # 3. 13º Salário Proporcional
+    if motivo != "Justa Causa":
+        decimo = (salario / 12) * meses_ano_atual
+        verbas[f"13º Salário Proporcional ({meses_ano_atual}/12)"] = decimo
+        
+    # 4. Férias
+    if motivo != "Justa Causa":
+        # Vencidas
+        if ferias_vencidas:
+            verbas["Férias Vencidas + 1/3"] = salario + (salario/3)
+        
+        # Proporcionais
+        val_ferias_prop = (salario / 12) * meses_ano_atual
+        verbas[f"Férias Proporcionais ({meses_ano_atual}/12) + 1/3"] = val_ferias_prop + (val_ferias_prop/3)
+
+    # 5. Multa FGTS
+    if motivo == "Demissão sem Justa Causa" or motivo == "Rescisão Indireta":
+        verbas["Multa 40% FGTS"] = saldo_fgts * 0.4
+    elif motivo == "Acordo (Comum)":
+        verbas["Multa 20% FGTS"] = saldo_fgts * 0.2
+
+    return verbas
 
 # --- ROBUST AI FUNCTION ---
 def tentar_gerar_conteudo(prompt, api_key_val):
@@ -286,7 +345,6 @@ if "navegacao_override" not in st.session_state: st.session_state.navegacao_over
 col_logo, col_menu = st.columns([1, 4])
 with col_logo: st.markdown("""<div class='header-logo'><h1 class='tech-header'>LEGALHUB<span>ELITE</span></h1></div>""", unsafe_allow_html=True)
 with col_menu:
-    # >>>>> ADICIONEI "CONTRATOS" NO MENU <<<<<
     mapa_nav = {"Dashboard": "📊 Dashboard", "Redator IA": "✍️ Redator Jurídico", "Contratos": "📜 Contratos", "Perícia & Calc": "🧮 Calculadoras & Perícia", "Audiência": "🏛️ Estratégia de Audiência", "Gestão Casos": "📂 Gestão de Casos", "Monitor Prazos": "🚦 Monitor de Prazos", "Assinatura": "💎 Planos & Upgrade"}
     opcoes_menu = list(mapa_nav.keys())
     idx_radio = 0
@@ -374,7 +432,6 @@ if menu_opcao == "📊 Dashboard":
                 st.session_state.navegacao_override = "📂 Gestão de Casos"
                 st.rerun()
 
-# >>>>> AQUI ESTÁ A LÓGICA DA TELA DE CONTRATOS <<<<<
 elif menu_opcao == "📜 Contratos":
     st.header("📜 Gerador de Contratos & Procurações")
     st.info("Nova funcionalidade ativa! Gere contratos blindados e procurações instantâneas.")
@@ -542,99 +599,77 @@ elif menu_opcao == "✍️ Redator Jurídico":
                 else: st.error(res)
         else: st.error("Créditos insuficientes ou dados incompletos.")
 
+# --- NOVA ABA SUBSTITUÍDA: CÁLCULADORA ROBUSTA ---
 elif menu_opcao == "🧮 Calculadoras & Perícia":
-    st.markdown("<h2 class='tech-header'>🧮 CÁLCULOS ESPECIALIZADOS</h2>", unsafe_allow_html=True)
-    plano_atual = st.session_state.plano_atual
-    opcoes_calc = ["Trabalhista", "Cível", "Criminal", "Família", "Bancário"]
-    if plano_atual == "criminal": opcoes_calc = ["Criminal"]
-    elif plano_atual == "trabalhista": opcoes_calc = ["Trabalhista"]
-    elif plano_atual == "civil": opcoes_calc = ["Cível", "Família", "Bancário"]
-    area_calc = st.selectbox("Selecione:", opcoes_calc)
+    st.header("🧮 Central de Cálculos & Perícia")
     
-    liberado = False
-    if area_calc == "Trabalhista" and verificar_permissao("trabalhista"): liberado = True
-    elif area_calc == "Criminal" and verificar_permissao("criminal"): liberado = True
-    elif area_calc in ["Cível", "Família", "Bancário"] and verificar_permissao("civil"): liberado = True
-    elif verificar_permissao("full"): liberado = True
+    # Seletor de Tipo de Calculadora
+    tipo_calc = st.selectbox("Selecione a Calculadora:", ["Trabalhista (Rescisão CLT)", "Cível (Atualização)", "Família (Pensão)"])
+    st.markdown("---")
 
-    if liberado:
+    # === CALCULADORA TRABALHISTA ROBUSTA ===
+    if tipo_calc == "Trabalhista (Rescisão CLT)":
+        st.info("Cálculo completo de Verbas Rescisórias (Lei 12.506/2011).")
+        
         with st.container(border=True):
-            if area_calc == "Cível":
-                tab_deb, tab_alu, tab_res, tab_ban, tab_vei, tab_not = st.tabs([
-                    "💸 Atualização", "🏠 Reajuste Aluguel", "🚫 Rescisão Aluguel", 
-                    "🏦 Juros Bancários", "🚘 Financ. Veículos", "📢 Notificação Extrajud."
-                ])
-                
-                with tab_deb:
-                    st.markdown("#### Correção Monetária")
-                    val = st.number_input("Valor", 0.0)
-                    if st.button("CALCULAR"): st.success(f"Valor Corrigido: R$ {val * 1.05:.2f}")
-
-                with tab_alu:
-                    st.markdown("#### Reajuste Aluguel")
-                    val = st.number_input("Aluguel Atual", 0.0)
-                    if st.button("REAJUSTAR"): st.success(f"Novo Aluguel: R$ {val * 1.045:.2f}")
-
-                with tab_res:
-                    st.markdown("#### Multa Rescisão")
-                    val = st.number_input("Valor Aluguel", key="res_v")
-                    if st.button("CALCULAR MULTA"): st.error(f"Multa: R$ {val * 1.5:.2f}")
-
-                with tab_ban:
-                    st.markdown("#### Juros Bancários")
-                    val = st.number_input("Valor Empréstimo", key="ban_v")
-                    if st.button("CALCULAR REVISIONAL"): st.warning(f"Economia estimada: R$ {val * 0.3:.2f}")
-
-                with tab_veiculo:
-                    st.markdown("#### Juros Veículos")
-                    val = st.number_input("Valor Veículo", key="vei_v")
-                    if st.button("CALCULAR VEÍCULO"): st.warning(f"Economia estimada: R$ {val * 0.2:.2f}")
-                
-                with tab_not:
-                    st.markdown("#### Gerador de Notificação Extrajudicial")
-                    c1, c2 = st.columns(2)
-                    notificante = c1.text_input("Nome do Notificante (Cliente)")
-                    notificado = c2.text_input("Nome do Notificado (Devedor/Parte)")
-                    endereco = st.text_input("Endereço do Imóvel/Objeto (Opcional)")
-                    motivo = st.text_area("Motivo (Ex: Cobrança aluguel, Desocupação, Vício Oculto)")
-                    prazo = st.number_input("Prazo (dias)", value=5)
-                    
-                    if st.button("GERAR NOTIFICAÇÃO RÁPIDA", key="btn_not"):
-                        if notificante and notificado and motivo:
-                            prompt = f"""
-                            Redija uma Notificação Extrajudicial formal.
-                            Notificante: {notificante}. Notificado: {notificado}.
-                            Endereço: {endereco}. Motivo: {motivo}.
-                            Prazo para cumprimento: {prazo} dias.
-                            Tom: Jurídico, formal e imperativo.
-                            """
-                            api_key_to_use = api_key if api_key else st.session_state.get('sidebar_api_key')
-                            res = tentar_gerar_conteudo(prompt, api_key_to_use)
-                            
-                            if "❌" not in res:
-                                st.markdown("### 📢 Minuta da Notificação")
-                                st.markdown(res)
-                                st.download_button("📥 Baixar Notificação (.docx)", gerar_word(res), "Notificacao_Extrajudicial.docx")
-                            else: st.error(res)
-                        else: st.error("Preencha os campos obrigatórios.")
+            c1, c2, c3 = st.columns(3)
+            dt_adm = c1.date_input("Data de Admissão", date(2022, 1, 1))
+            dt_dem = c2.date_input("Data de Demissão", date.today())
+            motivo = c3.selectbox("Motivo", ["Demissão sem Justa Causa", "Pedido de Demissão", "Justa Causa", "Acordo (Comum)"])
             
-            # --- OTHER CALCULATORS (Simplified for brevity but kept logic) ---
-            elif area_calc == "Família":
-                st.markdown("#### Pensão Alimentícia")
-                renda = st.number_input("Renda Líquida")
-                if st.button("CALCULAR PENSÃO"): st.success(f"Pensão sugerida (30%): R$ {renda * 0.3:.2f}")
+            c4, c5, c6 = st.columns(3)
+            salario = c4.number_input("Salário Base (R$)", min_value=0.0, value=2500.0)
+            saldo_fgts = c5.number_input("Saldo FGTS (p/ Multa)", min_value=0.0)
+            aviso = c6.selectbox("Aviso Prévio", ["Indenizado", "Trabalhado", "Não Trabalhado"])
+            
+            ferias_venc = st.checkbox("Possui Férias Vencidas (1 ano completo sem tirar)?")
+            
+            if st.button("CALCULAR RESCISÃO", use_container_width=True):
+                if dt_dem > dt_adm:
+                    # Chama a função que criamos no Passo 1
+                    verbas = calcular_rescisao_completa(dt_adm, dt_dem, salario, motivo, saldo_fgts, ferias_venc, aviso)
+                    
+                    # Exibe Resultado
+                    total = sum(verbas.values())
+                    st.subheader(f"💰 Total Estimado: R$ {total:,.2f}")
+                    
+                    df_res = pd.DataFrame(list(verbas.items()), columns=["Verba", "Valor (R$)"])
+                    st.dataframe(df_res, use_container_width=True)
+                    
+                    # Gera Parecer com IA
+                    with st.spinner("Gerando Laudo Técnico..."):
+                        prompt_laudo = f"""
+                        Atue como Contador Perito Trabalhista.
+                        Gere um PARECER TÉCNICO formal explicando este cálculo de rescisão.
+                        Dados: Admissão {dt_adm}, Demissão {dt_dem}, Motivo: {motivo}.
+                        Verbas: {verbas}. Total: {total}.
+                        Explique o aviso prévio proporcional e a multa do FGTS se houver.
+                        """
+                        # Tenta pegar a chave API (seja do secrets ou input manual)
+                        api_key_to_use = api_key if api_key else st.session_state.get('sidebar_api_key')
+                        if not api_key_to_use and 'API_KEY_FIXA' in globals(): api_key_to_use = API_KEY_FIXA
+                        
+                        parecer = tentar_gerar_conteudo(prompt_laudo, api_key_to_use)
+                        
+                        with st.expander("📄 Ver Parecer Técnico", expanded=True):
+                            st.markdown(parecer)
+                            st.download_button("Baixar Laudo (.docx)", gerar_word(parecer), "Laudo_Rescisao.docx")
+                else:
+                    st.error("A Data de Demissão deve ser posterior à Admissão.")
 
-            elif area_calc == "Trabalhista":
-                st.markdown("#### Rescisão CLT")
-                sal = st.number_input("Salário Base")
-                if st.button("CALCULAR RESCISÃO"): st.success(f"Total Estimado: R$ {sal * 1.4:.2f}")
-                
-            elif area_calc == "Criminal":
-                st.markdown("#### Dosimetria")
-                pena = st.number_input("Pena Base")
-                if st.button("CALCULAR PENA"): st.warning(f"Pena Final: {pena} anos")
+    # === CALCULADORA CÍVEL ===
+    elif tipo_calc == "Cível (Atualização)":
+        valor = st.number_input("Valor da Causa")
+        if st.button("Atualizar"):
+            st.success(f"Valor com Juros (1% a.m) e Correção: R$ {valor * 1.05:.2f} (Estimativa)")
 
-    else: tela_bloqueio(area_calc, "149")
+    # === CALCULADORA FAMÍLIA ===
+    elif tipo_calc == "Família (Pensão)":
+        renda = st.number_input("Renda Líquida do Alimentante")
+        filhos = st.slider("Número de Filhos", 1, 5, 1)
+        if st.button("Calcular"):
+            perc = 0.3 if filhos == 1 else 0.3 + (filhos * 0.05) # Lógica simples
+            st.info(f"Pensão Sugerida ({int(perc*100)}%): R$ {renda * perc:.2f}")
 
 elif menu_opcao == "📂 Gestão de Casos":
     st.markdown("<h2 class='tech-header'>📂 COFRE DIGITAL</h2>", unsafe_allow_html=True)
