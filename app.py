@@ -881,47 +881,83 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
                 st.write(f"- Pelo trabalho/estudo (1 p/ 3): {dias_remicao} dias")
             
 # --- SIMULADOR DE AUDIÊNCIA (NOVO) ---
+# --- SIMULADOR DE AUDIÊNCIA (COPILOTO ESTRATÉGICO) ---
 elif menu_opcao == "🏛️ Simulador Audiência":
-    st.markdown("<h2 class='tech-header'>🏛️ SIMULADOR DE AUDIÊNCIA (IA PREPARATÓRIA)</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 class='tech-header'>🏛️ WAR ROOM: ESTRATÉGIA DE AUDIÊNCIA</h2>", unsafe_allow_html=True)
+    st.caption("Analista de Autos, Gerador de Perguntas e Identificador de Teses Defensivas.")
     
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("#### 🛡️ Minha Defesa")
-        meu_cli = st.text_area("O que meu cliente alega?", height=150, placeholder="Ex: Meu cliente afirma que não recebeu horas extras...")
-    
-    with col2:
-        st.markdown("#### ⚔️ Parte Contrária")
-        outra_parte = st.text_area("O que a outra parte alega?", height=150, placeholder="Ex: A empresa diz que ele tinha cargo de confiança...")
-    
-    tipo_aud = st.selectbox("Tipo de Audiência", ["Instrução Trabalhista", "Cível (Conciliação/Instrução)", "Criminal", "Família"])
-    
-    if st.button("GERAR PREPARAÇÃO PARA AUDIÊNCIA", use_container_width=True):
-        if meu_cli and outra_parte:
-            with st.spinner("IA Analisando estratégia e gerando perguntas..."):
+    with st.container(border=True):
+        c1, c2 = st.columns([1, 2])
+        
+        with c1:
+            st.markdown("#### 📁 Dados do Caso")
+            lado = st.radio("Você representa:", ["Autor/Reclamante", "Réu/Reclamada"], horizontal=True)
+            tipo_aud = st.selectbox("Rito/Área", ["Trabalhista (Ordinário)", "Trabalhista (Sumaríssimo)", "Cível (Comum)", "Criminal (Júri)", "Criminal (Instrução)", "Família"])
+            
+            st.markdown("---")
+            st.markdown("**📄 Carregar Peça/Autos**")
+            uploaded_file = st.file_uploader("Suba a Inicial ou Contestação (PDF)", type="pdf", key="aud_pdf")
+            
+            fatos_pdf = ""
+            if uploaded_file:
+                with st.spinner("Lendo autos..."):
+                    fatos_pdf = extrair_texto_pdf(uploaded_file)
+                    st.success("Autos processados!")
+
+        with c2:
+            st.markdown("#### ⚔️ Narrativa dos Fatos")
+            st.caption("Descreva os pontos chave ou deixe a IA ler do PDF acima.")
+            contexto = st.text_area("Resumo do conflito e pontos sensíveis:", value=fatos_pdf if fatos_pdf else "", height=300, placeholder="Ex: O reclamante pede horas extras, mas exercia cargo de confiança (art. 62 CLT). Temos cartões de ponto assinados...")
+
+    if st.button("GERAR ESTRATÉGIA DE GUERRA", use_container_width=True):
+        if contexto:
+            with st.spinner("A IA está analisando teses, jurisprudência e formulando perguntas..."):
                 prompt = f"""
-                Atue como um Advogado Sênior experiente em audiências de {tipo_aud}.
-                Prepare um roteiro de audiência para mim.
+                Atue como um Advogado Sênior Litigante especialista em {tipo_aud}.
+                Estou me preparando para uma audiência. Eu represento o {lado}.
                 
-                CASO:
-                - Minha tese: {meu_cli}
-                - Tese da parte contrária: {outra_parte}
+                FATOS DO CASO:
+                {contexto}
                 
-                GERE:
-                1. Lista de 5 Perguntas CRUZADAS para fazer à parte contrária (para derrubar a tese deles).
-                2. Lista de 3 Perguntas para fazer ao meu cliente (para reforçar nossa tese).
-                3. Possíveis "Pegadinhas" que o outro advogado pode tentar fazer.
+                GERE UM RELATÓRIO ESTRATÉGICO COM:
+                
+                1. 🛡️ TESES DE MÉRITO E PRELIMINARES:
+                   - Quais artigos de lei me favorecem?
+                   - Quais súmulas (STF/STJ/TST) se aplicam?
+                   - Existe prescrição ou decadência?
+                
+                2. 🎯 PONTOS CONTROVERTIDOS (O que o juiz precisa decidir?):
+                   - Liste objetivamente os fatos que precisam de prova.
+                
+                3. 🕵️ ROTEIRO DE PERGUNTAS (INTERROGATÓRIO):
+                   - Perguntas para o MEU CLIENTE (para reafirmar nossa tese).
+                   - Perguntas para a PARTE CONTRÁRIA (Cross-examination: perguntas fechadas para obter contradição).
+                   - Perguntas para as TESTEMUNHAS (Focadas nos pontos controvertidos).
+                
+                4. ⚠️ ALERTAS DE RISCO:
+                   - Onde minha tese é fraca?
+                   - Que perguntas o advogado oponente provavelmente fará?
                 """
-                res = tentar_gerar_conteudo(prompt, None)
-                st.markdown(res)
                 
-                if "❌" not in res:
-                    salvar_documento_memoria("Audiencia", "Simulação", res)
-                    st.download_button("Baixar Roteiro", gerar_word(res), "Roteiro_Audiencia.docx")
+                res = tentar_gerar_conteudo(prompt, None)
+                st.session_state['resultado_aud'] = res # Salva para não perder ao recarregar
+                
         else:
-            st.warning("Preencha as teses de ambas as partes para gerar a simulação.")
+            st.warning("Por favor, insira o resumo dos fatos ou carregue um PDF.")
+
+    # Exibição do Resultado
+    if 'resultado_aud' in st.session_state:
+        st.markdown("---")
+        st.subheader("📋 SEU ROTEIRO DE AUDIÊNCIA")
+        st.markdown(st.session_state['resultado_aud'])
+        
+        col_down1, col_down2 = st.columns(2)
+        salvar_documento_memoria(f"Estratégia {tipo_aud}", "Audiência", st.session_state['resultado_aud'])
+        st.download_button("📥 Baixar Roteiro em Word", gerar_word(st.session_state['resultado_aud']), "Roteiro_Audiencia.docx", use_container_width=True)
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v9.8 | DEV MODE (NO LOGIN)</center>", unsafe_allow_html=True)
+
 
 
 
