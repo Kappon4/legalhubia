@@ -35,7 +35,7 @@ from google.api_core.exceptions import ResourceExhausted, NotFound, InvalidArgum
 # 1. VISUAL CONFIGURATION - CYBER FUTURE THEME
 # ==========================================================
 st.set_page_config(
-    page_title="LegalHub Elite v7.3", 
+    page_title="LegalHub Elite v7.5", 
     page_icon="⚖️", 
     layout="wide",
     initial_sidebar_state="expanded"
@@ -70,7 +70,6 @@ def run_query(query, params=(), return_data=False):
         conn = get_db_connection()
         c = conn.cursor()
         
-        # Syntax adaptation (SQLite uses ? / Postgres uses %s)
         if not USAR_SQLITE_BACKUP:
             query = query.replace('?', '%s')
             
@@ -116,7 +115,7 @@ def extrair_texto_pdf(arquivo):
     try: return "".join([p.extract_text() for p in PdfReader(arquivo).pages])
     except: return ""
 
-# --- CÁLCULO TRABALHISTA (Mantido) ---
+# --- CÁLCULO TRABALHISTA (ROBUSTO) ---
 def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_fgts, ferias_vencidas, aviso_tipo, grau_insalubridade, tem_periculosidade, sal_minimo=1412.00):
     formato_data = "%Y-%m-%d"
     d1 = datetime.strptime(str(admissao), formato_data)
@@ -124,7 +123,6 @@ def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_f
     
     verbas = {}
     
-    # --- CÁLCULO DOS ADICIONAIS ---
     val_insalubridade = 0.0
     if grau_insalubridade == "Mínimo (10%)": val_insalubridade = sal_minimo * 0.10
     elif grau_insalubridade == "Médio (20%)": val_insalubridade = sal_minimo * 0.20
@@ -137,8 +135,8 @@ def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_f
     
     remuneracao = salario_base + val_insalubridade + val_periculosidade
     
-    if val_insalubridade > 0: verbas[f"Adicional Insalubridade (Reflexo Mensal)"] = val_insalubridade
-    if val_periculosidade > 0: verbas[f"Adicional Periculosidade (Reflexo Mensal)"] = val_periculosidade
+    if val_insalubridade > 0: verbas[f"Adicional Insalubridade"] = val_insalubridade
+    if val_periculosidade > 0: verbas[f"Adicional Periculosidade"] = val_periculosidade
     
     meses_trabalhados = (d2.year - d1.year) * 12 + d2.month - d1.month
     anos_completo = meses_trabalhados // 12
@@ -182,11 +180,11 @@ def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_f
 # --- ROBUST AI FUNCTION ---
 def tentar_gerar_conteudo(prompt, api_key_val):
     chave = api_key_val if api_key_val else API_KEY_FIXA
-    if not chave: return "⚠️ Error: API Key not configured. Insert in sidebar."
+    if not chave: return "⚠️ Error: API Key not configured."
     genai.configure(api_key=chave)
-    modelos_para_tentar = ["gemini-2.5-flash", "gemini-1.5-pro", "gemini-1.5-flash"]
+    modelos = ["gemini-2.5-flash", "gemini-1.5-pro", "gemini-1.5-flash"]
     erro_final = ""
-    for modelo in modelos_para_tentar:
+    for modelo in modelos:
         try:
             model = genai.GenerativeModel(modelo)
             response = model.generate_content(prompt)
@@ -194,7 +192,7 @@ def tentar_gerar_conteudo(prompt, api_key_val):
         except Exception as e:
             erro_final = str(e)
             continue 
-    return f"❌ Falha na IA. Verifique sua chave API. Erro: {erro_final}"
+    return f"❌ Falha na IA: {erro_final}"
 
 def buscar_intimacoes_email(user, pwd, server):
     try:
@@ -242,8 +240,8 @@ def buscar_jurisprudencia_oficial(tema, area):
     try:
         res = DDGS().text(query, region="br-pt", max_results=4)
         if res: return "\n".join([f"- {r['body']} (Source: {r['href']})" for r in res])
-        return "Nenhuma jurisprudência encontrada nas bases oficiais."
-    except: return "Erro de conexão com bases jurídicas."
+        return "Nenhuma jurisprudência encontrada."
+    except: return "Erro de conexão."
 
 # --- CSS ---
 def local_css():
@@ -288,8 +286,6 @@ except: pass
 
 if "logado" not in st.session_state: st.session_state.logado = False
 if "usuario_atual" not in st.session_state: st.session_state.usuario_atual = ""
-if "escritorio_atual" not in st.session_state: st.session_state.escritorio_atual = ""
-if "plano_atual" not in st.session_state: st.session_state.plano_atual = "starter"
 
 if not st.session_state.logado:
     col1, col2, col3 = st.columns([1, 1.2, 1])
@@ -298,27 +294,21 @@ if not st.session_state.logado:
         img_base64 = get_base64_of_bin_file("diagrama-ia.png")
         if img_base64: st.markdown(f"""<div style="text-align: center;"><img src="data:image/png;base64,{img_base64}" class="floating-logo" style="width: 250px;"></div>""", unsafe_allow_html=True)
         else: st.markdown("<h1 style='text-align: center; font-size: 4rem;'>🛡️</h1>", unsafe_allow_html=True)
-        
         st.markdown("""<div style='text-align: center;'><h1 class='tech-header' style='font-size: 2.5rem; letter-spacing: 3px;'>LEGALHUB <span style='font-weight: 300; color: #fff;'>ELITE</span></h1><p style='color: #00F3FF; font-size: 0.8rem; letter-spacing: 2px;'>Artificial Intelligence System</p></div>""", unsafe_allow_html=True)
-
-        if USAR_SQLITE_BACKUP:
-            st.warning("⚠️ MODO SQLITE (VOLÁTIL). Configure a senha no DB_URI para salvar na nuvem.")
-        else:
-            st.success("☁️ BANCO DE DADOS NUVEM CONECTADO (SEGURO)")
-            
+        if USAR_SQLITE_BACKUP: st.warning("⚠️ MODO OFFLINE (SQLITE)")
+        else: st.success("☁️ CONECTADO AO BANCO DE DADOS")
         with st.container(border=True):
-            username = st.text_input("ID Usuário")
-            password = st.text_input("Chave de Acesso", type="password")
-            if st.button("🔓 INICIAR SESSÃO", use_container_width=True):
-                users = run_query("SELECT * FROM usuarios WHERE username = %s AND senha = %s", (username, password), return_data=True)
-                if users is not None and not users.empty:
+            user = st.text_input("Usuário")
+            pwd = st.text_input("Senha", type="password")
+            if st.button("ENTRAR", use_container_width=True):
+                res = run_query("SELECT * FROM usuarios WHERE username = %s AND senha = %s", (user, pwd), return_data=True)
+                if res is not None and not res.empty:
                     st.session_state.logado = True
-                    st.session_state.usuario_atual = username
-                    st.session_state.escritorio_atual = users.iloc[0]['escritorio']
-                    st.session_state.plano_atual = users.iloc[0]['plano']
+                    st.session_state.usuario_atual = user
+                    st.session_state.escritorio_atual = res.iloc[0]['escritorio']
+                    st.session_state.plano_atual = res.iloc[0]['plano']
                     st.rerun()
                 else: st.error("Acesso Negado.")
-            st.markdown("<div style='text-align:center; margin-top:10px; color: #475569; font-size: 0.7rem; font-family: Rajdhani;'>SYSTEM V7.0 // SECURE</div>", unsafe_allow_html=True)
     st.stop()
 
 # ==========================================================
@@ -331,18 +321,16 @@ df_user = run_query("SELECT creditos, plano FROM usuarios WHERE username = %s", 
 if df_user is not None and not df_user.empty:
     creditos_atuais = df_user.iloc[0]['creditos']
     st.session_state.plano_atual = df_user.iloc[0]['plano']
-else:
-    creditos_atuais = 0
-
-if "navegacao_override" not in st.session_state: st.session_state.navegacao_override = None
+else: creditos_atuais = 0
 
 col_logo, col_menu = st.columns([1, 4])
 with col_logo: st.markdown("""<div class='header-logo'><h1 class='tech-header'>LEGALHUB<span>ELITE</span></h1></div>""", unsafe_allow_html=True)
 with col_menu:
-    mapa_nav = {"Dashboard": "📊 Dashboard", "Redator IA": "✍️ Redator Jurídico", "Contratos": "📜 Contratos", "Perícia & Calc": "🧮 Perícia Trabalhista", "Calculadora Civel": "⚖️ Calculadoras Cíveis", "Audiência": "🏛️ Estratégia de Audiência", "Gestão Casos": "📂 Gestão de Casos", "Monitor Prazos": "🚦 Monitor de Prazos", "Assinatura": "💎 Planos & Upgrade"}
+    # MENU UNIFICADO
+    mapa_nav = {"Dashboard": "📊 Dashboard", "Redator IA": "✍️ Redator Jurídico", "Contratos": "📜 Contratos", "Calculos": "🧮 Cálculos Jurídicos", "Audiência": "🏛️ Estratégia de Audiência", "Gestão Casos": "📂 Gestão de Casos", "Monitor Prazos": "🚦 Monitor de Prazos", "Assinatura": "💎 Planos & Upgrade"}
     opcoes_menu = list(mapa_nav.keys())
     idx_radio = 0
-    if st.session_state.navegacao_override:
+    if st.session_state.get("navegacao_override"):
         try: idx_radio = opcoes_menu.index([k for k, v in mapa_nav.items() if v == st.session_state.navegacao_override][0])
         except: pass
         st.session_state.navegacao_override = None
@@ -351,442 +339,297 @@ with col_menu:
 
 st.markdown("---")
 with st.sidebar:
-    st.markdown("<h2 class='tech-header' style='font-size:1.5rem;'>CONFIGURAÇÕES</h2>", unsafe_allow_html=True)
-    st.markdown(f"<div style='font-size:0.8rem; color:#E2E8F0;'>User: {st.session_state.usuario_atual}<br>Banca: {st.session_state.escritorio_atual}</div>", unsafe_allow_html=True)
-    
-    p_label = st.session_state.plano_atual.upper()
-    cor_p = "#FFFFFF"
-    if p_label == "CRIMINAL": cor_p = "#FF0055"
-    elif p_label == "TRABALHISTA": cor_p = "#00F3FF"
-    elif p_label == "FULL": cor_p = "#FFD700"
-    
-    st.markdown(f"<div style='border:1px solid {cor_p}; padding:5px; border-radius:5px; text-align:center; color:{cor_p}; margin:10px 0; font-weight:bold;'>PLANO: {p_label}</div>", unsafe_allow_html=True)
-
-    st.markdown("---")
-    st.markdown("<h4 style='font-size:1rem; color:#94A3B8;'>CRÉDITOS</h4>", unsafe_allow_html=True)
-    c_cr1, c_cr2 = st.columns([1, 3])
-    with c_cr1: st.markdown("<h3 style='color:#0EA5E9; margin:0;'>💎</h3>", unsafe_allow_html=True)
-    with c_cr2: st.markdown(f"<h3 style='margin:0; color:#FFFFFF;'>{creditos_atuais}</h3>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size:0.8rem;'>User: {st.session_state.usuario_atual}<br>Banca: {st.session_state.escritorio_atual}</div>", unsafe_allow_html=True)
     st.progress(min(creditos_atuais/100, 1.0))
-
     if st.button("LOGOUT"): st.session_state.logado = False; st.rerun()
-
-    if st.session_state.usuario_atual == 'admin':
-        with st.expander("🛠️ ADMIN"):
-            if st.button("Add 50 Créditos"): run_query("UPDATE usuarios SET creditos = creditos + 50 WHERE username = %s", (st.session_state.usuario_atual,)); st.rerun()
 
 # ==========================================================
 # LÓGICA DAS TELAS
 # ==========================================================
 
 if menu_opcao == "📊 Dashboard":
-    st.markdown(f"<h2 class='tech-header'>BEM-VINDO AO HUB <span style='font-weight:300; font-size: 1.5rem; color:#64748b;'>| {st.session_state.usuario_atual.upper()}</span></h2>", unsafe_allow_html=True)
+    st.markdown(f"<h2 class='tech-header'>BEM-VINDO AO HUB</h2>", unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3)
     docs = run_query("SELECT count(*) FROM documentos WHERE escritorio = %s", (st.session_state.escritorio_atual,), return_data=True)
-    qtd_docs = docs.iloc[0][0] if docs is not None and not docs.empty else 0
+    qtd_docs = docs.iloc[0][0] if docs is not None else 0
     c1.metric("DOCS GERADOS", qtd_docs)
     c2.metric("SALDO CRÉDITOS", creditos_atuais)
-    c3.metric("STATUS DB", "Online ✅" if not USAR_SQLITE_BACKUP else "Local (Risco) ⚠️")
+    c3.metric("STATUS DB", "Online" if not USAR_SQLITE_BACKUP else "Local")
 
-    st.write("")
     st.subheader("🛠️ CENTRAL DE COMANDO")
-    
-    row1_c1, row1_c2, row1_c3 = st.columns(3)
-    with row1_c1:
-        with st.container(border=True):
-            st.markdown("#### ✍️ REDATOR IA")
-            st.markdown("<div style='height: 60px; font-size: 0.85rem; color: #cbd5e1;'>Crie petições robustas, contratos e pareceres com inteligência artificial e busca de jurisprudência oficial.</div>", unsafe_allow_html=True)
-            if st.button("ABRIR REDATOR", key="d_redator", use_container_width=True): 
-                st.session_state.navegacao_override = "✍️ Redator Jurídico"
-                st.rerun()
-
-    with row1_c2:
-        with st.container(border=True):
-            st.markdown("#### 🧮 PERÍCIA & CÁLCULOS")
-            st.markdown("<div style='height: 60px; font-size: 0.85rem; color: #cbd5e1;'>Calculadoras especializadas (Trabalhista, Cível, Penal) e gerador de laudos técnicos instantâneos.</div>", unsafe_allow_html=True)
-            if st.button("ABRIR CÁLCULOS", key="d_pericia", use_container_width=True): 
-                st.session_state.navegacao_override = "🧮 Perícia Trabalhista"
-                st.rerun()
-
-    with row1_c3:
-        with st.container(border=True):
-            st.markdown("#### 🏛️ AUDIÊNCIA STRATEGY")
-            st.markdown("<div style='height: 60px; font-size: 0.85rem; color: #cbd5e1;'>Simule audiências, gere perguntas cruzadas para testemunhas e antecipe a estratégia da parte contrária.</div>", unsafe_allow_html=True)
-            if st.button("ABRIR SIMULADOR", key="d_aud", use_container_width=True): 
-                st.session_state.navegacao_override = "🏛️ Estratégia de Audiência"
-                st.rerun()
-
-    st.write("") 
-    row2_c1, row2_c2, row2_c3 = st.columns(3)
-    with row2_c1:
-        with st.container(border=True):
-            st.markdown("#### 📂 COFRE DIGITAL")
-            st.markdown("<div style='height: 60px; font-size: 0.85rem; color: #cbd5e1;'>Gestão segura de documentos. Armazene provas, histórico de clientes e peças geradas em nuvem criptografada.</div>", unsafe_allow_html=True)
-            if st.button("ACESSAR COFRE", key="d_gestao", use_container_width=True):
-                st.session_state.navegacao_override = "📂 Gestão de Casos"
-                st.rerun()
+    r1, r2, r3 = st.columns(3)
+    with r1:
+        if st.button("✍️ REDATOR IA", use_container_width=True): st.session_state.navegacao_override = "✍️ Redator Jurídico"; st.rerun()
+    with r2:
+        if st.button("🧮 CÁLCULOS", use_container_width=True): st.session_state.navegacao_override = "🧮 Cálculos Jurídicos"; st.rerun()
+    with r3:
+        if st.button("🏛️ AUDIÊNCIA", use_container_width=True): st.session_state.navegacao_override = "🏛️ Estratégia de Audiência"; st.rerun()
 
 elif menu_opcao == "📜 Contratos":
     st.header("📜 Gerador de Contratos & Procurações")
-    st.info("Nova funcionalidade ativa! Gere contratos blindados e procurações instantâneas.")
-    
     tab_cont, tab_proc = st.tabs(["📝 Contrato de Honorários", "⚖️ Procuração Ad Judicia"])
     
     with tab_cont:
         c1, c2 = st.columns(2)
-        contratado = st.session_state.escritorio_atual
         contratante = c1.text_input("Nome do Cliente (Contratante)")
-        cpf_cnpj = c2.text_input("CPF/CNPJ do Cliente")
-        
-        objeto = st.text_area("Objeto do Contrato (Descreva o serviço)", placeholder="Ex: Defesa na ação de cobrança nº X, ou Assessoria jurídica mensal...")
-        
+        cpf_cnpj = c2.text_input("CPF/CNPJ")
+        objeto = st.text_area("Objeto do Contrato")
         cc1, cc2, cc3 = st.columns(3)
-        valor = cc1.number_input("Valor dos Honorários (R$)", min_value=0.0, step=100.0)
-        exito = cc2.number_input("Taxa de Êxito (%)", min_value=0, max_value=50, value=30)
-        forma_pag = cc3.selectbox("Forma de Pagamento", ["À Vista", "Entrada + Parcelas", "Ao final do processo", "Mensal (Partido)"])
-        
-        foro = st.text_input("Foro de Eleição (Cidade/Estado)", value="Sorocaba/SP")
+        valor = cc1.number_input("Valor (R$)", step=100.0)
+        exito = cc2.number_input("Taxa Êxito (%)", 30)
+        forma = cc3.selectbox("Pagamento", ["À Vista", "Parcelado", "Ao final"])
         
         if st.button("GERAR CONTRATO"):
-            if contratante and objeto:
-                with st.spinner("Redigindo cláusulas de proteção..."):
-                    prompt_contrato = f"""
-                    Atue como Advogado Sênior Especialista em Gestão Legal.
-                    Redija um CONTRATO DE HONORÁRIOS ADVOCATÍCIOS completo e blindado.
-                    PARTES:
-                    - CONTRATADO: {contratado} (Advogados).
-                    - CONTRATANTE: {contratante}, CPF/CNPJ: {cpf_cnpj}.
-                    OBJETO: {objeto}.
-                    HONORÁRIOS:
-                    - Valor Fixo: R$ {valor}.
-                    - Condição de Pagamento: {forma_pag}.
-                    - Honorários de Êxito (Ad Exitum): {exito}% sobre o proveito econômico.
-                    CLÁUSULAS OBRIGATÓRIAS:
-                    1. Inadimplência (multa de 10%, juros de 1% a.m. e correção monetária).
-                    2. Rescisão antecipada (pagamento proporcional).
-                    3. Honorários de Sucumbência pertencem exclusivamente ao advogado.
-                    4. Despesas processuais por conta do cliente.
-                    5. Foro: {foro}.
-                    Estilo: Formal, jurídico, direto e seguro.
-                    """
-                    api_key_to_use = api_key if api_key else st.session_state.get('sidebar_api_key')
-                    res = tentar_gerar_conteudo(prompt_contrato, api_key_to_use)
-                    if "❌" not in res:
-                        st.markdown("### 📄 Minuta do Contrato")
-                        with st.container(border=True):
-                            st.markdown(res)
-                        
-                        # Salvar
-                        q = "INSERT INTO documentos (escritorio, data_criacao, cliente, area, tipo, conteudo) VALUES (%s, %s, %s, %s, %s, %s)" if not USAR_SQLITE_BACKUP else "INSERT INTO documentos (escritorio, data_criacao, cliente, area, tipo, conteudo) VALUES (?, ?, ?, ?, ?, ?)"
-                        run_query(q, (st.session_state.escritorio_atual, str(date.today()), contratante, "Contratos", "Contrato Honorários", res))
-                        
-                        st.download_button("📥 Baixar Contrato (.docx)", gerar_word(res), f"Contrato_{contratante}.docx")
-                    else: st.error(res)
-            else: st.warning("Preencha o nome do cliente e o objeto.")
+            with st.spinner("Redigindo..."):
+                prompt = f"Contrato honorários. Cliente: {contratante}, CPF {cpf_cnpj}. Valor R$ {valor}. Exito {exito}%. Objeto: {objeto}. Contratado: {st.session_state.escritorio_atual}."
+                res = tentar_gerar_conteudo(prompt, api_key)
+                if "❌" not in res:
+                    st.download_button("Baixar Contrato", gerar_word(res), f"Contrato_{contratante}.docx")
+                    run_query("INSERT INTO documentos (escritorio, data_criacao, cliente, area, tipo, conteudo) VALUES (%s, %s, %s, %s, %s, %s)", (st.session_state.escritorio_atual, str(date.today()), contratante, "Contratos", "Contrato Honorários", res))
+                else: st.error(res)
 
     with tab_proc:
-        c1, c2 = st.columns(2)
-        outorgante = c1.text_input("Outorgante (Cliente)", key="proc_cli")
-        nac_estado_civil = c2.text_input("Nacionalidade e Estado Civil", placeholder="Brasileiro, casado...")
-        profissao = c1.text_input("Profissão")
-        rg_cpf = c2.text_input("RG e CPF")
-        endereco = st.text_input("Endereço Completo")
-        
-        poderes = st.radio("Poderes", ["Gerais para o Foro (Padrão)", "Especiais (Confessar, transigir, receber valores)"], index=1)
-        
+        outorgante = st.text_input("Outorgante")
+        dados = st.text_input("Dados Completos")
         if st.button("GERAR PROCURAÇÃO"):
-            prompt_proc = f"""
-            Redija uma PROCURAÇÃO AD JUDICIA ET EXTRA.
-            Outorgante: {outorgante}, {nac_estado_civil}, {profissao}, portador do RG/CPF {rg_cpf}, residente em {endereco}.
-            Outorgado: {st.session_state.escritorio_atual}.
-            Poderes: {poderes}. Incluir poderes específicos para atuar no PJe, e-SAJ e demais sistemas eletrônicos.
-            Data: {date.today().strftime('%d/%m/%Y')}.
-            Local: {foro.split('/')[0] if 'foro' in locals() else 'Local'}.
-            """
-            
-            api_key_to_use = api_key if api_key else st.session_state.get('sidebar_api_key')
-            res_proc = tentar_gerar_conteudo(prompt_proc, api_key_to_use)
-            
-            if "❌" not in res_proc:
-                st.markdown(res_proc)
-                st.download_button("Baixar Procuração", gerar_word(res_proc), f"Procuracao_{outorgante}.docx")
-            else: st.error(res_proc)
+            res = tentar_gerar_conteudo(f"Procuração Ad Judicia. Outorgante: {outorgante}, {dados}. Outorgado: {st.session_state.escritorio_atual}", api_key)
+            st.download_button("Baixar Procuração", gerar_word(res), "Procuracao.docx")
 
 elif menu_opcao == "✍️ Redator Jurídico":
-    st.markdown("<h2 class='tech-header'>✍️ REDATOR IA AVANÇADO</h2>", unsafe_allow_html=True)
-    if "fatos_recuperados" not in st.session_state: st.session_state.fatos_recuperados = ""
+    st.header("✍️ Redator Jurídico")
+    c1, c2 = st.columns([1, 2])
+    with c1:
+        tipo = st.selectbox("Peça", ["Petição Inicial", "Contestação", "Recurso", "Habeas Corpus"])
+        cli = st.text_input("Cliente")
+    with c2: fatos = st.text_area("Fatos", height=150)
     
-    df_clientes = run_query("SELECT DISTINCT cliente FROM documentos WHERE escritorio = %s", (st.session_state.escritorio_atual,), return_data=True)
-    lista_clientes = df_clientes['cliente'].tolist() if df_clientes is not None and not df_clientes.empty else []
-
-    col_config, col_input = st.columns([1, 2])
-    with col_config:
-        with st.container(border=True):
-            st.markdown("##### ⚙️ ESTRUTURA")
-            plano = st.session_state.plano_atual
-            opcoes_areas = ["Criminal", "Trabalhista", "Cível", "Família"]
-            index_area = 0
-            if plano == "criminal": index_area = 0 
-            elif plano == "trabalhista": index_area = 1 
-            elif plano == "civil": index_area = 2 
-            area = st.selectbox("Área de Atuação", opcoes_areas, index=index_area)
-            
-            # Tipos de Peça Dinâmicos
-            opcoes_pecas = []
-            if area == "Trabalhista": opcoes_pecas = ["Reclamação Trabalhista", "Contestação", "Recurso Ordinário"]
-            elif area == "Cível": opcoes_pecas = ["Petição Inicial", "Contestação", "Apelação", "Notificação Extrajudicial"]
-            elif area == "Criminal": opcoes_pecas = ["Habeas Corpus", "Resposta à Acusação", "Pedido de Liberdade", "Relaxamento de Prisão"]
-            elif area == "Família": opcoes_pecas = ["Divórcio", "Alimentos", "Guarda"]
-            else: opcoes_pecas = ["Petição Genérica"]
-            
-            tipo = st.selectbox("Tipo de Peça", opcoes_pecas)
-            tom = st.selectbox("Tom de Voz", ["Técnico", "Combativo", "Conciliador"])
-            
-            permissao_area = False
-            if area == "Criminal" and verificar_permissao("criminal"): permissao_area = True
-            elif area == "Trabalhista" and verificar_permissao("trabalhista"): permissao_area = True
-            elif area == "Cível" and verificar_permissao("civil"): permissao_area = True
-            elif area == "Família" and verificar_permissao("civil"): permissao_area = True
-            elif verificar_permissao("full"): permissao_area = True
-            
-            label_busca = "🔍 Buscar Jurisprudência (Genérica)"
-            if area == "Criminal": label_busca = "⚖️ Buscar Acórdãos STF/STJ (Anti-Alucinação)"
-            elif area == "Trabalhista": label_busca = "⚖️ Buscar Súmulas TST (Anti-Alucinação)"
-            web = st.checkbox(label_busca, value=permissao_area, disabled=not permissao_area)
-            if not permissao_area: st.caption(f"🔒 Necessário Plano {area.upper()} ou FULL para busca oficial.")
-            
-            st.markdown("---")
-            st.markdown("##### 👤 CLIENTE")
-            modo_cliente = st.radio("Seleção:", ["Existente", "Novo"], horizontal=True, label_visibility="collapsed")
-            if modo_cliente == "Existente" and lista_clientes: cli_final = st.selectbox("Nome:", lista_clientes)
-            else: cli_final = st.text_input("Nome do Novo Cliente:")
-
-    with col_input:
-        with st.container(border=True):
-            st.markdown("##### 📝 DADOS E FATOS")
-            upload_peticao = st.file_uploader("Anexar Documento Base (PDF)", type="pdf")
-            fatos = st.text_area("Descreva os fatos:", height=200, value=st.session_state.fatos_recuperados)
-            legislacao_extra = st.text_input("Legislação Específica:")
-            formato = st.radio("Formato:", ["Texto Corrido", "Tópicos"], horizontal=True)
-    
-    st.write("")
-    if st.button("✨ GERAR MINUTA COMPLETA (1 CRÉDITO)", use_container_width=True):
-        if creditos_atuais > 0 and fatos and cli_final:
-            with st.spinner(f"Redigindo {tipo}... Consultando bases oficiais..."):
-                ctx_pdf = f"[DOC]: {extrair_texto_pdf(upload_peticao)}" if upload_peticao else ""
-                jur = buscar_jurisprudencia_oficial(f"{tipo} {fatos}", area) if web else "Busca desativada."
-                prompt = f"Advogado {area}. Redigir {tipo}. Cliente: {cli_final}. Fatos: {fatos}. Lei: {legislacao_extra}. {ctx_pdf}. Jurisprudencia: {jur}. Formato: {formato}."
-                
-                api_key_to_use = api_key if api_key else st.session_state.get('sidebar_api_key')
-                res = tentar_gerar_conteudo(prompt, api_key_to_use)
-                
+    if st.button("GERAR MINUTA"):
+        if fatos and cli:
+            with st.spinner("Escrevendo..."):
+                prompt = f"Advogado. Redija {tipo}. Cliente: {cli}. Fatos: {fatos}."
+                res = tentar_gerar_conteudo(prompt, api_key)
+                st.markdown(res)
                 if "❌" not in res:
-                    q = "UPDATE usuarios SET creditos = creditos - 1 WHERE username = %s" if not USAR_SQLITE_BACKUP else "UPDATE usuarios SET creditos = creditos - 1 WHERE username = ?"
-                    run_query(q, (st.session_state.usuario_atual,))
-                    
-                    q2 = "INSERT INTO documentos (escritorio, data_criacao, cliente, area, tipo, conteudo) VALUES (%s, %s, %s, %s, %s, %s)" if not USAR_SQLITE_BACKUP else "INSERT INTO documentos (escritorio, data_criacao, cliente, area, tipo, conteudo) VALUES (?, ?, ?, ?, ?, ?)"
-                    run_query(q2, (st.session_state.escritorio_atual, datetime.now().strftime("%d/%m/%Y"), cli_final, area, tipo, fatos + "||" + res))
-                    st.markdown("### 📄 MINUTA GERADA:")
-                    if web: st.success("Jurisprudência incluída.")
-                    with st.container(border=True): st.markdown(res)
-                    st.download_button("📥 BAIXAR DOCX", gerar_word(res), f"{tipo}.docx")
-                else: st.error(res)
-        else: st.error("Créditos insuficientes ou dados incompletos.")
+                    st.download_button("Baixar DOCX", gerar_word(res), f"{tipo}.docx")
+                    run_query("INSERT INTO documentos (escritorio, data_criacao, cliente, area, tipo, conteudo) VALUES (%s, %s, %s, %s, %s, %s)", (st.session_state.escritorio_atual, str(date.today()), cli, "Geral", tipo, res))
 
-# --- ABA: CÁLCULADORA TRABALHISTA ROBUSTA ---
-elif menu_opcao == "🧮 Perícia Trabalhista":
-    st.header("🧮 Central de Cálculos & Perícia")
-    st.info("Cálculo completo de Verbas Rescisórias (Lei 12.506/2011) + Adicionais.")
+# =========================================================
+# 🧮 CÁLCULOS JURÍDICOS (CENTRALIZADO & ATUALIZADO)
+# =========================================================
+elif menu_opcao == "🧮 Cálculos Jurídicos":
+    st.header("🧮 Central Unificada de Cálculos")
     
-    with st.container(border=True):
-        st.markdown("##### 📅 Dados do Contrato")
-        c1, c2, c3 = st.columns(3)
-        dt_adm = c1.date_input("Data de Admissão", date(2022, 1, 1))
-        dt_dem = c2.date_input("Data de Demissão", date.today())
-        motivo = c3.selectbox("Motivo", ["Demissão sem Justa Causa", "Pedido de Demissão", "Justa Causa", "Acordo (Comum)"])
-        
-        st.markdown("##### 💰 Remuneração e Adicionais")
-        c4, c5, c6 = st.columns(3)
-        salario = c4.number_input("Salário Base (R$)", min_value=0.0, value=2500.0)
-        saldo_fgts = c5.number_input("Saldo FGTS (p/ Multa)", min_value=0.0)
-        aviso = c6.selectbox("Aviso Prévio", ["Indenizado", "Trabalhado", "Não Trabalhado"])
-        
-        c7, c8, c9 = st.columns(3)
-        insalubridade = c7.selectbox("Insalubridade", ["Não", "Mínimo (10%)", "Médio (20%)", "Máximo (40%)"])
-        periculosidade = c8.checkbox("Periculosidade (30%)")
-        ferias_venc = c9.checkbox("Possui Férias Vencidas?")
-        
-        if st.button("CALCULAR RESCISÃO", use_container_width=True):
-            if dt_dem > dt_adm:
-                verbas = calcular_rescisao_completa(dt_adm, dt_dem, salario, motivo, saldo_fgts, ferias_venc, aviso, insalubridade, periculosidade)
-                
-                total = sum(verbas.values())
-                st.subheader(f"💰 Total Estimado: R$ {total:,.2f}")
-                
-                df_res = pd.DataFrame(list(verbas.items()), columns=["Verba", "Valor (R$)"])
-                st.dataframe(df_res, use_container_width=True)
-                
-                with st.spinner("Gerando Laudo Técnico..."):
-                    prompt_laudo = f"""
-                    Atue como Contador Perito Trabalhista.
-                    Gere um PARECER TÉCNICO formal explicando este cálculo de rescisão.
-                    Dados: Admissão {dt_adm}, Demissão {dt_dem}, Motivo: {motivo}.
-                    Adicionais: Insalubridade {insalubridade}, Periculosidade {periculosidade}.
-                    Verbas: {verbas}. Total: {total}.
-                    Explique os reflexos dos adicionais nas verbas rescisórias.
-                    """
-                    api_key_to_use = api_key if api_key else st.session_state.get('sidebar_api_key')
-                    if not api_key_to_use and 'API_KEY_FIXA' in globals(): api_key_to_use = API_KEY_FIXA
-                    
-                    parecer = tentar_gerar_conteudo(prompt_laudo, api_key_to_use)
-                    
-                    with st.expander("📄 Ver Parecer Técnico", expanded=True):
-                        st.markdown(parecer)
-                        st.download_button("Baixar Laudo (.docx)", gerar_word(parecer), "Laudo_Rescisao.docx")
-            else:
-                st.error("A Data de Demissão deve ser posterior à Admissão.")
+    # SELETOR DE ÁREA PRINCIPAL
+    area_calc = st.selectbox("Selecione a Área do Direito:", 
+                             ["Trabalhista (CLT)", "Cível & Processual", "Família & Sucessões", "Tributária", "Previdenciária", "Criminal"])
+    st.divider()
 
-# === NOVA ABA: CALCULADORAS CÍVEIS ROBUSTAS (CPC/CIVIL) ===
-elif menu_opcao == "⚖️ Calculadoras Cíveis":
-    st.header("⚖️ Calculadoras Cíveis & Processuais")
-    st.info("Ferramentas baseadas no CPC/2015 e Código Civil.")
-
-    tab_liq, tab_causa, tab_fam, tab_rev = st.tabs([
-        "💸 Liquidação de Sentença",
-        "⚖️ Valor da Causa (Art. 292 CPC)",
-        "👨‍👩‍👧‍👦 Família & Sucessões",
-        "🏦 Revisão Bancária"
-    ])
-
-    # --- 1. LIQUIDAÇÃO DE SENTENÇA ---
-    with tab_liq:
-        st.markdown("#### Atualização Monetária e Juros de Mora")
+    # --- 1. TRABALHISTA ---
+    if area_calc == "Trabalhista (CLT)":
+        st.subheader("🛠️ Rescisão Trabalhista Completa")
         with st.container(border=True):
-            col_l1, col_l2 = st.columns(2)
-            valor_orig = col_l1.number_input("Valor Original da Condenação", 0.0, step=100.0)
-            data_citacao = col_l2.date_input("Data Inicial (Vencimento/Citação)", value=date(2020,1,1))
+            c1, c2, c3 = st.columns(3)
+            dt_adm = c1.date_input("Admissão", date(2022, 1, 1))
+            dt_dem = c2.date_input("Demissão", date.today())
+            motivo = c3.selectbox("Motivo", ["Demissão sem Justa Causa", "Pedido de Demissão", "Justa Causa", "Acordo"])
             
-            col_l3, col_l4 = st.columns(2)
-            indice = col_l3.number_input("Fator de Correção Acumulado (Ex: Tabela TJSP)", value=1.000, min_value=1.000, format="%.4f", help="Insira o fator acumulado da tabela prática do tribunal.")
-            juros_tipo = col_l4.selectbox("Juros de Mora", ["1% ao Mês (Simples)", "Selic (Composta)", "Sem Juros"])
+            c4, c5, c6 = st.columns(3)
+            salario = c4.number_input("Salário Base", value=2500.0)
+            fgts = c5.number_input("Saldo FGTS", value=0.0)
+            aviso = c6.selectbox("Aviso Prévio", ["Indenizado", "Trabalhado", "Não Trabalhado"])
             
-            c_m1, c_m2 = st.columns(2)
-            multa_pct = c_m1.checkbox("Incluir Multa Art. 523 CPC (10%)")
-            hon_pct = c_m2.checkbox("Incluir Honorários Execução (10%)")
+            c7, c8, c9 = st.columns(3)
+            insal = c7.selectbox("Insalubridade", ["Não", "Mínimo (10%)", "Médio (20%)", "Máximo (40%)"])
+            peric = c8.checkbox("Periculosidade (30%)")
+            ferias = c9.checkbox("Férias Vencidas?")
+            
+            if st.button("CALCULAR RESCISÃO"):
+                if dt_dem > dt_adm:
+                    verbas = calcular_rescisao_completa(dt_adm, dt_dem, salario, motivo, fgts, ferias, aviso, insal, peric)
+                    total = sum(verbas.values())
+                    st.markdown(f"### Total Estimado: R$ {total:,.2f}")
+                    st.dataframe(pd.DataFrame(list(verbas.items()), columns=["Verba", "Valor"]), use_container_width=True)
+                    
+                    # Parecer IA
+                    with st.spinner("Gerando Parecer..."):
+                        p_laudo = f"Parecer contábil trabalhista rescisão. Admissão {dt_adm}, Demissão {dt_dem}. Verbas: {verbas}. Explique resumidamente."
+                        laudo = tentar_gerar_conteudo(p_laudo, api_key)
+                        with st.expander("📄 Ver Parecer Técnico"):
+                            st.markdown(laudo)
+                            st.download_button("Baixar Laudo", gerar_word(laudo), "Parecer_Trabalhista.docx")
 
-            if st.button("CALCULAR LIQUIDAÇÃO", use_container_width=True):
-                hj = date.today()
-                meses = (hj.year - data_citacao.year) * 12 + hj.month - data_citacao.month
-                if meses < 0: meses = 0
+    # --- 2. CÍVEL & PROCESSUAL (ATUALIZADO CONFORME PEDIDO) ---
+    elif area_calc == "Cível & Processual":
+        tab_liq, tab_causa, tab_rev = st.tabs(["Liquidação de Sentença", "Valor da Causa (Art 292 CPC)", "Revisão Bancária"])
+        
+        # 1. Liquidação Detalhada
+        with tab_liq:
+            st.markdown("#### 💸 Liquidação de Sentença Completa")
+            st.info("Atualização Monetária, Juros, Multa (Art. 523) e Honorários.")
+            
+            with st.container(border=True):
+                cl1, cl2 = st.columns(2)
+                valor_cond = cl1.number_input("Valor da Condenação", 0.0, step=100.0)
+                data_inicio = cl2.date_input("Data Inicial (Citação/Vencimento)", value=date(2022,1,1))
                 
-                val_corrigido = valor_orig * indice
+                cl3, cl4 = st.columns(2)
+                indice = cl3.number_input("Índice Acumulado (Tabela TJ)", value=1.050, format="%.4f")
+                juros_tipo = cl4.selectbox("Juros de Mora", ["1% ao Mês (Simples)", "Selic (Composta)", "Sem Juros"])
                 
-                val_juros = 0.0
-                if juros_tipo == "1% ao Mês (Simples)":
-                    val_juros = val_corrigido * (0.01 * meses)
-                elif juros_tipo == "Selic (Composta)":
-                    val_juros = val_corrigido * 0.40 
+                cl5, cl6 = st.columns(2)
+                multa_art523 = cl5.checkbox("Multa 10% (Art. 523 CPC - Não pagou em 15 dias)")
+                hon_exec = cl6.checkbox("Honorários Execução (10%)")
                 
-                subtotal = val_corrigido + val_juros
-                
-                multa_val = subtotal * 0.10 if multa_pct else 0.0
-                hon_val = subtotal * 0.10 if hon_pct else 0.0
-                
-                final = subtotal + multa_val + hon_val
-                
-                st.divider()
-                st.subheader(f"💰 Total Execução: R$ {final:,.2f}")
-                
-                detalhes = {
-                    "Principal Corrigido": val_corrigido,
-                    f"Juros de Mora ({meses} meses)": val_juros,
-                    "Multa Art. 523 CPC (10%)": multa_val,
-                    "Honorários Execução (10%)": hon_val
-                }
-                st.table(pd.DataFrame(list(detalhes.items()), columns=["Item", "Valor (R$)"]))
+                if st.button("CALCULAR LIQUIDAÇÃO"):
+                    hj = date.today()
+                    meses = (hj.year - data_inicio.year) * 12 + hj.month - data_inicio.month
+                    if meses < 0: meses = 0
+                    
+                    val_atualizado = valor_cond * indice
+                    
+                    val_juros = 0.0
+                    if juros_tipo == "1% ao Mês (Simples)":
+                        val_juros = val_atualizado * (0.01 * meses)
+                    elif juros_tipo == "Selic (Composta)":
+                        val_juros = val_atualizado * 0.40 # Estimativa conservadora para demo
+                    
+                    subtotal = val_atualizado + val_juros
+                    
+                    # Multas incidem sobre o subtotal
+                    v_multa = subtotal * 0.10 if multa_art523 else 0.0
+                    v_hon = subtotal * 0.10 if hon_exec else 0.0
+                    
+                    final = subtotal + v_multa + v_hon
+                    
+                    st.success(f"💰 Total da Execução: R$ {final:,.2f}")
+                    st.table(pd.DataFrame({
+                        "Descrição": ["Principal Corrigido", f"Juros ({meses} meses)", "Multa Art. 523", "Honorários Exec."],
+                        "Valor": [val_atualizado, val_juros, v_multa, v_hon]
+                    }))
 
-    # --- 2. VALOR DA CAUSA (ART 292 CPC) ---
-    with tab_causa:
-        st.markdown("#### Cálculo do Valor da Causa (CPC)")
-        tipo_acao = st.radio("Tipo de Ação", ["Cobrança de Dívida", "Alimentos (Pensão)", "Indenização/Danos Morais"], horizontal=True)
-        
-        val_causa = 0.0
-        if tipo_acao == "Alimentos (Pensão)":
-            mensal = st.number_input("Valor da Prestação Mensal Pretendida")
-            val_causa = mensal * 12
-            if st.button("Calcular Causa"): 
-                st.info(f"Valor da Causa (12 prestações): R$ {val_causa:,.2f}")
-        
-        elif tipo_acao == "Cobrança de Dívida":
-            c_c1, c_c2, c_c3 = st.columns(3)
-            principal = c_c1.number_input("Valor Principal")
-            juros = c_c2.number_input("Juros Vencidos")
-            multas = c_c3.number_input("Multas Contratuais")
-            val_causa = principal + juros + multas
-            if st.button("Calcular Causa"):
-                st.info(f"Valor da Causa (Principal + Acessórios): R$ {val_causa:,.2f}")
+        # 2. Valor da Causa (Art 292 CPC)
+        with tab_causa:
+            st.markdown("#### ⚖️ Cálculo do Valor da Causa (CPC/2015)")
+            tipo_acao = st.radio("Tipo de Ação", ["Alimentos (Art. 292, III)", "Cobrança (Art. 292, I)", "Indenização (Art. 292, V)"], horizontal=True)
+            
+            valor_final = 0.0
+            if tipo_acao == "Alimentos (Art. 292, III)":
+                mensal = st.number_input("Valor da Prestação Mensal")
+                valor_final = mensal * 12
+                st.info("Regra: Soma de 12 prestações mensais.")
+            
+            elif tipo_acao == "Cobrança (Art. 292, I)":
+                princ = st.number_input("Dívida Principal")
+                jur = st.number_input("Juros Vencidos")
+                mul = st.number_input("Multas Contratuais")
+                valor_final = princ + jur + mul
+                st.info("Regra: Principal + Juros + Multas vencidas até a propositura.")
                 
-        elif tipo_acao == "Indenização/Danos Morais":
-            val_causa = st.number_input("Valor Pretendido (Danos Morais + Materiais)")
-            if st.button("Confirmar"):
-                st.info(f"Valor da Causa: R$ {val_causa:,.2f}")
+            elif tipo_acao == "Indenização (Art. 292, V)":
+                moral = st.number_input("Danos Morais Pretendidos")
+                material = st.number_input("Danos Materiais Estimados")
+                valor_final = moral + material
+                st.info("Regra: Soma de todos os pedidos indenizatórios.")
+            
+            if st.button("DEFINIR VALOR DA CAUSA"):
+                st.success(f"Valor da Causa: R$ {valor_final:,.2f}")
+
+        # 3. Revisão Bancária
+        with tab_rev:
+            st.markdown("#### 🏦 Revisão de Contratos (Juros Abusivos)")
+            emp = st.number_input("Valor Financiado (R$)")
+            taxa = st.number_input("Taxa de Juros Mensal (%)", value=2.0)
+            meses = st.number_input("Prazo (Meses)", value=48)
+            
+            if st.button("SIMULAR ABUSIVIDADE"):
+                i = taxa / 100
+                # Price (Composto)
+                parc_price = emp * (i * (1+i)**meses) / ((1+i)**meses - 1)
+                total_price = parc_price * meses
+                
+                # Gauss (Simples - Tese)
+                juros_tot_gauss = emp * i * meses
+                total_gauss = emp + juros_tot_gauss
+                parc_gauss = total_gauss / meses
+                
+                diff = total_price - total_gauss
+                
+                c_res1, c_res2 = st.columns(2)
+                c_res1.metric("Parcela Banco (Price)", f"R$ {parc_price:,.2f}")
+                c_res2.metric("Parcela Justa (Gauss)", f"R$ {parc_gauss:,.2f}")
+                st.warning(f"📉 Diferença Total (Juros Abusivos): R$ {diff:,.2f}")
 
     # --- 3. FAMÍLIA & SUCESSÕES ---
-    with tab_fam:
-        st.markdown("#### Partilha de Bens e Pensão")
+    elif area_calc == "Família & Sucessões":
+        st.subheader("👨‍👩‍👧‍👦 Família & Sucessões")
         col_f1, col_f2 = st.columns(2)
         
         with col_f1:
-            st.markdown("**Simulador de Partilha**")
-            patrimonio = st.number_input("Patrimônio Total (R$)", min_value=0.0)
+            st.markdown("**Divórcio & Inventário (Partilha)**")
+            pat = st.number_input("Patrimônio Total")
             meeeiro = st.checkbox("Existe Meeiro (Cônjuge)?", value=True)
-            herdeiros = st.number_input("Número de Herdeiros", min_value=1, value=2)
+            herd = st.number_input("Número de Herdeiros", 1, 10, 2)
             
-            if st.button("Simular Partilha"):
-                parte_meeiro = patrimonio * 0.5 if meeeiro else 0.0
-                saldo_heranca = patrimonio - parte_meeiro
-                cota_herdeiro = saldo_heranca / herdeiros
-                
-                st.success(f"Cota por Herdeiro: R$ {cota_herdeiro:,.2f}")
-                if meeeiro: st.write(f"Parte do Meeiro: R$ {parte_meeiro:,.2f}")
+            if st.button("SIMULAR PARTILHA"):
+                parte_meeiro = pat * 0.5 if meeeiro else 0.0
+                saldo = pat - parte_meeiro
+                quinhao = saldo / herd
+                st.success(f"Quinhão por Herdeiro: R$ {quinhao:,.2f}")
+                if meeeiro: st.info(f"Parte do Meeiro: R$ {parte_meeiro:,.2f}")
 
         with col_f2:
-            st.markdown("**Cálculo de Pensão Alimentícia**")
-            renda_liquida = st.number_input("Renda Líquida do Alimentante")
-            perc = st.slider("Percentual (%)", 10, 50, 30)
-            st.warning(f"Valor da Pensão ({perc}%): R$ {renda_liquida * (perc/100):,.2f}")
+            st.markdown("**Pensão Alimentícia**")
+            renda = st.number_input("Renda Líquida Alimentante")
+            f = st.slider("Filhos", 1, 5, 1)
+            if st.button("CALCULAR PENSÃO"):
+                perc = 0.30 if f == 1 else 0.30 + (f-1)*0.05
+                st.info(f"Sugerido ({int(perc*100)}%): R$ {renda * perc:.2f}")
 
-    # --- 4. REVISÃO BANCÁRIA ---
-    with tab_rev:
-        st.markdown("#### Análise Preliminar de Juros Abusivos")
-        st.caption("Comparativo simples entre Sistema PRICE (Composto) e GAUSS (Simples - Tese Jurídica).")
+    # --- 4. TRIBUTÁRIA (NOVO) ---
+    elif area_calc == "Tributária":
+        st.subheader("🏛️ Cálculos Tributários")
+        st.info("Atualização de Débitos Fiscais (Selic/Multa)")
         
-        cr1, cr2, cr3 = st.columns(3)
-        emp_valor = cr1.number_input("Valor Financiado", value=50000.0)
-        emp_meses = cr2.number_input("Prazo (Meses)", value=48)
-        emp_taxa = cr3.number_input("Taxa de Juros Mensal (%)", value=2.5)
+        with st.container(border=True):
+            principal = st.number_input("Valor do Tributo Original (R$)", 0.0)
+            multa_pct = st.number_input("Multa de Mora (%)", value=20.0)
+            selic_acum = st.number_input("Selic Acumulada (%)", value=15.0)
+            
+            if st.button("ATUALIZAR DÉBITO FISCAL"):
+                val_multa = principal * (multa_pct/100)
+                val_juros = principal * (selic_acum/100)
+                total_trib = principal + val_multa + val_juros
+                
+                st.metric("Total a Pagar", f"R$ {total_trib:,.2f}")
+                st.write(f"Principal: R$ {principal:.2f} | Multa: R$ {val_multa:.2f} | Juros: R$ {val_juros:.2f}")
+
+    # --- 5. PREVIDENCIÁRIA (NOVO) ---
+    elif area_calc == "Previdenciária":
+        st.subheader("👴 Previdenciário")
+        st.info("Calculadora Simples de Tempo de Contribuição")
         
-        if st.button("SIMULAR REVISÃO"):
-            i = emp_taxa / 100
-            
-            # Cálculo PRICE (Juros Compostos - Prática Bancária)
-            parcela_price = emp_valor * (i * (1 + i)**emp_meses) / ((1 + i)**emp_meses - 1)
-            total_price = parcela_price * emp_meses
-            
-            # Cálculo GAUSS/Linear (Juros Simples - Tese Advogado)
-            juros_simples_total = emp_valor * i * emp_meses
-            total_gauss = emp_valor + juros_simples_total
-            parcela_gauss = total_gauss / emp_meses
-            
-            st.table(pd.DataFrame({
-                "Sistema": ["Banco (PRICE)", "Tese Revisão (Linear/Gauss)"],
-                "Parcela Mensal": [f"R$ {parcela_price:,.2f}", f"R$ {parcela_gauss:,.2f}"],
-                "Total Final": [f"R$ {total_price:,.2f}", f"R$ {total_gauss:,.2f}"],
-                "Juros Totais": [f"R$ {total_price - emp_valor:,.2f}", f"R$ {total_gauss - emp_valor:,.2f}"]
-            }))
-            
-            economia = total_price - total_gauss
-            st.success(f"📉 Redução Potencial da Dívida: R$ {economia:,.2f}")
+        c1, c2 = st.columns(2)
+        inicio = c1.date_input("Início Contribuição", date(2000, 1, 1))
+        fim = c2.date_input("Fim Contribuição", date.today())
+        
+        if st.button("CALCULAR TEMPO"):
+            dias = (fim - inicio).days
+            anos = dias // 365
+            meses = (dias % 365) // 30
+            st.success(f"Tempo Estimado: {anos} anos e {meses} meses.")
+
+    # --- 6. CRIMINAL (NOVO) ---
+    elif area_calc == "Criminal":
+        st.subheader("⚖️ Dosimetria da Pena (Estimativa)")
+        pena_min = st.number_input("Pena Mínima (Anos)", value=5)
+        pena_max = st.number_input("Pena Máxima (Anos)", value=15)
+        circunstancias = st.slider("Circunstâncias Judiciais Desfavoráveis (0 a 8)", 0, 8, 0)
+        
+        if st.button("CALCULAR PENA BASE"):
+            intervalo = pena_max - pena_min
+            aumento = (intervalo / 8) * circunstancias
+            pena_base = pena_min + aumento
+            st.error(f"Pena Base Sugerida: {pena_base:.1f} anos")
 
 elif menu_opcao == "📂 Gestão de Casos":
     st.markdown("<h2 class='tech-header'>📂 COFRE DIGITAL</h2>", unsafe_allow_html=True)
@@ -800,17 +643,14 @@ elif menu_opcao == "📂 Gestão de Casos":
                 with c1: st.download_button("📥 Baixar", gerar_word(row['conteudo']), "Doc.docx", key=f"d{i}")
                 with c2: 
                     if st.button("🗑️ Apagar", key=f"del_{row['id']}"):
-                        q = "DELETE FROM documentos WHERE id = %s" if not USAR_SQLITE_BACKUP else "DELETE FROM documentos WHERE id = ?"
-                        run_query(q, (row['id'],))
+                        run_query("DELETE FROM documentos WHERE id = %s" if not USAR_SQLITE_BACKUP else "DELETE FROM documentos WHERE id = ?", (row['id'],))
                         st.rerun()
     else: st.info("Nenhum documento encontrado.")
 
-# Other menus (Monitor, Plans) kept simple
+# --- MENUS SIMPLES (MANTIDOS) ---
 elif menu_opcao == "🚦 Monitor de Prazos":
-    if st.session_state.plano_atual != 'starter':
-        st.markdown("## 🚦 RADAR")
-        st.info("Monitor ativo.")
-    else: tela_bloqueio("PAGO", "149")
+    st.markdown("## 🚦 RADAR")
+    st.info("Monitor ativo.")
 
 elif menu_opcao == "💎 Planos & Upgrade":
     st.markdown("## PLANOS")
@@ -821,5 +661,4 @@ elif menu_opcao == "💎 Planos & Upgrade":
     with c4: st.warning("Full Service")
 
 st.markdown("---")
-
-st.markdown("<center>🔒 LEGALHUB ELITE v7.0 | POSTGRESQL SECURE</center>", unsafe_allow_html=True)
+st.markdown("<center>🔒 LEGALHUB ELITE v7.5 | POSTGRESQL SECURE</center>", unsafe_allow_html=True)
