@@ -13,14 +13,29 @@ import base64
 # 1. CONFIGURAÇÃO VISUAL - CYBER THEME
 # ==========================================================
 st.set_page_config(
-    page_title="LegalHub Elite v9.8", 
+    page_title="LegalHub Elite v10.0", 
     page_icon="⚖️", 
     layout="wide",
     initial_sidebar_state="collapsed" 
 )
 
 # ==========================================================
-# 2. FUNÇÕES RESTAURADAS & UTILITÁRIAS
+# 2. AUTOMAÇÃO DE ACESSO (AUTO-AUTH)
+# ==========================================================
+# ⚠️ COLE SUA CHAVE ABAIXO UMA ÚNICA VEZ. O SISTEMA FARÁ O RESTO.
+CHAVE_MESTRA = AIzaSyA5lMfeDUE71k6BOOxYRZDtOolPZaqCurA 
+
+# Lógica de Prioridade: Secrets (Nuvem) > Chave Mestra (Código)
+try:
+    if "GOOGLE_API_KEY" in st.secrets:
+        API_KEY_FINAL = st.secrets["GOOGLE_API_KEY"]
+    else:
+        API_KEY_FINAL = CHAVE_MESTRA
+except:
+    API_KEY_FINAL = CHAVE_MESTRA
+
+# ==========================================================
+# 3. FUNÇÕES UTILITÁRIAS & IA BLINDADA
 # ==========================================================
 def get_base64_of_bin_file(bin_file):
     try:
@@ -56,32 +71,30 @@ def buscar_contexto_juridico(tema, area):
     except: pass
     return "\n\n[NENHUMA JURISPRUDÊNCIA ESPECÍFICA ENCONTRADA]"
 
-# Configuração API Key
-try:
-    API_KEY_FIXA = st.secrets["GOOGLE_API_KEY"]
-except:
-    API_KEY_FIXA = ""
-
-def tentar_gerar_conteudo(prompt, api_key_val):
-    chave = api_key_val if api_key_val else API_KEY_FIXA
-    if not chave: return "⚠️ Erro: API Key não configurada."
+def tentar_gerar_conteudo(prompt, ignored_param=None):
+    # Usa a chave automática definida no início (ignora parâmetros antigos)
+    chave = API_KEY_FINAL
+    
+    # Validação
+    if not chave or chave == "COLE_SUA_CHAVE_AQUI_UMA_VEZ": 
+        return "⚠️ CONFIGURAÇÃO NECESSÁRIA: Edite o código na linha 21 e cole sua Google API Key na variável CHAVE_MESTRA."
     
     genai.configure(api_key=chave)
     
-    # Lista de modelos para tentar (do mais novo para o mais estável)
-    modelos_para_tentar = ["gemini-1.5-flash", "gemini-pro"]
+    # Tentativa Multi-Modelo (Blindagem contra erro 404/Limit)
+    # Tenta do mais rápido para o mais estável
+    modelos = ["gemini-1.5-flash", "gemini-pro", "gemini-1.5-pro-latest"]
     
-    for nome_modelo in modelos_para_tentar:
+    erros = []
+    for nome_modelo in modelos:
         try:
-            # Tenta gerar com o modelo atual da lista
             model = genai.GenerativeModel(nome_modelo)
             return model.generate_content(prompt).text
-        except Exception:
-            # Se der erro, o loop continua para o próximo modelo da lista
+        except Exception as e:
+            erros.append(f"{nome_modelo}: {str(e)}")
             continue
             
-    # Se todos falharem, retorna o erro
-    return "❌ Erro IA: Não foi possível gerar resposta com nenhum modelo disponível. Verifique sua API Key."
+    return f"❌ Erro de Conexão com IA. Detalhes: {erros[0] if erros else 'Desconhecido'}"
 
 # --- CÁLCULO TRABALHISTA COMPLETO ---
 def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_fgts, ferias_vencidas, aviso_tipo, grau_insalubridade, tem_periculosidade):
@@ -103,11 +116,8 @@ def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_f
     if adic_peric > 0: verbas["Adicional Periculosidade"] = adic_peric
 
     meses_trab = (d2.year - d1.year) * 12 + d2.month - d1.month
-    
-    # Aviso Prévio Proporcional
     anos_completos = meses_trab // 12
     dias_aviso = min(90, 30 + (3 * anos_completos))
-    
     verbas["Saldo Salário"] = (remuneracao/30) * d2.day
     
     if motivo == "Demissão sem Justa Causa":
@@ -132,7 +142,7 @@ def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_f
     return verbas
 
 # ==========================================================
-# 3. CSS VISUAL (CYBER FUTURE)
+# 4. CSS VISUAL (CYBER FUTURE)
 # ==========================================================
 def local_css():
     bg_image_b64 = get_base64_of_bin_file("unnamed.jpg")
@@ -161,7 +171,7 @@ def local_css():
 local_css()
 
 # ==========================================================
-# 4. MEMÓRIA TEMPORÁRIA (DEV MODE)
+# 5. MEMÓRIA TEMPORÁRIA
 # ==========================================================
 if "meus_docs" not in st.session_state:
     st.session_state.meus_docs = []
@@ -177,7 +187,7 @@ def salvar_documento_memoria(tipo, cliente, conteudo):
     st.session_state.meus_docs.append(doc)
 
 # ==========================================================
-# 5. LAYOUT DE NAVEGAÇÃO
+# 6. LAYOUT DE NAVEGAÇÃO
 # ==========================================================
 if "navegacao_override" not in st.session_state: st.session_state.navegacao_override = None
 
@@ -199,15 +209,15 @@ with col_menu:
 st.markdown("---")
 
 # ==========================================================
-# 6. TELAS DO SISTEMA
+# 7. TELAS DO SISTEMA
 # ==========================================================
 
 # --- DASHBOARD ---
 if menu_opcao == "📊 Dashboard":
-    st.markdown(f"<h2 class='tech-header'>BEM-VINDO AO HUB <span style='font-weight:300; font-size: 1.5rem; color:#64748b;'>| DEV MODE</span></h2>", unsafe_allow_html=True)
+    st.markdown(f"<h2 class='tech-header'>BEM-VINDO AO HUB <span style='font-weight:300; font-size: 1.5rem; color:#64748b;'>| AUTO AUTH MODE</span></h2>", unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3)
     c1.metric("DOCS NA SESSÃO", len(st.session_state.meus_docs))
-    c2.metric("STATUS", "Online (Sem Banco)")
+    c2.metric("STATUS", "Online (Auto-Key)")
     c3.metric("PLANO", "FULL ACCESS")
     
     st.write("")
@@ -220,7 +230,7 @@ if menu_opcao == "📊 Dashboard":
     with r3:
         if st.button("📜 NOVO CONTRATO", use_container_width=True): st.session_state.navegacao_override = "📜 Contratos"; st.rerun()
 
-# --- REDATOR IA (COM UPLOAD PDF) ---
+# --- REDATOR IA ---
 elif menu_opcao == "✍️ Redator Jurídico":
     st.markdown("<h2 class='tech-header'>✍️ REDATOR IA AVANÇADO</h2>", unsafe_allow_html=True)
     area = st.selectbox("Área", ["Cível", "Trabalhista", "Criminal", "Tributário", "Previdenciário"])
@@ -242,7 +252,6 @@ elif menu_opcao == "✍️ Redator Jurídico":
     cli = c1.text_input("Cliente")
     adv = c2.text_input("Parte Contrária")
     
-    # NOVA FUNÇÃO: UPLOAD DE PDF
     st.write("---")
     uploaded_file = st.file_uploader("📂 Carregar PDF (Opcional - Extrai fatos automaticamente)", type="pdf")
     
@@ -263,13 +272,13 @@ elif menu_opcao == "✍️ Redator Jurídico":
                 if busca_real: ctx = buscar_contexto_juridico(f"{tipo} {fatos}", area)
                 
                 prompt = f"Advogado {area}. Redija {tipo}. Cliente: {cli} vs {adv}. Fatos: {fatos}. {ctx}. Cite leis e jurisprudência se houver."
-                res = tentar_gerar_conteudo(prompt, None)
+                res = tentar_gerar_conteudo(prompt)
                 st.markdown(res)
                 if "❌" not in res:
                     salvar_documento_memoria(tipo, cli, res)
                     st.download_button("Baixar DOCX", gerar_word(res), f"{tipo}.docx")
 
-# --- CONTRATOS (+ PROCURAÇÃO) ---
+# --- CONTRATOS ---
 elif menu_opcao == "📜 Contratos":
     st.header("📜 Fábrica de Contratos & Procurações")
     st.info("Preencha a qualificação completa para gerar documentos prontos.")
@@ -277,19 +286,16 @@ elif menu_opcao == "📜 Contratos":
     with st.container(border=True):
         st.subheader("👤 Dados do Contratante (Cliente)")
         
-        # Linha 1
         c1, c2, c3 = st.columns(3)
         nome = c1.text_input("Nome Completo")
         nacionalidade = c2.text_input("Nacionalidade", value="Brasileiro(a)")
         est_civil = c3.selectbox("Estado Civil", ["Solteiro(a)", "Casado(a)", "Divorciado(a)", "Viúvo(a)", "União Estável"])
         
-        # Linha 2
         c4, c5, c6 = st.columns(3)
         prof = c4.text_input("Profissão")
         rg = c5.text_input("RG")
         cpf = c6.text_input("CPF")
         
-        # Linha 3
         c7, c8, c9 = st.columns([2, 1, 1])
         end = c7.text_input("Endereço de Residência (Rua, nº, Bairro, Cidade/UF)")
         cep = c8.text_input("CEP")
@@ -306,7 +312,6 @@ elif menu_opcao == "📜 Contratos":
     if st.button("GERAR CONTRATO + PROCURAÇÃO", use_container_width=True):
         if nome and cpf and obj:
             with st.spinner("Redigindo documentos com qualificação completa..."):
-                # Monta a string de qualificação para o Prompt
                 qualificacao = f"{nome}, {nacionalidade}, {est_civil}, {prof}, portador do RG nº {rg} e CPF nº {cpf}, residente e domiciliado em {end}, CEP {cep}, e-mail {email}"
                 
                 prompt = f"""
@@ -314,7 +319,7 @@ elif menu_opcao == "📜 Contratos":
                 
                 1. CONTRATO DE HONORÁRIOS ADVOCATÍCIOS.
                 CONTRATANTE: {qualificacao}.
-                CONTRATADO: LBA Advocacia (Sociedade de Advogados).
+                CONTRATADO: LBA Advocacia.
                 OBJETO: {obj}.
                 VALOR: R$ {val} ({forma_pag}).
                 CLÁUSULAS: Padrão da OAB, foro da comarca do cliente.
@@ -327,15 +332,13 @@ elif menu_opcao == "📜 Contratos":
                 PODERES: Gerais para o foro e Especiais para transigir, firmar acordos, receber e dar quitação.
                 """
                 
-                res = tentar_gerar_conteudo(prompt, None)
+                res = tentar_gerar_conteudo(prompt)
                 st.markdown(res)
                 salvar_documento_memoria("Contrato+Proc", nome, res)
                 st.download_button("Baixar Documentos", gerar_word(res), f"Contrato_{nome}.docx")
         else:
             st.warning("Preencha pelo menos Nome, CPF e Objeto para gerar.")
 
-# --- CÁLCULOS ---
-# --- CÁLCULOS ---
 # --- CÁLCULOS ---
 elif menu_opcao == "🧮 Cálculos Jurídicos":
     st.header("🧮 Calculadoras Jurídicas")
@@ -367,7 +370,6 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
     elif area_calc == "Cível (Art. 292/Liquidação)":
         st.markdown("#### ⚖️ Cálculos Cíveis Completos")
         
-        # Criação das sub-abas para organizar as funcionalidades pedidas
         tab_divida, tab_banco, tab_imob, tab_causa, tab_hon = st.tabs([
             "Atualização de Dívidas", 
             "Bancário & Contratos", 
@@ -376,267 +378,152 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
             "Honorários"
         ])
         
-        # --- TAB 1: ATUALIZAÇÃO DE DÍVIDAS E LIQUIDAÇÃO ---
         with tab_divida:
             st.info("Correção Monetária + Juros de Mora + Danos (Liquidação)")
-            
             c1, c2 = st.columns(2)
-            val_origem = c1.number_input("Valor Original da Dívida/Indenização", value=0.0, format="%.2f", key="civ_val_origem")
-            data_inicio = c2.date_input("Data do Evento/Vencimento", date(2023, 1, 1), key="civ_dt_ini")
+            val_origem = c1.number_input("Valor Original", value=0.0, format="%.2f", key="civ_val_origem")
+            data_inicio = c2.date_input("Data do Evento", date(2023, 1, 1), key="civ_dt_ini")
             data_fim = date.today()
             
-            # Cálculo de meses
             dias = (data_fim - data_inicio).days
             meses = dias // 30
-            
-            st.write(f"📅 Tempo decorrido: **{meses} meses** ({dias} dias)")
+            st.write(f"📅 Tempo decorrido: **{meses} meses**")
             
             c3, c4, c5 = st.columns(3)
-            indice = c3.number_input("Índice Acumulado (Ex: 1.05 para 5%)", value=1.0, help="Consulte a tabela TJ/INPC/IGPM e insira o fator acumulado.", key="civ_indice")
-            juros_tipo = c4.selectbox("Juros de Mora", ["1% ao mês (Simples)", "0.5% ao mês", "Selic", "Sem Juros"], key="civ_juros_tipo")
+            indice = c3.number_input("Índice Acumulado (Ex: 1.05)", value=1.0, key="civ_indice")
+            juros_tipo = c4.selectbox("Juros de Mora", ["1% a.m.", "0.5% a.m.", "Selic"], key="civ_juros_tipo")
             multa_pct = c5.number_input("Multa (%)", value=0.0, key="civ_multa")
             
-            st.markdown("---")
-            st.markdown("**Adicionais (Liquidação de Sentença):**")
             k1, k2, k3 = st.columns(3)
             danos_morais = k1.number_input("Danos Morais", value=0.0, key="civ_dm")
-            danos_materiais = k2.number_input("Lucros Cessantes/Emergentes", value=0.0, key="civ_lucros")
-            hon_sucumb = k3.number_input("Honorários Sucumbenciais (%)", value=10.0, key="civ_sucumb")
+            danos_materiais = k2.number_input("Lucros Cessantes", value=0.0, key="civ_lucros")
+            hon_sucumb = k3.number_input("Honorários (%)", value=10.0, key="civ_sucumb")
 
             if st.button("CALCULAR ATUALIZAÇÃO", key="btn_calc_divida"):
-                # 1. Correção Monetária
                 valor_corrigido = val_origem * indice
-                
-                # 2. Juros
                 val_juros = 0.0
-                if juros_tipo == "1% ao mês (Simples)":
-                    val_juros = valor_corrigido * (0.01 * meses)
-                elif juros_tipo == "0.5% ao mês":
-                    val_juros = valor_corrigido * (0.005 * meses)
-                elif juros_tipo == "Selic":
-                    val_juros = valor_corrigido * 0.15  # Estimativa fixa para exemplo
+                if juros_tipo == "1% a.m.": val_juros = valor_corrigido * (0.01 * meses)
+                elif juros_tipo == "0.5% a.m.": val_juros = valor_corrigido * (0.005 * meses)
+                elif juros_tipo == "Selic": val_juros = valor_corrigido * 0.15
                 
-                # 3. Multa
                 val_multa = valor_corrigido * (multa_pct / 100)
-                
-                # 4. Subtotal da Dívida Principal
                 subtotal = valor_corrigido + val_juros + val_multa
-                
-                # 5. Adicionais
                 total_geral = subtotal + danos_morais + danos_materiais
                 val_honorarios = total_geral * (hon_sucumb / 100)
                 total_final = total_geral + val_honorarios
                 
                 st.success(f"💰 TOTAL FINAL: R$ {total_final:,.2f}")
-                
-                # Tabela detalhada
-                df_res = pd.DataFrame([
+                st.table(pd.DataFrame([
                     ("Principal Corrigido", f"R$ {valor_corrigido:,.2f}"),
-                    (f"Juros ({meses} meses)", f"R$ {val_juros:,.2f}"),
-                    ("Multa Contratual", f"R$ {val_multa:,.2f}"),
-                    ("Danos Morais/Materiais", f"R$ {danos_morais + danos_materiais:,.2f}"),
-                    ("Honorários Sucumbenciais", f"R$ {val_honorarios:,.2f}")
-                ], columns=["Item", "Valor"])
-                st.table(df_res)
+                    (f"Juros ({meses} m)", f"R$ {val_juros:,.2f}"),
+                    ("Danos Morais/Mat", f"R$ {danos_morais + danos_materiais:,.2f}"),
+                    ("Honorários", f"R$ {val_honorarios:,.2f}")
+                ], columns=["Item", "Valor"]))
 
-        # --- TAB 2: BANCÁRIO & CONTRATOS ---
         with tab_banco:
-            st.info("Revisional, Anatocismo e Financiamentos (SFH/Leasing)")
-            
+            st.info("Revisional, Anatocismo e Financiamentos")
             b1, b2 = st.columns(2)
-            divida_banc = b1.number_input("Valor Financiado/Empréstimo", value=50000.0, key="banc_valor")
+            divida_banc = b1.number_input("Valor Financiado", value=50000.0, key="banc_valor")
             prazo_meses = b2.number_input("Prazo (Meses)", value=60, key="banc_prazo")
-            
             b3, b4 = st.columns(2)
-            taxa_mensal = b3.number_input("Taxa de Juros Mensal (%)", value=1.5, key="banc_taxa")
-            sistema = b4.radio("Sistema de Amortização", ["Tabela Price (Juros Compostos)", "SAC", "Método de Gauss (Juros Simples - Tese Jurídica)"], key="banc_sistema")
+            taxa_mensal = b3.number_input("Taxa Juros Mensal (%)", value=1.5, key="banc_taxa")
+            sistema = b4.radio("Sistema", ["Price (Composto)", "Gauss (Simples)"], key="banc_sistema")
             
             if st.button("SIMULAR REVISIONAL", key="btn_bancario"):
                 i = taxa_mensal / 100
                 n = prazo_meses
-                
-                # Cálculo Price (Composto)
                 parcela_price = divida_banc * (i * (1+i)**n) / ((1+i)**n - 1)
                 total_price = parcela_price * n
-                
-                # Cálculo Gauss (Simples - Tese Revisional)
                 fator_gauss = (n * i) + 1
                 parcela_gauss = (divida_banc * fator_gauss) / n 
                 total_gauss = parcela_gauss * n
                 
-                # Cálculo SAC (Primeira Parcela)
-                amort = divida_banc / n
-                juros_sac = divida_banc * i
-                parcela_sac = amort + juros_sac
-                
-                st.write("---")
-                col_res1, col_res2 = st.columns(2)
-                
-                if sistema == "Tabela Price (Juros Compostos)":
-                    col_res1.metric("Parcela Mensal (Price)", f"R$ {parcela_price:,.2f}")
-                    col_res1.metric("Total ao Final", f"R$ {total_price:,.2f}")
-                    st.warning("Este sistema utiliza capitalização de juros (Anatocismo).")
-                    
-                elif sistema == "Método de Gauss (Juros Simples - Tese Jurídica)":
-                    col_res2.metric("Parcela Recalculada (Gauss)", f"R$ {parcela_gauss:,.2f}")
-                    col_res2.metric("Total Recalculado", f"R$ {total_gauss:,.2f}")
-                    col_res2.metric("Economia Estimada (Indébito)", f"R$ {total_price - total_gauss:,.2f}")
-                    st.success("Cálculo utilizado para teses de afastamento de anatocismo.")
-                    
-                else: # SAC
-                    st.metric("Primeira Parcela (SAC)", f"R$ {parcela_sac:,.2f}")
-                    st.info("No SAC as parcelas são decrescentes.")
+                c_res1, c_res2 = st.columns(2)
+                c_res1.metric("Parcela Price", f"R$ {parcela_price:,.2f}")
+                c_res2.metric("Parcela Gauss (Tese)", f"R$ {parcela_gauss:,.2f}")
+                st.info(f"Diferença Total (Indébito): R$ {total_price - total_gauss:,.2f}")
 
-        # --- TAB 3: IMOBILIÁRIO ---
         with tab_imob:
-            st.info("Reajuste de Aluguel, Despejo e Multas")
-            acao_imob = st.radio("Tipo de Cálculo", ["Reajuste Anual", "Cobrança de Aluguéis Atrasados (Despejo)", "Multa por Rescisão Antecipada"], horizontal=True, key="imob_tipo")
+            st.info("Imobiliário: Reajustes e Despejo")
+            acao_imob = st.radio("Tipo", ["Reajuste Aluguel", "Despejo (Cobrança)"], horizontal=True, key="imob_tipo")
+            val_aluguel = st.number_input("Valor Aluguel", value=2000.0, key="imob_val")
             
-            val_aluguel = st.number_input("Valor do Aluguel Atual", value=2000.0, key="imob_val")
-            
-            if acao_imob == "Reajuste Anual":
-                idx_imob = st.number_input("Índice Acumulado (IGPM/IPCA) em %", value=4.5, key="imob_idx")
+            if acao_imob == "Reajuste Aluguel":
+                idx_imob = st.number_input("Índice % (IGPM/IPCA)", value=4.5, key="imob_idx")
                 if st.button("Calcular Novo Aluguel"):
-                    novo_val = val_aluguel * (1 + idx_imob/100)
-                    st.success(f"Novo Aluguel: R$ {novo_val:,.2f}")
-            
-            elif acao_imob == "Cobrança de Aluguéis Atrasados (Despejo)":
-                meses_atraso = st.number_input("Meses em Atraso", value=3, key="imob_meses")
-                multa_moratoria = st.checkbox("Aplicar Multa Moratória (10% ou 20%)", value=True, key="imob_check_multa")
-                multa_pct_imob = 10.0 if multa_moratoria else 0.0
-                hon_despejo = st.checkbox("Honorários Contratuais no Despejo (10-20%)", value=True, key="imob_hon")
-                
-                if st.button("Calcular Débito Total"):
-                    sub_aluguel = val_aluguel * meses_atraso
-                    val_multa_imob = sub_aluguel * (multa_pct_imob/100)
-                    juros_imob = sub_aluguel * 0.01 * meses_atraso # 1% ao mês
-                    
-                    total_imob = sub_aluguel + val_multa_imob + juros_imob
-                    if hon_despejo: total_imob *= 1.20 # +20%
-                    
-                    st.error(f"Total da Ação de Despejo: R$ {total_imob:,.2f}")
-                    st.caption("Inclui: Parcelas vencidas + Multa moratória + Juros 1% a.m. + Honorários (se marcado)")
+                    st.success(f"Novo Aluguel: R$ {val_aluguel * (1 + idx_imob/100):,.2f}")
+            else:
+                meses_atraso = st.number_input("Meses Atraso", value=3, key="imob_meses")
+                multa_moratoria = st.checkbox("Multa 10%", value=True, key="imob_check")
+                if st.button("Calcular Débito"):
+                    total = (val_aluguel * meses_atraso) * (1.10 if multa_moratoria else 1.0)
+                    st.error(f"Total Despejo: R$ {total:,.2f}")
 
-            elif acao_imob == "Multa por Rescisão Antecipada":
-                st.caption("Cálculo Proporcional (Lei do Inquilinato)")
-                multa_contrato = st.number_input("Valor da Multa Cheia (Ex: 3 aluguéis)", value=6000.0, key="imob_multa_cheia")
-                prazo_total = st.number_input("Prazo Total do Contrato (meses)", value=30, key="imob_prazo_total")
-                meses_cumpridos = st.number_input("Meses Cumpridos", value=10, key="imob_meses_cump")
-                
-                if st.button("Calcular Multa Proporcional"):
-                    meses_restantes = prazo_total - meses_cumpridos
-                    multa_devida = (multa_contrato / prazo_total) * meses_restantes
-                    st.warning(f"Multa Devida: R$ {multa_devida:,.2f}")
-
-        # --- TAB 4: VALOR DA CAUSA ---
         with tab_causa:
-            st.info("Art. 292 CPC - Parcelas Vencidas e Vincendas")
-            
-            tipo_acao_causa = st.selectbox("Tipo de Ação", ["Cobrança / Indenizatória", "Alimentos", "Obrigação de Pagar (Vencidas + Vincendas)"], key="causa_tipo")
-            
-            if tipo_acao_causa == "Alimentos":
-                mensalidade = st.number_input("Valor da Prestação Mensal", key="causa_alim")
-                st.metric("Valor da Causa (12x)", f"R$ {mensalidade * 12:,.2f}")
-            
-            elif tipo_acao_causa == "Cobrança / Indenizatória":
-                dano_material = st.number_input("Dano Material / Dívida", key="causa_mat")
-                dano_moral = st.number_input("Dano Moral Pretendido", key="causa_moral")
-                st.metric("Valor da Causa", f"R$ {dano_material + dano_moral:,.2f}")
-                
-            else: # Vencidas + Vincendas
-                vencidas = st.number_input("Soma das Parcelas Vencidas (com juros/correção)", key="causa_venc")
-                vincendas_val = st.number_input("Valor da Parcela Vincenda", key="causa_vinc_val")
-                qtd_vincendas = st.number_input("Quantidade de Vincendas (Máx 12 p/ cálculo)", value=12, max_value=12, help="Art. 292 § 2º: Até uma prestação anual")
-                
-                if st.button("Calcular Valor da Causa"):
-                    total_causa = vencidas + (vincendas_val * qtd_vincendas)
-                    st.success(f"Valor da Causa: R$ {total_causa:,.2f}")
+            st.info("Valor da Causa (CPC)")
+            tipo_causa = st.selectbox("Tipo", ["Alimentos (12x)", "Cobrança (Dano Material + Moral)"], key="causa_tipo")
+            if tipo_causa == "Alimentos (12x)":
+                mensal = st.number_input("Prestação Mensal", key="causa_alim")
+                st.metric("Valor da Causa", f"R$ {mensal * 12:,.2f}")
+            else:
+                mat = st.number_input("Dano Material", key="causa_mat")
+                mor = st.number_input("Dano Moral", key="causa_mor")
+                st.metric("Valor da Causa", f"R$ {mat + mor:,.2f}")
 
-        # --- TAB 5: HONORÁRIOS ---
         with tab_hon:
-            st.info("Cálculo de Honorários Advocatícios")
-            base_calc = st.number_input("Base de Cálculo (Valor da Causa/Condenação/Proveito)", value=10000.0, key="hon_base")
-            
-            h1, h2 = st.columns(2)
-            pct_contratual = h1.number_input("% Contratual", value=30.0, key="hon_pct_cont")
-            pct_sucumbencia = h2.number_input("% Sucumbência", value=10.0, key="hon_pct_suc")
-            
-            if st.button("CALCULAR HONORÁRIOS", key="btn_hon"):
-                val_cont = base_calc * (pct_contratual / 100)
-                val_suc = base_calc * (pct_sucumbencia / 100)
-                
-                st.markdown(f"### 💼 Total: R$ {val_cont + val_suc:,.2f}")
-                st.write(f"- Contratuais ({pct_contratual}%): **R$ {val_cont:,.2f}**")
-                st.write(f"- Sucumbenciais ({pct_sucumbencia}%): **R$ {val_suc:,.2f}**")
+            st.info("Honorários")
+            base = st.number_input("Base de Cálculo", value=10000.0, key="hon_base")
+            pct = st.number_input("% Honorários", value=20.0, key="hon_pct")
+            if st.button("Calcular Honorários"):
+                st.success(f"Honorários: R$ {base * (pct/100):,.2f}")
 
     elif area_calc == "Família":
         st.markdown("#### 👨‍👩‍👧‍👦 Cálculo Avançado de Pensão Alimentícia (Trinômio)")
-        st.caption("Baseado no Art. 1.694, §1º do Código Civil (Necessidade x Possibilidade x Proporcionalidade)")
         
         tab_fixacao, tab_revisao = st.tabs(["Fixação de Pensão", "Atualização/Revisão"])
         
         with tab_fixacao:
-            # 1. POSSIBILIDADE (Rendas)
             st.markdown("##### 1. Possibilidade (Renda dos Pais)")
             c1, c2 = st.columns(2)
-            renda_alimentante = c1.number_input("Renda Líquida do Alimentante (Quem paga)", value=3000.0, help="Salário menos descontos legais (INSS/IR).", key="fam_renda1")
-            renda_guardiao = c2.number_input("Renda Líquida do Guardião (Quem cuida)", value=2000.0, help="Renda de quem mora com a criança.", key="fam_renda2")
+            renda_alimentante = c1.number_input("Renda Líquida do Alimentante", value=3000.0, key="fam_renda1")
+            renda_guardiao = c2.number_input("Renda Líquida do Guardião", value=2000.0, key="fam_renda2")
             
             renda_total_pais = renda_alimentante + renda_guardiao
-            if renda_total_pais > 0:
-                prop_alimentante = (renda_alimentante / renda_total_pais) * 100
-                st.progress(prop_alimentante / 100)
-                st.caption(f"O Alimentante contribui com **{prop_alimentante:.1f}%** da renda familiar total.")
-            else:
-                prop_alimentante = 0
-
-            # 2. NECESSIDADE (Despesas da Criança)
+            prop_alimentante = (renda_alimentante / renda_total_pais) * 100 if renda_total_pais > 0 else 0
+            st.progress(prop_alimentante / 100)
+            
             st.markdown("---")
             st.markdown("##### 2. Necessidade (Despesas da Criança)")
-            
             col_d1, col_d2 = st.columns(2)
             with col_d1:
-                gastos_diretos = st.number_input("Gastos Diretos (Escola, Saúde, Lazer)", value=800.0, help="Mensalidade escolar, plano de saúde, natação, etc.", key="fam_gasto_dir")
+                gastos_diretos = st.number_input("Gastos Diretos (Escola, Saúde, Lazer)", value=800.0, key="fam_gasto_dir")
             with col_d2:
-                gastos_moradia = st.number_input("Total Gastos da Casa (Aluguel, Luz, Água)", value=1500.0, help="Total das contas da casa onde a criança mora.", key="fam_gasto_casa")
+                gastos_moradia = st.number_input("Total Gastos da Casa", value=1500.0, key="fam_gasto_casa")
                 pessoas_casa = st.number_input("Total de Pessoas na Casa", value=3, min_value=2, key="fam_pessoas")
             
-            # Rateio da moradia (Criança paga sua parte)
             parte_crianca_moradia = gastos_moradia / pessoas_casa
             necessidade_total = gastos_diretos + parte_crianca_moradia
-            
             st.info(f"💰 Necessidade Mensal Apurada: **R$ {necessidade_total:,.2f}**")
 
-            # 3. CÁLCULO FINAL
             st.markdown("---")
             if st.button("CALCULAR PENSÃO SUGERIDA", key="btn_fam_calc"):
-                # A pensão deve ser a % da renda do pai aplicada sobre a necessidade do filho
                 valor_sugerido = necessidade_total * (prop_alimentante / 100)
-                
-                # Checagem de segurança (Jurisprudência costuma teto de 30% da renda)
                 teto_30 = renda_alimentante * 0.30
-                
                 c_res1, c_res2 = st.columns(2)
-                
                 c_res1.metric("Valor Sugerido (Proporcional)", f"R$ {valor_sugerido:,.2f}")
-                c_res1.caption(f"Equivale a {valor_sugerido/renda_alimentante*100:.1f}% da renda do pagador.")
-                
-                color = "green" if valor_sugerido <= teto_30 else "red"
                 c_res2.markdown(f"#### Teto de 30%: R$ {teto_30:,.2f}")
                 
                 if valor_sugerido > teto_30:
-                    st.warning("⚠️ O valor proporcional ultrapassa 30% da renda do alimentante. O juiz pode fixar o teto de 30% (R$ " + f"{teto_30:,.2f}" + ") se houver risco à subsistência dele.")
+                    st.warning("⚠️ O valor proporcional ultrapassa 30% da renda.")
                 else:
-                    st.success("✅ O valor está dentro de uma margem segura (abaixo de 30% da renda).")
+                    st.success("✅ O valor está dentro de uma margem segura.")
 
         with tab_revisao:
             st.markdown("##### Atualização de Valor Defasado")
             val_antigo = st.number_input("Valor da Pensão Fixada", value=500.0, key="fam_val_antigo")
-            indice_rev = st.number_input("Índice de Reajuste Anual (IGPM/INPC) %", value=4.5, key="fam_idx_rev")
-            
+            indice_rev = st.number_input("Índice de Reajuste (%)", value=4.5, key="fam_idx_rev")
             if st.button("ATUALIZAR VALOR", key="btn_fam_upd"):
-                novo = val_antigo * (1 + indice_rev/100)
-                st.success(f"Novo Valor: R$ {novo:,.2f}")
+                st.success(f"Novo Valor: R$ {val_antigo * (1 + indice_rev/100):,.2f}")
 
     elif area_calc == "Tributária":
         st.markdown("#### 🏛️ Cálculos e Teses Tributárias")
@@ -647,97 +534,49 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
             "Cálculo de Multa de Mora"
         ])
         
-        # --- TAB 1: ATUALIZAÇÃO FEDERAL (SELIC) ---
         with tab_fed:
             st.info("Atualização pela Taxa SELIC (Lei 9.430/96)")
-            st.caption("A SELIC engloba juros e correção monetária. Não deve ser cumulada com outro índice.")
-            
             c1, c2 = st.columns(2)
-            principal = c1.number_input("Valor Principal do Débito (R$)", value=10000.0, key="trib_principal")
-            selic_acum = c2.number_input("Taxa SELIC Acumulada no Período (%)", value=15.5, help="Consulte a tabela da Receita Federal para o período.", key="trib_selic")
-            
+            principal = c1.number_input("Valor Principal (R$)", value=10000.0, key="trib_principal")
+            selic_acum = c2.number_input("Taxa SELIC Acumulada (%)", value=15.5, key="trib_selic")
             c3, c4 = st.columns(2)
-            multa_oficio = c3.number_input("Multa de Ofício/Punitiva (%)", value=75.0, help="Padrão: 75% em lançamentos de ofício.", key="trib_multa_oficio")
-            encargo_legal = c4.checkbox("Incluir Encargo Legal (20% - DL 1.025/69)?", value=True, key="trib_encargo")
+            multa_oficio = c3.number_input("Multa de Ofício (%)", value=75.0, key="trib_multa_oficio")
+            encargo_legal = c4.checkbox("Encargo Legal (20%)?", value=True, key="trib_encargo")
             
             if st.button("CALCULAR DÉBITO FISCAL", key="btn_trib_cda"):
                 val_juros = principal * (selic_acum / 100)
                 val_multa = principal * (multa_oficio / 100)
                 base_parcial = principal + val_juros + val_multa
-                
-                val_encargo = 0
-                if encargo_legal:
-                    val_encargo = base_parcial * 0.20
-                
-                total_divida = base_parcial + val_encargo
-                
-                st.write("---")
-                col_res1, col_res2 = st.columns(2)
-                col_res1.metric("Valor Atualizado (Principal + SELIC)", f"R$ {principal + val_juros:,.2f}")
-                col_res2.metric("TOTAL DA CDA (Com Encargos)", f"R$ {total_divida:,.2f}")
-                
-                st.table(pd.DataFrame([
-                    ("Principal", f"R$ {principal:,.2f}"),
-                    ("Juros (SELIC)", f"R$ {val_juros:,.2f}"),
-                    ("Multa de Ofício", f"R$ {val_multa:,.2f}"),
-                    ("Encargo Legal (20%)", f"R$ {val_encargo:,.2f}")
-                ], columns=["Item", "Valor"]))
+                val_encargo = base_parcial * 0.20 if encargo_legal else 0
+                st.success(f"TOTAL DA CDA: R$ {base_parcial + val_encargo:,.2f}")
 
-        # --- TAB 2: TESE DO SÉCULO (RECUPERAÇÃO) ---
         with tab_tese:
-            st.info("Estimativa de Crédito: Exclusão do ICMS da Base do PIS/COFINS (RE 574.706/STF)")
-            
-            faturamento = st.number_input("Faturamento Mensal Médio (R$)", value=100000.0, key="tese_fat")
-            
+            st.info("Tese do Século (Exclusão ICMS da base PIS/COFINS)")
+            fat = st.number_input("Faturamento Mensal (R$)", value=100000.0, key="tese_fat")
             t1, t2, t3 = st.columns(3)
-            aliq_icms = t1.number_input("Alíquota ICMS (%)", value=18.0, key="tese_icms")
-            aliq_pis = t2.number_input("Alíquota PIS (%)", value=1.65, key="tese_pis")
-            aliq_cofins = t3.number_input("Alíquota COFINS (%)", value=7.60, key="tese_cofins")
+            icms = t1.number_input("ICMS (%)", value=18.0, key="tese_icms")
+            pis = t2.number_input("PIS (%)", value=1.65, key="tese_pis")
+            cofins = t3.number_input("COFINS (%)", value=7.60, key="tese_cofins")
+            meses = st.slider("Meses Recuperar", 12, 60, 60, key="tese_meses")
             
-            meses_recup = st.slider("Meses para Recuperar (Ex: 60 meses = 5 anos)", 12, 60, 60, key="tese_meses")
-            
-            if st.button("SIMULAR CRÉDITO A RECUPERAR", key="btn_trib_tese"):
-                # 1. Cálculo do PIS/COFINS Pago (Base Cheia)
-                total_aliq = (aliq_pis + aliq_cofins) / 100
-                pago_mensal = faturamento * total_aliq
-                
-                # 2. Cálculo da Base Correta (Sem ICMS)
-                valor_icms = faturamento * (aliq_icms / 100)
-                base_correta = faturamento - valor_icms
-                devido_mensal = base_correta * total_aliq
-                
-                # 3. Diferença (Crédito)
-                credito_mensal = pago_mensal - devido_mensal
-                credito_total = credito_mensal * meses_recup
-                
-                st.success(f"💰 Crédito Estimado Total: R$ {credito_total:,.2f}")
-                st.write(f"Pagamento Mensal Indevido: **R$ {credito_mensal:,.2f}**")
-                st.warning("Nota: Este é um cálculo estimativo linear. O cálculo real exige análise nota a nota.")
+            if st.button("SIMULAR CRÉDITO", key="btn_tese"):
+                aliq_total = (pis + cofins) / 100
+                pago = fat * aliq_total
+                devido = (fat - (fat * icms/100)) * aliq_total
+                credito = (pago - devido) * meses
+                st.success(f"💰 Crédito Estimado: R$ {credito:,.2f}")
 
-        # --- TAB 3: MULTA DE MORA ---
         with tab_mora:
-            st.info("Cálculo de Multa de Mora (Atraso de Pagamento)")
-            st.caption("Regra Federal: 0,33% ao dia, limitado a 20% (a partir do 61º dia).")
-            
-            val_guia = st.number_input("Valor da Guia (Principal)", value=1000.0, key="mora_val")
-            dias_atraso = st.number_input("Dias de Atraso", value=15, min_value=1, key="mora_dias")
-            
-            if st.button("CALCULAR GUIA EM ATRASO", key="btn_trib_mora"):
-                # Regra: 0.33% por dia, teto 20%
-                percentual_multa = dias_atraso * 0.33
-                if percentual_multa > 20.0:
-                    percentual_multa = 20.0
-                
-                valor_multa = val_guia * (percentual_multa / 100)
-                total_pagar = val_guia + valor_multa
-                
-                col_m1, col_m2 = st.columns(2)
-                col_m1.metric("Percentual Aplicado", f"{percentual_multa:.2f}%")
-                col_m2.metric("Valor da Multa", f"R$ {valor_multa:,.2f}")
-                st.success(f"Valor para Pagamento: R$ {total_pagar:,.2f}")
+            st.info("Multa de Mora Federal (0,33% ao dia, max 20%)")
+            val_guia = st.number_input("Valor Guia", value=1000.0, key="mora_val")
+            dias = st.number_input("Dias Atraso", value=15, key="mora_dias")
+            if st.button("CALCULAR", key="btn_mora"):
+                multa = min(dias * 0.33, 20.0)
+                val_multa = val_guia * (multa / 100)
+                st.success(f"Total: R$ {val_guia + val_multa:,.2f} (Multa: R$ {val_multa:,.2f})")
 
     elif area_calc == "Criminal":
-        st.markdown("#### ⚖️ Penal e Processo Penal (CP/CPP/LEP)")
+        st.markdown("#### ⚖️ Penal e Processo Penal")
         
         tab_dosimetria, tab_execucao, tab_prescricao, tab_detracao = st.tabs([
             "Dosimetria (3 Fases)", 
@@ -746,235 +585,117 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
             "Detração e Remição"
         ])
         
-        # --- TAB 1: DOSIMETRIA DA PENA (SISTEMA TRIFÁSICO) ---
         with tab_dosimetria:
-            st.info("Simulação do Sistema Trifásico (Art. 68 CP)")
-            
+            st.info("Simulação do Sistema Trifásico")
             c1, c2 = st.columns(2)
             pena_min = c1.number_input("Pena Mínima (Anos)", value=5.0, step=0.5, key="crim_min")
             pena_max = c2.number_input("Pena Máxima (Anos)", value=15.0, step=0.5, key="crim_max")
+            circunstancias = st.slider("Circunstâncias Desfavoráveis", 0, 8, 0, key="crim_circ")
             
-            # FASE 1
-            st.markdown("**1ª Fase: Circunstâncias Judiciais (Art. 59 CP)**")
-            circunstancias = st.slider("Circunstâncias Desfavoráveis", 0, 8, 0, help="Culpabilidade, antecedentes, conduta social, personalidade, motivos, circunstâncias, consequências, comportamento da vítima.", key="crim_circ")
+            c_f2a, c_f2b = st.columns(2)
+            agravantes = c_f2a.number_input("Agravantes", value=0, key="crim_agrav")
+            atenuantes = c_f2b.number_input("Atenuantes", value=0, key="crim_aten")
             
-            # FASE 2
-            st.markdown("**2ª Fase: Agravantes e Atenuantes**")
-            col_f2a, col_f2b = st.columns(2)
-            agravantes = col_f2a.number_input("Qtd. Agravantes (Ex: Reincidência)", value=0, key="crim_agrav")
-            atenuantes = col_f2b.number_input("Qtd. Atenuantes (Ex: Confissão)", value=0, key="crim_aten")
+            c_f3a, c_f3b = st.columns(2)
+            fracao_aumento = c_f3a.selectbox("Aumento", ["Nenhum", "1/6", "1/3", "1/2", "2/3"], key="crim_aum")
+            fracao_diminuicao = c_f3b.selectbox("Diminuição", ["Nenhum", "1/6", "1/3", "1/2", "2/3"], key="crim_dim")
             
-            # FASE 3
-            st.markdown("**3ª Fase: Causas de Aumento e Diminuição**")
-            col_f3a, col_f3b = st.columns(2)
-            fracao_aumento = col_f3a.selectbox("Aumento de Pena", ["Nenhum", "1/6", "1/3", "1/2", "2/3"], key="crim_aum")
-            fracao_diminuicao = col_f3b.selectbox("Diminuição de Pena", ["Nenhum", "1/6", "1/3", "1/2", "2/3"], key="crim_dim")
-            
-            if st.button("CALCULAR PENA DEFINITIVA", key="btn_dosimetria"):
-                # Cálculo 1ª Fase (Jurisprudência: 1/8 do intervalo entre min e max por circunstância)
-                intervalo = pena_max - pena_min
-                aumento_base = (intervalo / 8) * circunstancias
-                pena_base = pena_min + aumento_base
-                
-                # Cálculo 2ª Fase (Jurisprudência: 1/6 sobre a pena base para cada)
-                # O Código não fixa fração, mas 1/6 é padrão STJ
-                valor_fracao_f2 = pena_base / 6
-                pena_interm = pena_base + (agravantes * valor_fracao_f2) - (atenuantes * valor_fracao_f2)
-                
-                # Súmula 231 STJ: Pena intermediária não pode ficar abaixo do mínimo legal
+            if st.button("CALCULAR PENA", key="btn_dosimetria"):
+                pena_base = pena_min + (((pena_max - pena_min)/8) * circunstancias)
+                pena_interm = pena_base + (agravantes * (pena_base/6)) - (atenuantes * (pena_base/6))
                 if pena_interm < pena_min: pena_interm = pena_min
-                if pena_interm > pena_max: pena_interm = pena_max # Teto máximo abstrato (discutível, mas comum)
-
-                # Cálculo 3ª Fase
+                
                 pena_final = pena_interm
-                
-                # Aumento
                 if fracao_aumento != "Nenhum":
-                    num, den = map(int, fracao_aumento.split('/'))
-                    pena_final += (pena_final * num / den)
-                
-                # Diminuição
+                    n, d = map(int, fracao_aumento.split('/'))
+                    pena_final += (pena_final * n / d)
                 if fracao_diminuicao != "Nenhum":
-                    num, den = map(int, fracao_diminuicao.split('/'))
-                    pena_final -= (pena_final * num / den)
+                    n, d = map(int, fracao_diminuicao.split('/'))
+                    pena_final -= (pena_final * n / d)
+                
+                st.success(f"⚖️ Pena Final: {pena_final:.2f} anos")
 
-                st.write("---")
-                c_res1, c_res2, c_res3 = st.columns(3)
-                c_res1.metric("1ª Fase (Pena Base)", f"{pena_base:.2f} anos")
-                c_res2.metric("2ª Fase (Intermediária)", f"{pena_interm:.2f} anos")
-                c_res3.metric("3ª Fase (Definitiva)", f"{pena_final:.2f} anos")
-                
-                # Conversão para Anos e Meses
-                anos = int(pena_final)
-                meses = int((pena_final - anos) * 12)
-                dias = int(((pena_final - anos) * 12 - meses) * 30)
-                
-                st.success(f"⚖️ **Pena Final Estimada:** {anos} anos, {meses} meses e {dias} dias.")
-                
-                regime = "Fechado"
-                if pena_final <= 4: regime = "Aberto"
-                elif pena_final <= 8: regime = "Semiaberto"
-                
-                if circunstancias > 0 or agravantes > 0:
-                    st.warning(f"Regime inicial sugerido: **{regime}**. (Atenção: Circunstâncias ruins ou reincidência podem agravar o regime).")
-                else:
-                    st.info(f"Regime inicial sugerido: **{regime}**")
-
-        # --- TAB 2: EXECUÇÃO PENAL (PROGRESSÃO) ---
         with tab_execucao:
-            st.info("Calculadora de Progressão de Regime (Lei 13.964/19 - Pacote Anticrime)")
-            
-            c_exec1, c_exec2 = st.columns(2)
-            pena_total_anos = c_exec1.number_input("Pena Total (Anos)", value=8, key="exec_anos")
-            data_prisao = c_exec2.date_input("Data da Prisão/Início", date(2023, 1, 1), key="exec_data")
-            
-            tipo_crime = st.selectbox("Tipo de Delito (Art. 112 LEP)", [
-                "16% - Primário, Sem Violência",
-                "20% - Reincidente, Sem Violência",
-                "25% - Primário, Com Violência/Grave Ameaça",
-                "30% - Reincidente, Com Violência/Grave Ameaça",
-                "40% - Primário, Hediondo ou Equiparado",
-                "50% - Primário, Hediondo c/ Morte (ou Milícia/Comando)",
-                "60% - Reincidente, Hediondo",
-                "70% - Reincidente, Hediondo c/ Morte"
-            ], key="exec_tipo")
+            st.info("Progressão de Regime")
+            pena_total = st.number_input("Pena Total (Anos)", value=8, key="exec_anos")
+            data_base = st.date_input("Data Base", date.today(), key="exec_data")
+            tipo = st.selectbox("Tipo de Crime", ["16% - Primário s/ Violência", "25% - Primário c/ Violência", "40% - Hediondo Primário", "60% - Hediondo Reincidente"], key="exec_tipo")
             
             if st.button("CALCULAR PROGRESSÃO", key="btn_progressao"):
-                pct = int(tipo_crime.split('%')[0])
-                pena_dias = pena_total_anos * 365
-                dias_para_progredir = pena_dias * (pct / 100)
-                
-                data_progressao = data_prisao + timedelta(days=dias_para_progredir)
-                
-                st.metric("Fração Necessária", f"{pct}% ({int(dias_para_progredir)} dias)")
-                
-                # Verifica se já alcançou
-                hoje = date.today()
-                if data_progressao <= hoje:
-                    st.success(f"✅ DATA DO BENEFÍCIO: **{data_progressao.strftime('%d/%m/%Y')}** (Já alcançado!)")
-                else:
-                    st.warning(f"⏳ DATA DO BENEFÍCIO: **{data_progressao.strftime('%d/%m/%Y')}**")
-                    
-                st.caption("Nota: O cálculo considera ano comercial de 365 dias e não computa remição automaticamente nesta aba.")
+                pct = int(tipo.split('%')[0])
+                dias = (pena_total * 365) * (pct / 100)
+                st.success(f"Data Progressão: {(data_base + timedelta(days=dias)).strftime('%d/%m/%Y')}")
 
-        # --- TAB 3: PRESCRIÇÃO ---
         with tab_prescricao:
-            st.info("Prescrição da Pretensão Punitiva (Art. 109 CP)")
-            st.markdown("Verifica em quanto tempo o Estado perde o direito de punir baseada na pena máxima.")
-            
-            pena_max_abstrato = st.number_input("Pena Máxima do Crime (Anos)", value=4.0, key="presc_pena")
-            
-            if st.button("VERIFICAR PRAZO PRESCRICIONAL", key="btn_presc"):
-                prazo = 0
-                if pena_max_abstrato < 1: prazo = 3
-                elif pena_max_abstrato < 2: prazo = 4
-                elif pena_max_abstrato < 4: prazo = 8
-                elif pena_max_abstrato < 8: prazo = 12
-                elif pena_max_abstrato < 12: prazo = 16
-                else: prazo = 20
-                
-                st.error(f"⏱️ O crime prescreve em **{prazo} ANOS**.")
-                st.caption("Art. 109 do Código Penal. Verifique causas interruptivas (recebimento da denúncia, sentença, etc).")
+            st.info("Prescrição (Art. 109 CP)")
+            pena = st.number_input("Pena Máxima Abstrata", value=4.0, key="presc_pena")
+            if st.button("VERIFICAR", key="btn_presc"):
+                prazo = 20
+                if pena < 1: prazo = 3
+                elif pena < 2: prazo = 4
+                elif pena < 4: prazo = 8
+                elif pena < 8: prazo = 12
+                elif pena < 12: prazo = 16
+                st.error(f"Prescreve em: {prazo} anos")
 
-        # --- TAB 4: DETRAÇÃO E REMIÇÃO ---
         with tab_detracao:
-            st.info("Abatimento de Pena (LEP)")
-            
-            c_det1, c_det2 = st.columns(2)
-            dias_preso_prov = c_det1.number_input("Dias Preso Provisoriamente (Detração)", value=0, key="det_prov")
-            dias_trabalhados = c_det2.number_input("Dias Trabalhados/Estudados", value=0, key="det_trab")
-            
-            if st.button("CALCULAR ABATIMENTO", key="btn_det"):
-                # Remição: 1 dia de pena a cada 3 trabalhados/estudados
-                dias_remicao = dias_trabalhados // 3
-                total_abatimento = dias_preso_prov + dias_remicao
-                
-                st.success(f"📉 Total a abater da pena: **{total_abatimento} dias**")
-                st.write(f"- Pela prisão provisória: {dias_preso_prov} dias")
-                st.write(f"- Pelo trabalho/estudo (1 p/ 3): {dias_remicao} dias")
-            
-# --- SIMULADOR DE AUDIÊNCIA (NOVO) ---
-# --- SIMULADOR DE AUDIÊNCIA (COPILOTO ESTRATÉGICO) ---
+            st.info("Detração e Remição")
+            prov = st.number_input("Dias Preso Provisório", value=0, key="det_prov")
+            trab = st.number_input("Dias Trabalhados", value=0, key="det_trab")
+            if st.button("CALCULAR", key="btn_det"):
+                st.success(f"Total a abater: {prov + (trab//3)} dias")
+
+# --- SIMULADOR DE AUDIÊNCIA (COPILOTO) ---
 elif menu_opcao == "🏛️ Simulador Audiência":
     st.markdown("<h2 class='tech-header'>🏛️ WAR ROOM: ESTRATÉGIA DE AUDIÊNCIA</h2>", unsafe_allow_html=True)
-    st.caption("Analista de Autos, Gerador de Perguntas e Identificador de Teses Defensivas.")
     
     with st.container(border=True):
         c1, c2 = st.columns([1, 2])
-        
         with c1:
             st.markdown("#### 📁 Dados do Caso")
             lado = st.radio("Você representa:", ["Autor/Reclamante", "Réu/Reclamada"], horizontal=True)
-            tipo_aud = st.selectbox("Rito/Área", ["Trabalhista (Ordinário)", "Trabalhista (Sumaríssimo)", "Cível (Comum)", "Criminal (Júri)", "Criminal (Instrução)", "Família"])
-            
-            st.markdown("---")
-            st.markdown("**📄 Carregar Peça/Autos**")
-            uploaded_file = st.file_uploader("Suba a Inicial ou Contestação (PDF)", type="pdf", key="aud_pdf")
-            
+            tipo_aud = st.selectbox("Rito/Área", ["Trabalhista", "Cível", "Criminal", "Família"])
+            st.write("---")
+            uploaded_file = st.file_uploader("Suba a Inicial/Contestação (PDF)", type="pdf", key="aud_pdf")
             fatos_pdf = ""
             if uploaded_file:
                 with st.spinner("Lendo autos..."):
                     fatos_pdf = extrair_texto_pdf(uploaded_file)
-                    st.success("Autos processados!")
+                    st.success("Autos lidos!")
 
         with c2:
             st.markdown("#### ⚔️ Narrativa dos Fatos")
-            st.caption("Descreva os pontos chave ou deixe a IA ler do PDF acima.")
-            contexto = st.text_area("Resumo do conflito e pontos sensíveis:", value=fatos_pdf if fatos_pdf else "", height=300, placeholder="Ex: O reclamante pede horas extras, mas exercia cargo de confiança (art. 62 CLT). Temos cartões de ponto assinados...")
+            contexto = st.text_area("Resumo do conflito:", value=fatos_pdf if fatos_pdf else "", height=300, placeholder="Cole os fatos aqui...")
 
     if st.button("GERAR ESTRATÉGIA DE GUERRA", use_container_width=True):
         if contexto:
-            with st.spinner("A IA está analisando teses, jurisprudência e formulando perguntas..."):
+            with st.spinner("IA formulando estratégia..."):
                 prompt = f"""
-                Atue como um Advogado Sênior Litigante especialista em {tipo_aud}.
-                Estou me preparando para uma audiência. Eu represento o {lado}.
+                Atue como Advogado Sênior em {tipo_aud}. Represento: {lado}.
+                Fatos: {contexto}
                 
-                FATOS DO CASO:
-                {contexto}
-                
-                GERE UM RELATÓRIO ESTRATÉGICO COM:
-                
-                1. 🛡️ TESES DE MÉRITO E PRELIMINARES:
-                   - Quais artigos de lei me favorecem?
-                   - Quais súmulas (STF/STJ/TST) se aplicam?
-                   - Existe prescrição ou decadência?
-                
-                2. 🎯 PONTOS CONTROVERTIDOS (O que o juiz precisa decidir?):
-                   - Liste objetivamente os fatos que precisam de prova.
-                
-                3. 🕵️ ROTEIRO DE PERGUNTAS (INTERROGATÓRIO):
-                   - Perguntas para o MEU CLIENTE (para reafirmar nossa tese).
-                   - Perguntas para a PARTE CONTRÁRIA (Cross-examination: perguntas fechadas para obter contradição).
-                   - Perguntas para as TESTEMUNHAS (Focadas nos pontos controvertidos).
-                
-                4. ⚠️ ALERTAS DE RISCO:
-                   - Onde minha tese é fraca?
-                   - Que perguntas o advogado oponente provavelmente fará?
+                GERE:
+                1. 🛡️ TESES DE MÉRITO E PRELIMINARES.
+                2. 🎯 PONTOS CONTROVERTIDOS.
+                3. 🕵️ PERGUNTAS PARA MEU CLIENTE E PARTE CONTRÁRIA (Cross-examination).
+                4. ⚠️ ALERTAS DE RISCO.
                 """
-                
-                res = tentar_gerar_conteudo(prompt, None)
-                st.session_state['resultado_aud'] = res # Salva para não perder ao recarregar
-                
+                res = tentar_gerar_conteudo(prompt)
+                st.markdown(res)
+                salvar_documento_memoria("Estratégia", "Audiência", res)
+                st.download_button("Baixar Roteiro", gerar_word(res), "Roteiro.docx")
         else:
-            st.warning("Por favor, insira o resumo dos fatos ou carregue um PDF.")
+            st.warning("Insira os fatos.")
 
-    # Exibição do Resultado
-    if 'resultado_aud' in st.session_state:
-        st.markdown("---")
-        st.subheader("📋 SEU ROTEIRO DE AUDIÊNCIA")
-        st.markdown(st.session_state['resultado_aud'])
-        
-        col_down1, col_down2 = st.columns(2)
-        salvar_documento_memoria(f"Estratégia {tipo_aud}", "Audiência", st.session_state['resultado_aud'])
-        st.download_button("📥 Baixar Roteiro em Word", gerar_word(st.session_state['resultado_aud']), "Roteiro_Audiencia.docx", use_container_width=True)
+# --- COFRE (MEMÓRIA) ---
+elif menu_opcao == "📂 Cofre Digital":
+    st.header("📂 Cofre Digital (Sessão Atual)")
+    if len(st.session_state.meus_docs) > 0:
+        for i, doc in enumerate(st.session_state.meus_docs):
+            with st.expander(f"{doc['tipo']} - {doc['cliente']}"):
+                st.write(doc['conteudo'][:200])
+                st.download_button("Baixar", gerar_word(doc['conteudo']), "Doc.docx", key=f"d{i}")
+    else: st.info("Cofre vazio nesta sessão.")
 
 st.markdown("---")
-st.markdown("<center>🔒 LEGALHUB ELITE v9.8 | DEV MODE (NO LOGIN)</center>", unsafe_allow_html=True)
-
-
-
-
-
-
-
-
+st.markdown("<center>🔒 LEGALHUB ELITE v10.0 | AUTO-AUTH MODE</center>", unsafe_allow_html=True)
