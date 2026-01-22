@@ -11,7 +11,7 @@ import base64
 import os
 
 # ==========================================================
-# 1. CONFIGURAÇÃO VISUAL - CYBER THEME
+# 1. CONFIGURAÇÃO VISUAL
 # ==========================================================
 st.set_page_config(
     page_title="LegalHub Elite v10.0", 
@@ -30,7 +30,66 @@ except Exception:
     st.stop()
 
 # ==========================================================
-# 3. IA COM CASCATA INTELIGENTE (FIX REQUIREMENTS)
+# 3. IA DEDICADA: GEMINI 2.0 (COM RETRY AGRESSIVO)
+# ==========================================================
+def tentar_gerar_conteudo(prompt, ignored_param=None):
+    if not API_KEY_FINAL: return "⚠️ Chave Inválida"
+    
+    genai.configure(api_key=API_KEY_FINAL)
+
+    # --- APENAS MODELOS 2.0 (Conforme solicitado) ---
+    # Prioridade: Versão Flash (Rápida) -> Versão Experimental -> Versão Pro
+    modelos_2_0 = [
+        "gemini-2.0-flash",          
+        "gemini-2.0-flash-exp",
+        "gemini-2.0-pro-exp-02-05" 
+    ]
+
+    log_erros = []
+
+    for modelo in modelos_2_0:
+        # Sistema de Tentativas (Retry) para vencer o erro 429
+        tentativas = 0
+        max_tentativas = 3  # Tenta 3 vezes o MESMO modelo antes de desistir
+        
+        while tentativas < max_tentativas:
+            try:
+                model_instance = genai.GenerativeModel(modelo)
+                response = model_instance.generate_content(prompt)
+                return response.text # Sucesso!
+            
+            except Exception as e:
+                erro_msg = str(e)
+                
+                # Se for cota (429), espera e tenta de novo
+                if "429" in erro_msg or "quota" in erro_msg.lower():
+                    tempo_espera = (tentativas + 1) * 5  # Espera 5s, 10s, 15s...
+                    log_erros.append(f"⏳ {modelo}: Cota cheia. Aguardando {tempo_espera}s...")
+                    time.sleep(tempo_espera)
+                    tentativas += 1
+                    continue # Volta para o while e tenta de novo
+                
+                # Se for erro de versão (404), não adianta tentar de novo, pula modelo
+                elif "404" in erro_msg:
+                    log_erros.append(f"🚫 {modelo}: Não encontrado (Update Lib).")
+                    break # Sai do while, vai pro próximo modelo da lista
+                
+                else:
+                    log_erros.append(f"⚠️ {modelo}: {erro_msg[:50]}...")
+                    break # Outro erro, pula modelo
+
+    return f"""❌ FALHA NA GERAÇÃO 2.0.
+    
+    Diagnóstico:
+    1. Seus modelos 2.0 estão estourando a cota gratuita (Erro 429).
+    2. O código tentou esperar e reconectar, mas o Google bloqueou temporariamente.
+    
+    Log Técnico:
+    {chr(10).join(log_erros)}
+    """
+
+# ==========================================================
+# 4. FUNÇÕES UTILITÁRIAS
 # ==========================================================
 def get_base64_of_bin_file(bin_file):
     try:
@@ -66,46 +125,8 @@ def buscar_contexto_juridico(tema, area):
     except: pass
     return "\n\n[NENHUMA JURISPRUDÊNCIA ESPECÍFICA ENCONTRADA]"
 
-def tentar_gerar_conteudo(prompt, ignored_param=None):
-    if not API_KEY_FINAL: return "⚠️ Chave Inválida"
-    genai.configure(api_key=API_KEY_FINAL)
-
-    # Lista estendida de modelos (do mais estável para o experimental)
-    # Inclui prefixo 'models/' para compatibilidade máxima
-    modelos_cascata = [
-        "models/gemini-1.5-flash",          # Padrão Ouro (Estável)
-        "models/gemini-1.5-flash-002",      # Versão Atualizada
-        "models/gemini-1.5-flash-8b",       # Versão Leve (Cota Alta)
-        "models/gemini-1.5-pro",            # Backup Potente
-        "models/gemini-2.0-flash-exp",      # Experimental (Rápido)
-        "models/gemini-1.0-pro"             # Legado
-    ]
-
-    erros_log = []
-
-    for modelo in modelos_cascata:
-        try:
-            # Tenta gerar com o modelo da vez
-            model_instance = genai.GenerativeModel(modelo)
-            response = model_instance.generate_content(prompt)
-            return response.text
-            
-        except Exception as e:
-            msg = str(e)
-            # Loga o erro e pula para o próximo
-            if "429" in msg or "quota" in msg.lower() or "404" in msg:
-                # Erro de cota ou não encontrado -> tenta o próximo
-                erros_log.append(f"{modelo}: Falhou")
-                time.sleep(1) # Pequena pausa para respirar
-                continue
-            else:
-                erros_log.append(f"{modelo}: {msg}")
-                continue
-
-    return f"❌ FALHA TOTAL. Detalhes: {'; '.join(erros_log)}. (DICA: Crie o arquivo requirements.txt com 'google-generativeai>=0.8.3')"
-
 # ==========================================================
-# 4. CÁLCULO TRABALHISTA
+# 5. CÁLCULO TRABALHISTA
 # ==========================================================
 def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_fgts, ferias_vencidas, aviso_tipo, grau_insalubridade, tem_periculosidade):
     formato = "%Y-%m-%d"
@@ -152,7 +173,7 @@ def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_f
     return verbas
 
 # ==========================================================
-# 5. CSS VISUAL (CYBER FUTURE)
+# 6. CSS VISUAL
 # ==========================================================
 def local_css():
     bg_image_b64 = get_base64_of_bin_file("unnamed.jpg")
@@ -181,7 +202,7 @@ def local_css():
 local_css()
 
 # ==========================================================
-# 6. MEMÓRIA & NAVEGAÇÃO
+# 7. NAVEGAÇÃO
 # ==========================================================
 if "meus_docs" not in st.session_state:
     st.session_state.meus_docs = []
@@ -216,20 +237,26 @@ with col_menu:
 st.markdown("---")
 
 # ==========================================================
-# 7. TELAS DO SISTEMA
+# 8. CONTEÚDO DAS TELAS
 # ==========================================================
 
 # --- DASHBOARD ---
 if menu_opcao == "📊 Dashboard":
-    st.markdown(f"<h2 class='tech-header'>BEM-VINDO AO HUB <span style='font-weight:300; font-size: 1.5rem; color:#64748b;'>| CASCATA MODE</span></h2>", unsafe_allow_html=True)
+    st.markdown(f"<h2 class='tech-header'>BEM-VINDO AO HUB <span style='font-weight:300; font-size: 1.5rem; color:#64748b;'>| GEMINI 2.0 ONLY</span></h2>", unsafe_allow_html=True)
+    
+    # Mostra a versão da biblioteca (para debug se o 2.0 der 404)
+    import google.generativeai as gai
+    versao_atual = gai.__version__
+    
     c1, c2, c3 = st.columns(3)
     c1.metric("DOCS NA SESSÃO", len(st.session_state.meus_docs))
-    c2.metric("STATUS", "Blindado (Anti-404)")
-    c3.metric("PLANO", "FULL ACCESS")
+    c2.metric("LIB VERSION", f"v{versao_atual}")
+    c3.metric("MODO", "2.0 (High Precision)")
+    
+    if versao_atual < "0.8.3":
+        st.warning(f"⚠️ Sua biblioteca v{versao_atual} pode não encontrar o Gemini 2.0. Verifique o requirements.txt.")
     
     st.write("")
-    st.info("💡 Dica: Se der erro, crie o arquivo requirements.txt no GitHub.")
-    
     st.subheader("🛠️ CENTRAL DE COMANDO")
     r1, r2, r3 = st.columns(3)
     with r1:
@@ -241,7 +268,7 @@ if menu_opcao == "📊 Dashboard":
 
 # --- REDATOR IA ---
 elif menu_opcao == "✍️ Redator Jurídico":
-    st.markdown("<h2 class='tech-header'>✍️ REDATOR IA AVANÇADO</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 class='tech-header'>✍️ REDATOR IA AVANÇADO (2.0)</h2>", unsafe_allow_html=True)
     area = st.selectbox("Área", ["Cível", "Trabalhista", "Criminal", "Tributário", "Previdenciário"])
     
     pecas = []
@@ -274,9 +301,9 @@ elif menu_opcao == "✍️ Redator Jurídico":
     
     busca_real = st.checkbox("🔍 Buscar Jurisprudência Real (STF/STJ/TST)", value=True)
     
-    if st.button("GERAR PEÇA", use_container_width=True):
+    if st.button("GERAR PEÇA (MODO 2.0)", use_container_width=True):
         if fatos and cli:
-            with st.spinner("Pesquisando nos Tribunais e Redigindo..."):
+            with st.spinner("Pesquisando e Redigindo com Gemini 2.0 (Isso pode levar alguns segundos)..."):
                 ctx = ""
                 if busca_real: ctx = buscar_contexto_juridico(f"{tipo} {fatos}", area)
                 
@@ -318,9 +345,9 @@ elif menu_opcao == "📜 Contratos":
         val = c_val.number_input("Valor Honorários (R$)", step=100.0, format="%.2f")
         forma_pag = c_forma.text_input("Forma de Pagamento (Ex: À vista / 3x no cartão)")
 
-    if st.button("GERAR CONTRATO + PROCURAÇÃO", use_container_width=True):
+    if st.button("GERAR CONTRATO (MODO 2.0)", use_container_width=True):
         if nome and cpf and obj:
-            with st.spinner("Redigindo documentos com qualificação completa..."):
+            with st.spinner("Redigindo com Gemini 2.0..."):
                 qualificacao = f"{nome}, {nacionalidade}, {est_civil}, {prof}, portador do RG nº {rg} e CPF nº {cpf}, residente e domiciliado em {end}, CEP {cep}, e-mail {email}"
                 
                 prompt = f"""
@@ -372,7 +399,7 @@ elif menu_opcao == "🏛️ Simulador Audiência":
     st.markdown("<h2 class='tech-header'>🏛️ WAR ROOM: ESTRATÉGIA DE AUDIÊNCIA</h2>", unsafe_allow_html=True)
     contexto = st.text_area("Resumo do conflito:", height=300)
     
-    if st.button("GERAR ESTRATÉGIA DE GUERRA", use_container_width=True):
+    if st.button("GERAR ESTRATÉGIA DE GUERRA (2.0)", use_container_width=True):
         if contexto:
             with st.spinner("IA formulando estratégia..."):
                 prompt = f"Advogado Sênior. Gere estratégia de audiência para: {contexto}. Inclua teses, perguntas e riscos."
@@ -392,4 +419,4 @@ elif menu_opcao == "📂 Cofre Digital":
     else: st.info("Cofre vazio nesta sessão.")
 
 st.markdown("---")
-st.markdown("<center>🔒 LEGALHUB ELITE v10.0 | CASCATA MODE</center>", unsafe_allow_html=True)
+st.markdown("<center>🔒 LEGALHUB ELITE v10.0 | GEMINI 2.0 EXCLUSIVE</center>", unsafe_allow_html=True)
