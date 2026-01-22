@@ -23,15 +23,14 @@ st.set_page_config(
 # ==========================================================
 # 2. AUTOMAÇÃO DE ACESSO (SECRETS)
 # ==========================================================
-# O Streamlit Cloud vai injetar a senha aqui automaticamente
 try:
     API_KEY_FINAL = st.secrets["GOOGLE_API_KEY"]
 except Exception:
-    st.error("⚠️ ERRO: Chave de API não configurada. Vá nas configurações do Streamlit Cloud > Secrets e adicione a GOOGLE_API_KEY.")
+    st.error("⚠️ ERRO CRÍTICO: Chave de API não configurada. Configure no Secrets do Streamlit Cloud.")
     st.stop()
 
 # ==========================================================
-# 3. IA COM SISTEMA DE CASCATA (ANTI-FALHA 429)
+# 3. IA COM CASCATA INTELIGENTE (FIX REQUIREMENTS)
 # ==========================================================
 def get_base64_of_bin_file(bin_file):
     try:
@@ -68,48 +67,45 @@ def buscar_contexto_juridico(tema, area):
     return "\n\n[NENHUMA JURISPRUDÊNCIA ESPECÍFICA ENCONTRADA]"
 
 def tentar_gerar_conteudo(prompt, ignored_param=None):
-    chave = API_KEY_FINAL
-    if not chave: return "⚠️ Chave API inválida."
-    
-    genai.configure(api_key=chave)
+    if not API_KEY_FINAL: return "⚠️ Chave Inválida"
+    genai.configure(api_key=API_KEY_FINAL)
 
-    # --- LISTA DE CASCATA (FALLBACK) ---
-    # Se o primeiro falhar (cota), ele pula pro segundo imediatamente.
-    # 1.5 Flash: Maior cota gratuita (15 RPM / 1500 RPD)
-    # 1.5 Pro: Cota menor, mas serve de backup (2 RPM / 50 RPD)
-    # 2.0 Flash: Cota instável (Experimental), fica por último
+    # Lista estendida de modelos (do mais estável para o experimental)
+    # Inclui prefixo 'models/' para compatibilidade máxima
     modelos_cascata = [
-        "gemini-1.5-flash", 
-        "gemini-1.5-pro", 
-        "gemini-2.0-flash",
-        "gemini-1.0-pro"
+        "models/gemini-1.5-flash",          # Padrão Ouro (Estável)
+        "models/gemini-1.5-flash-002",      # Versão Atualizada
+        "models/gemini-1.5-flash-8b",       # Versão Leve (Cota Alta)
+        "models/gemini-1.5-pro",            # Backup Potente
+        "models/gemini-2.0-flash-exp",      # Experimental (Rápido)
+        "models/gemini-1.0-pro"             # Legado
     ]
 
-    erros_acumulados = []
+    erros_log = []
 
     for modelo in modelos_cascata:
         try:
-            # Tenta instanciar e gerar com o modelo atual da lista
+            # Tenta gerar com o modelo da vez
             model_instance = genai.GenerativeModel(modelo)
             response = model_instance.generate_content(prompt)
-            return response.text # Se der certo, retorna e encerra a função
+            return response.text
             
         except Exception as e:
-            erro_msg = str(e)
-            # Se for erro de cota (429), apenas loga e tenta o próximo
-            if "429" in erro_msg or "quota" in erro_msg.lower():
-                erros_acumulados.append(f"{modelo}: Cota cheia")
-                continue # PULA PARA O PRÓXIMO MODELO DA LISTA
+            msg = str(e)
+            # Loga o erro e pula para o próximo
+            if "429" in msg or "quota" in msg.lower() or "404" in msg:
+                # Erro de cota ou não encontrado -> tenta o próximo
+                erros_log.append(f"{modelo}: Falhou")
+                time.sleep(1) # Pequena pausa para respirar
+                continue
             else:
-                # Se for outro erro (ex: modelo não existe), também pula
-                erros_acumulados.append(f"{modelo}: {erro_msg}")
+                erros_log.append(f"{modelo}: {msg}")
                 continue
 
-    # Se saiu do loop, nenhum modelo funcionou
-    return f"❌ TODOS OS MODELOS FALHARAM. Detalhes: {'; '.join(erros_acumulados)}. Tente novamente em 2 minutos."
+    return f"❌ FALHA TOTAL. Detalhes: {'; '.join(erros_log)}. (DICA: Crie o arquivo requirements.txt com 'google-generativeai>=0.8.3')"
 
 # ==========================================================
-# 4. CÁLCULO TRABALHISTA COMPLETO
+# 4. CÁLCULO TRABALHISTA
 # ==========================================================
 def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_fgts, ferias_vencidas, aviso_tipo, grau_insalubridade, tem_periculosidade):
     formato = "%Y-%m-%d"
@@ -228,11 +224,11 @@ if menu_opcao == "📊 Dashboard":
     st.markdown(f"<h2 class='tech-header'>BEM-VINDO AO HUB <span style='font-weight:300; font-size: 1.5rem; color:#64748b;'>| CASCATA MODE</span></h2>", unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3)
     c1.metric("DOCS NA SESSÃO", len(st.session_state.meus_docs))
-    c2.metric("STATUS", "Blindado (Anti-429)")
+    c2.metric("STATUS", "Blindado (Anti-404)")
     c3.metric("PLANO", "FULL ACCESS")
     
     st.write("")
-    st.info("💡 Dica: Agora o sistema tenta 4 modelos diferentes automaticamente antes de falhar.")
+    st.info("💡 Dica: Se der erro, crie o arquivo requirements.txt no GitHub.")
     
     st.subheader("🛠️ CENTRAL DE COMANDO")
     r1, r2, r3 = st.columns(3)
