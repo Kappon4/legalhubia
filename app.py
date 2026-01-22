@@ -22,7 +22,7 @@ st.set_page_config(
 # ==========================================================
 # 2. AUTOMAÇÃO DE ACESSO (AUTO-AUTH)
 # ==========================================================
-CHAVE_MESTRA = "AIzaSyA5lMfeDUE71k6BOOxYRZDtOolPZaqCurA" 
+CHAVE_MESTRA = "AIzaSyARcrvlSM3yduUs2toRc2zDOU0ES7eoFLA" 
 
 try:
     if "GOOGLE_API_KEY" in st.secrets:
@@ -435,3 +435,4 @@ elif menu_opcao == "📂 Cofre Digital":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v10.0 | AUTO-AUTH MODE</center>", unsafe_allow_html=True)
+
