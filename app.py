@@ -32,7 +32,7 @@ except Exception:
     st.stop()
 
 # ==========================================================
-# 3. FUNÇÕES UTILITÁRIAS & IA AUTO-ADAPTÁVEL (ATUALIZADO)
+# 3. FUNÇÕES UTILITÁRIAS & IA BLINDADA CONTRA ERROS 429
 # ==========================================================
 def get_base64_of_bin_file(bin_file):
     try:
@@ -84,6 +84,7 @@ def listar_modelos_validos():
     except Exception:
         return []
 
+# --- FUNÇÃO DE IA COM SISTEMA DE RETRY (CORREÇÃO DO ERRO 429) ---
 def tentar_gerar_conteudo(prompt, ignored_param=None):
     chave = API_KEY_FINAL
     
@@ -93,42 +94,61 @@ def tentar_gerar_conteudo(prompt, ignored_param=None):
     try:
         genai.configure(api_key=chave)
         
-        # 1. Escaneia a conta para ver o que existe (solução definitiva)
+        # 1. Escaneia a conta para ver o que existe
         modelos_disponiveis = listar_modelos_validos()
         
         if not modelos_disponiveis:
-            return "❌ Erro Crítico: A chave é válida, mas nenhum modelo de texto foi encontrado nela. Verifique permissões no Google AI Studio."
+            return "❌ Erro Crítico: Nenhum modelo encontrado na chave."
 
-        # 2. Lista de preferência (do melhor para o 'pior')
-        # O sistema vai procurar o primeiro desta lista que ESTIVER na sua conta.
+        # --- MUDANÇA ESTRATÉGICA: PRIORIDADE PARA MODELOS ESTÁVEIS ---
+        # Priorizamos o 1.5 Flash porque o 2.0 pode estar com cota cheia no Free Tier
         ordem_prioridade = [
-            "gemini-2.0-pro-exp-02-05",  # O mais poderoso (se tiver)
-            "gemini-2.0-flash",          # O mais rápido e atual
+            "gemini-1.5-flash",          # Prioridade 1: Rápido e cota alta (evita erro 429)
+            "gemini-2.0-flash",          # Tenta o 2.0 se o 1.5 falhar
+            "gemini-1.5-pro",            # Backup potente
             "gemini-2.0-flash-exp",
-            "gemini-1.5-pro",            # Backup robusto
-            "gemini-1.5-flash",
-            "gemini-1.0-pro"             # Último recurso
+            "gemini-2.0-pro-exp-02-05",
+            "gemini-1.0-pro"
         ]
         
         modelo_escolhido = None
-        
-        # Tenta casar a prioridade com a disponibilidade
         for preferido in ordem_prioridade:
             if preferido in modelos_disponiveis:
                 modelo_escolhido = preferido
                 break
         
-        # Se não achou nenhum da lista de preferência, pega o primeiro que a conta tiver
         if not modelo_escolhido:
             modelo_escolhido = modelos_disponiveis[0]
             
-        # 3. Gera o conteúdo com o modelo garantido
+        # 2. SISTEMA DE RETRY (PACIÊNCIA)
+        # Tenta 3 vezes antes de desistir. Se der erro 429, espera e tenta de novo.
         model = genai.GenerativeModel(modelo_escolhido)
-        response = model.generate_content(prompt)
-        return response.text
+        
+        tentativas = 0
+        max_tentativas = 3
+        
+        while tentativas < max_tentativas:
+            try:
+                # Tenta gerar
+                response = model.generate_content(prompt)
+                return response.text
+            except Exception as e:
+                erro_str = str(e)
+                # Se o erro for 429 (Cota excedida/Too many requests)
+                if "429" in erro_str or "quota" in erro_str.lower():
+                    tentativas += 1
+                    wait_time = 10 * tentativas # Espera 10s, depois 20s...
+                    if tentativas < max_tentativas:
+                        time.sleep(wait_time) # Pausa o código
+                        continue # Tenta de novo
+                    else:
+                        return f"❌ Erro de Cota: Sistema sobrecarregado. Tente novamente em 1 minuto. (Modelo: {modelo_escolhido})"
+                else:
+                    # Se for outro erro, retorna direto
+                    return f"❌ Erro Técnico: {erro_str}"
 
     except Exception as e:
-        return f"❌ Erro Técnico: {str(e)}"
+        return f"❌ Erro Geral: {str(e)}"
 
 # --- CÁLCULO TRABALHISTA COMPLETO ---
 def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_fgts, ferias_vencidas, aviso_tipo, grau_insalubridade, tem_periculosidade):
@@ -434,5 +454,3 @@ elif menu_opcao == "📂 Cofre Digital":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v10.0 | AUTO-AUTH MODE</center>", unsafe_allow_html=True)
-
-
