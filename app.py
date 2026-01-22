@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, date
 import time
 import pandas as pd
 import base64
+import os
 
 # ==========================================================
 # 1. CONFIGURAÇÃO VISUAL - CYBER THEME
@@ -22,8 +23,6 @@ st.set_page_config(
 # ==========================================================
 # 2. AUTOMAÇÃO DE ACESSO (SECRETS)
 # ==========================================================
-import os
-
 # O Streamlit Cloud vai injetar a senha aqui automaticamente
 try:
     API_KEY_FINAL = st.secrets["GOOGLE_API_KEY"]
@@ -32,7 +31,7 @@ except Exception:
     st.stop()
 
 # ==========================================================
-# 3. FUNÇÕES UTILITÁRIAS & IA BLINDADA CONTRA ERROS 429
+# 3. IA COM SISTEMA DE CASCATA (ANTI-FALHA 429)
 # ==========================================================
 def get_base64_of_bin_file(bin_file):
     try:
@@ -68,89 +67,50 @@ def buscar_contexto_juridico(tema, area):
     except: pass
     return "\n\n[NENHUMA JURISPRUDÊNCIA ESPECÍFICA ENCONTRADA]"
 
-# --- NOVA LÓGICA DE DESCOBERTA DE MODELOS ---
-def listar_modelos_validos():
-    """Consulta a API para ver o que está realmente liberado na sua chave."""
-    try:
-        genai.configure(api_key=API_KEY_FINAL)
-        meus_modelos = []
-        for m in genai.list_models():
-            # Filtra apenas modelos que geram texto (ignora embeddings, vision puro, etc)
-            if 'generateContent' in m.supported_generation_methods:
-                # Remove o prefixo 'models/' se existir para facilitar o uso
-                clean_name = m.name.replace('models/', '')
-                meus_modelos.append(clean_name)
-        return meus_modelos
-    except Exception:
-        return []
-
-# --- FUNÇÃO DE IA COM SISTEMA DE RETRY (CORREÇÃO DO ERRO 429) ---
 def tentar_gerar_conteudo(prompt, ignored_param=None):
     chave = API_KEY_FINAL
+    if not chave: return "⚠️ Chave API inválida."
     
-    if not chave or "COLE_SUA_CHAVE" in chave: 
-        return "⚠️ CONFIGURAÇÃO NECESSÁRIA: Verifique a CHAVE_MESTRA."
-    
-    try:
-        genai.configure(api_key=chave)
-        
-        # 1. Escaneia a conta para ver o que existe
-        modelos_disponiveis = listar_modelos_validos()
-        
-        if not modelos_disponiveis:
-            return "❌ Erro Crítico: Nenhum modelo encontrado na chave."
+    genai.configure(api_key=chave)
 
-        # --- MUDANÇA ESTRATÉGICA: PRIORIDADE PARA MODELOS ESTÁVEIS ---
-        # Priorizamos o 1.5 Flash porque o 2.0 pode estar com cota cheia no Free Tier
-        ordem_prioridade = [
-            "gemini-1.5-flash",          # Prioridade 1: Rápido e cota alta (evita erro 429)
-            "gemini-2.0-flash",          # Tenta o 2.0 se o 1.5 falhar
-            "gemini-1.5-pro",            # Backup potente
-            "gemini-2.0-flash-exp",
-            "gemini-2.0-pro-exp-02-05",
-            "gemini-1.0-pro"
-        ]
-        
-        modelo_escolhido = None
-        for preferido in ordem_prioridade:
-            if preferido in modelos_disponiveis:
-                modelo_escolhido = preferido
-                break
-        
-        if not modelo_escolhido:
-            modelo_escolhido = modelos_disponiveis[0]
+    # --- LISTA DE CASCATA (FALLBACK) ---
+    # Se o primeiro falhar (cota), ele pula pro segundo imediatamente.
+    # 1.5 Flash: Maior cota gratuita (15 RPM / 1500 RPD)
+    # 1.5 Pro: Cota menor, mas serve de backup (2 RPM / 50 RPD)
+    # 2.0 Flash: Cota instável (Experimental), fica por último
+    modelos_cascata = [
+        "gemini-1.5-flash", 
+        "gemini-1.5-pro", 
+        "gemini-2.0-flash",
+        "gemini-1.0-pro"
+    ]
+
+    erros_acumulados = []
+
+    for modelo in modelos_cascata:
+        try:
+            # Tenta instanciar e gerar com o modelo atual da lista
+            model_instance = genai.GenerativeModel(modelo)
+            response = model_instance.generate_content(prompt)
+            return response.text # Se der certo, retorna e encerra a função
             
-        # 2. SISTEMA DE RETRY (PACIÊNCIA)
-        # Tenta 3 vezes antes de desistir. Se der erro 429, espera e tenta de novo.
-        model = genai.GenerativeModel(modelo_escolhido)
-        
-        tentativas = 0
-        max_tentativas = 3
-        
-        while tentativas < max_tentativas:
-            try:
-                # Tenta gerar
-                response = model.generate_content(prompt)
-                return response.text
-            except Exception as e:
-                erro_str = str(e)
-                # Se o erro for 429 (Cota excedida/Too many requests)
-                if "429" in erro_str or "quota" in erro_str.lower():
-                    tentativas += 1
-                    wait_time = 10 * tentativas # Espera 10s, depois 20s...
-                    if tentativas < max_tentativas:
-                        time.sleep(wait_time) # Pausa o código
-                        continue # Tenta de novo
-                    else:
-                        return f"❌ Erro de Cota: Sistema sobrecarregado. Tente novamente em 1 minuto. (Modelo: {modelo_escolhido})"
-                else:
-                    # Se for outro erro, retorna direto
-                    return f"❌ Erro Técnico: {erro_str}"
+        except Exception as e:
+            erro_msg = str(e)
+            # Se for erro de cota (429), apenas loga e tenta o próximo
+            if "429" in erro_msg or "quota" in erro_msg.lower():
+                erros_acumulados.append(f"{modelo}: Cota cheia")
+                continue # PULA PARA O PRÓXIMO MODELO DA LISTA
+            else:
+                # Se for outro erro (ex: modelo não existe), também pula
+                erros_acumulados.append(f"{modelo}: {erro_msg}")
+                continue
 
-    except Exception as e:
-        return f"❌ Erro Geral: {str(e)}"
+    # Se saiu do loop, nenhum modelo funcionou
+    return f"❌ TODOS OS MODELOS FALHARAM. Detalhes: {'; '.join(erros_acumulados)}. Tente novamente em 2 minutos."
 
-# --- CÁLCULO TRABALHISTA COMPLETO ---
+# ==========================================================
+# 4. CÁLCULO TRABALHISTA COMPLETO
+# ==========================================================
 def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_fgts, ferias_vencidas, aviso_tipo, grau_insalubridade, tem_periculosidade):
     formato = "%Y-%m-%d"
     d1 = datetime.strptime(str(admissao), formato)
@@ -196,7 +156,7 @@ def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_f
     return verbas
 
 # ==========================================================
-# 4. CSS VISUAL (CYBER FUTURE)
+# 5. CSS VISUAL (CYBER FUTURE)
 # ==========================================================
 def local_css():
     bg_image_b64 = get_base64_of_bin_file("unnamed.jpg")
@@ -225,7 +185,7 @@ def local_css():
 local_css()
 
 # ==========================================================
-# 5. MEMÓRIA TEMPORÁRIA
+# 6. MEMÓRIA & NAVEGAÇÃO
 # ==========================================================
 if "meus_docs" not in st.session_state:
     st.session_state.meus_docs = []
@@ -240,9 +200,6 @@ def salvar_documento_memoria(tipo, cliente, conteudo):
     }
     st.session_state.meus_docs.append(doc)
 
-# ==========================================================
-# 6. LAYOUT DE NAVEGAÇÃO
-# ==========================================================
 if "navegacao_override" not in st.session_state: st.session_state.navegacao_override = None
 
 col_logo, col_menu = st.columns([1, 4])
@@ -266,31 +223,17 @@ st.markdown("---")
 # 7. TELAS DO SISTEMA
 # ==========================================================
 
-# --- DASHBOARD (ATUALIZADO COM DIAGNÓSTICO) ---
+# --- DASHBOARD ---
 if menu_opcao == "📊 Dashboard":
-    st.markdown(f"<h2 class='tech-header'>BEM-VINDO AO HUB <span style='font-weight:300; font-size: 1.5rem; color:#64748b;'>| SYSTEM DIAGNOSTIC</span></h2>", unsafe_allow_html=True)
+    st.markdown(f"<h2 class='tech-header'>BEM-VINDO AO HUB <span style='font-weight:300; font-size: 1.5rem; color:#64748b;'>| CASCATA MODE</span></h2>", unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3)
     c1.metric("DOCS NA SESSÃO", len(st.session_state.meus_docs))
-    c2.metric("STATUS", "Online (Auto-Detect)")
+    c2.metric("STATUS", "Blindado (Anti-429)")
     c3.metric("PLANO", "FULL ACCESS")
     
     st.write("")
+    st.info("💡 Dica: Agora o sistema tenta 4 modelos diferentes automaticamente antes de falhar.")
     
-    # --- ÁREA DE DIAGNÓSTICO DA CHAVE ---
-    with st.expander("🔍 CLIQUE AQUI SE TIVER ERRO NA IA (DIAGNÓSTICO DE CHAVE)"):
-        st.info("Esta ferramenta vai listar exatamente quais modelos sua chave pode acessar.")
-        if st.button("ESCANEAR MODELOS DISPONÍVEIS AGORA"):
-            with st.spinner("Conectando ao Google AI Studio..."):
-                mods = listar_modelos_validos()
-                if mods:
-                    st.success(f"✅ SUCESSO! Sua chave tem acesso a {len(mods)} modelos.")
-                    st.write("Modelos encontrados na sua conta:")
-                    st.code("\n".join(mods))
-                    st.caption("O sistema usará automaticamente o melhor modelo dessa lista.")
-                else:
-                    st.error("❌ FALHA CRÍTICA: A chave foi aceita, mas não retornou modelos. Verifique se a API 'Generative Language' está ativada no Google Cloud Console.")
-
-    st.write("")
     st.subheader("🛠️ CENTRAL DE COMANDO")
     r1, r2, r3 = st.columns(3)
     with r1:
@@ -337,7 +280,7 @@ elif menu_opcao == "✍️ Redator Jurídico":
     
     if st.button("GERAR PEÇA", use_container_width=True):
         if fatos and cli:
-            with st.spinner("Pesquisando e Redigindo..."):
+            with st.spinner("Pesquisando nos Tribunais e Redigindo..."):
                 ctx = ""
                 if busca_real: ctx = buscar_contexto_juridico(f"{tipo} {fatos}", area)
                 
@@ -453,4 +396,4 @@ elif menu_opcao == "📂 Cofre Digital":
     else: st.info("Cofre vazio nesta sessão.")
 
 st.markdown("---")
-st.markdown("<center>🔒 LEGALHUB ELITE v10.0 | AUTO-AUTH MODE</center>", unsafe_allow_html=True)
+st.markdown("<center>🔒 LEGALHUB ELITE v10.0 | CASCATA MODE</center>", unsafe_allow_html=True)
