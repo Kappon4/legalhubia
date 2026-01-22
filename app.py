@@ -20,17 +20,16 @@ st.set_page_config(
 )
 
 # ==========================================================
-# 2. AUTOMAÇÃO DE ACESSO (AUTO-AUTH)
+# 2. AUTOMAÇÃO DE ACESSO (SECRETS)
 # ==========================================================
-CHAVE_MESTRA = "AIzaSyARcrvlSM3yduUs2toRc2zDOU0ES7eoFLA" 
+import os
 
+# O Streamlit Cloud vai injetar a senha aqui automaticamente
 try:
-    if "GOOGLE_API_KEY" in st.secrets:
-        API_KEY_FINAL = st.secrets["GOOGLE_API_KEY"]
-    else:
-        API_KEY_FINAL = CHAVE_MESTRA
-except:
-    API_KEY_FINAL = CHAVE_MESTRA
+    API_KEY_FINAL = st.secrets["GOOGLE_API_KEY"]
+except Exception:
+    st.error("⚠️ ERRO: Chave de API não configurada. Vá nas configurações do Streamlit Cloud > Secrets e adicione a GOOGLE_API_KEY.")
+    st.stop()
 
 # ==========================================================
 # 3. FUNÇÕES UTILITÁRIAS & IA AUTO-ADAPTÁVEL (ATUALIZADO)
@@ -435,4 +434,5 @@ elif menu_opcao == "📂 Cofre Digital":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v10.0 | AUTO-AUTH MODE</center>", unsafe_allow_html=True)
+
 
