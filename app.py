@@ -22,7 +22,6 @@ st.set_page_config(
 # ==========================================================
 # 2. AUTOMAÇÃO DE ACESSO (AUTO-AUTH)
 # ==========================================================
-# ⚠️ COLE SUA CHAVE ABAIXO UMA ÚNICA VEZ. O SISTEMA FARÁ O RESTO.
 CHAVE_MESTRA = "AIzaSyA5lMfeDUE71k6BOOxYRZDtOolPZaqCurA" 
 
 try:
@@ -34,7 +33,7 @@ except:
     API_KEY_FINAL = CHAVE_MESTRA
 
 # ==========================================================
-# 3. FUNÇÕES UTILITÁRIAS & IA BLINDADA
+# 3. FUNÇÕES UTILITÁRIAS & IA AUTO-ADAPTÁVEL (ATUALIZADO)
 # ==========================================================
 def get_base64_of_bin_file(bin_file):
     try:
@@ -70,35 +69,67 @@ def buscar_contexto_juridico(tema, area):
     except: pass
     return "\n\n[NENHUMA JURISPRUDÊNCIA ESPECÍFICA ENCONTRADA]"
 
+# --- NOVA LÓGICA DE DESCOBERTA DE MODELOS ---
+def listar_modelos_validos():
+    """Consulta a API para ver o que está realmente liberado na sua chave."""
+    try:
+        genai.configure(api_key=API_KEY_FINAL)
+        meus_modelos = []
+        for m in genai.list_models():
+            # Filtra apenas modelos que geram texto (ignora embeddings, vision puro, etc)
+            if 'generateContent' in m.supported_generation_methods:
+                # Remove o prefixo 'models/' se existir para facilitar o uso
+                clean_name = m.name.replace('models/', '')
+                meus_modelos.append(clean_name)
+        return meus_modelos
+    except Exception:
+        return []
+
 def tentar_gerar_conteudo(prompt, ignored_param=None):
     chave = API_KEY_FINAL
     
     if not chave or "COLE_SUA_CHAVE" in chave: 
-        return "⚠️ CONFIGURAÇÃO NECESSÁRIA: Verifique se a variável CHAVE_MESTRA no topo do código contém sua chave válida."
+        return "⚠️ CONFIGURAÇÃO NECESSÁRIA: Verifique a CHAVE_MESTRA."
     
     try:
         genai.configure(api_key=chave)
         
-        # --- MODELOS ATUALIZADOS PARA 2026 ---
-        modelos = [
-            "gemini-2.0-flash",           # Versão mais rápida e atual (estável)
-            "gemini-2.0-pro-exp-02-05",    # Versão Pro experimental de altíssimo desempenho
-            "gemini-2.0-flash-exp",        # Versão Flash experimental
-            "gemini-1.5-pro",             # Backup de alta capacidade de contexto
+        # 1. Escaneia a conta para ver o que existe (solução definitiva)
+        modelos_disponiveis = listar_modelos_validos()
+        
+        if not modelos_disponiveis:
+            return "❌ Erro Crítico: A chave é válida, mas nenhum modelo de texto foi encontrado nela. Verifique permissões no Google AI Studio."
+
+        # 2. Lista de preferência (do melhor para o 'pior')
+        # O sistema vai procurar o primeiro desta lista que ESTIVER na sua conta.
+        ordem_prioridade = [
+            "gemini-2.0-pro-exp-02-05",  # O mais poderoso (se tiver)
+            "gemini-2.0-flash",          # O mais rápido e atual
+            "gemini-2.0-flash-exp",
+            "gemini-1.5-pro",            # Backup robusto
+            "gemini-1.5-flash",
+            "gemini-1.0-pro"             # Último recurso
         ]
         
-        for nome_modelo in modelos:
-            try:
-                model = genai.GenerativeModel(nome_modelo)
-                response = model.generate_content(prompt)
-                return response.text
-            except Exception:
-                continue
-                
-        return "❌ Erro: Sua chave não tem acesso aos modelos Gemini 2.0 ou os IDs mudaram. Verifique no Google AI Studio."
+        modelo_escolhido = None
+        
+        # Tenta casar a prioridade com a disponibilidade
+        for preferido in ordem_prioridade:
+            if preferido in modelos_disponiveis:
+                modelo_escolhido = preferido
+                break
+        
+        # Se não achou nenhum da lista de preferência, pega o primeiro que a conta tiver
+        if not modelo_escolhido:
+            modelo_escolhido = modelos_disponiveis[0]
+            
+        # 3. Gera o conteúdo com o modelo garantido
+        model = genai.GenerativeModel(modelo_escolhido)
+        response = model.generate_content(prompt)
+        return response.text
 
     except Exception as e:
-        return f"❌ Erro de configuração da API: {str(e)}"
+        return f"❌ Erro Técnico: {str(e)}"
 
 # --- CÁLCULO TRABALHISTA COMPLETO ---
 def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_fgts, ferias_vencidas, aviso_tipo, grau_insalubridade, tem_periculosidade):
@@ -213,17 +244,33 @@ with col_menu:
 st.markdown("---")
 
 # ==========================================================
-# 7. TELAS DO SISTEMA (CONTEÚDO DAS ABAS)
+# 7. TELAS DO SISTEMA
 # ==========================================================
 
-# --- DASHBOARD ---
+# --- DASHBOARD (ATUALIZADO COM DIAGNÓSTICO) ---
 if menu_opcao == "📊 Dashboard":
-    st.markdown(f"<h2 class='tech-header'>BEM-VINDO AO HUB <span style='font-weight:300; font-size: 1.5rem; color:#64748b;'>| AUTO AUTH MODE</span></h2>", unsafe_allow_html=True)
+    st.markdown(f"<h2 class='tech-header'>BEM-VINDO AO HUB <span style='font-weight:300; font-size: 1.5rem; color:#64748b;'>| SYSTEM DIAGNOSTIC</span></h2>", unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3)
     c1.metric("DOCS NA SESSÃO", len(st.session_state.meus_docs))
-    c2.metric("STATUS", "Online (Auto-Key)")
+    c2.metric("STATUS", "Online (Auto-Detect)")
     c3.metric("PLANO", "FULL ACCESS")
     
+    st.write("")
+    
+    # --- ÁREA DE DIAGNÓSTICO DA CHAVE ---
+    with st.expander("🔍 CLIQUE AQUI SE TIVER ERRO NA IA (DIAGNÓSTICO DE CHAVE)"):
+        st.info("Esta ferramenta vai listar exatamente quais modelos sua chave pode acessar.")
+        if st.button("ESCANEAR MODELOS DISPONÍVEIS AGORA"):
+            with st.spinner("Conectando ao Google AI Studio..."):
+                mods = listar_modelos_validos()
+                if mods:
+                    st.success(f"✅ SUCESSO! Sua chave tem acesso a {len(mods)} modelos.")
+                    st.write("Modelos encontrados na sua conta:")
+                    st.code("\n".join(mods))
+                    st.caption("O sistema usará automaticamente o melhor modelo dessa lista.")
+                else:
+                    st.error("❌ FALHA CRÍTICA: A chave foi aceita, mas não retornou modelos. Verifique se a API 'Generative Language' está ativada no Google Cloud Console.")
+
     st.write("")
     st.subheader("🛠️ CENTRAL DE COMANDO")
     r1, r2, r3 = st.columns(3)
@@ -343,7 +390,7 @@ elif menu_opcao == "📜 Contratos":
         else:
             st.warning("Preencha pelo menos Nome, CPF e Objeto para gerar.")
 
-# --- CÁLCULOS JURÍDICOS (RESUMIDO PARA O EXEMPLO) ---
+# --- CÁLCULOS JURÍDICOS ---
 elif menu_opcao == "🧮 Cálculos Jurídicos":
     st.header("🧮 Calculadoras Jurídicas")
     area_calc = st.selectbox("Área", ["Trabalhista (CLT)", "Cível (Art. 292/Liquidação)", "Família", "Tributária", "Criminal"])
