@@ -408,7 +408,7 @@ elif menu_opcao == "✍️ Petições Inteligentes":
 # --- CONTRATOS ---
 elif menu_opcao == "📜 Contratos":
     st.header("📜 Fábrica de Contratos & Procurações")
-    st.info("Preencha a qualificação completa para gerar documentos prontos.")
+    st.info("Gera automaticamente o Contrato de Honorários + Procuração Ad Judicia.")
     
     with st.container(border=True):
         st.subheader("👤 Dados do Contratante (Cliente)")
@@ -435,34 +435,65 @@ elif menu_opcao == "📜 Contratos":
         c_val, c_forma = st.columns(2)
         val = c_val.number_input("Valor Honorários (R$)", step=100.0, format="%.2f")
         forma_pag = c_forma.text_input("Forma de Pagamento (Ex: À vista / 3x no cartão)")
+        
+        st.markdown("---")
+        st.markdown("##### 📄 Papel Timbrado (Opcional)")
+        uploaded_timbrado = st.file_uploader("Carregue seu papel timbrado (PDF) para gerar o documento final nele.", type="pdf")
 
-    if st.button("GERAR CONTRATO", use_container_width=True):
+    if st.button("GERAR CONTRATO + PROCURAÇÃO", use_container_width=True):
         if nome and cpf and obj:
-            with st.spinner("Redigindo com Gemini 2.5..."):
+            with st.spinner("Redigindo documentos com Gemini 2.5..."):
                 qualificacao = f"{nome}, {nacionalidade}, {est_civil}, {prof}, portador do RG nº {rg} e CPF nº {cpf}, residente e domiciliado em {end}, CEP {cep}, e-mail {email}"
                 
+                # Prompt instruindo a IA a não usar formatação Markdown complexa (negrito/títulos)
+                # pois isso dificulta a conversão para PDF simples no timbrado.
                 prompt = f"""
-                Atue como advogado. Redija dois documentos formais em sequência:
+                Atue como advogado. Redija dois documentos formais em sequência.
+                IMPORTANTE: Não use negrito (**texto**), use CAIXA ALTA para títulos. Não use formatação markdown complexa.
                 
-                1. CONTRATO DE HONORÁRIOS ADVOCATÍCIOS.
+                DOCUMENTO 1: CONTRATO DE HONORÁRIOS ADVOCATÍCIOS
                 CONTRATANTE: {qualificacao}.
                 CONTRATADO: LBA Advocacia.
                 OBJETO: {obj}.
                 VALOR: R$ {val} ({forma_pag}).
                 CLÁUSULAS: Padrão da OAB, foro da comarca do cliente.
                 
-                --- QUEBRA DE PÁGINA ---
+                --------------------------------------------------
+                (QUEBRA DE PÁGINA)
+                --------------------------------------------------
                 
-                2. PROCURAÇÃO AD JUDICIA.
+                DOCUMENTO 2: PROCURAÇÃO AD JUDICIA
                 OUTORGANTE: {qualificacao}.
                 OUTORGADO: LBA Advocacia.
                 PODERES: Gerais para o foro e Especiais para transigir, firmar acordos, receber e dar quitação.
                 """
                 
                 res = tentar_gerar_conteudo(prompt)
-                st.markdown(res)
+                
+                # Salva na memória
                 salvar_documento_memoria("Contrato+Proc", nome, res)
-                st.download_button("Baixar Documentos", gerar_word(res), f"Contrato_{nome}.docx")
+                
+                # Exibe prévia do texto
+                with st.expander("👁️ Ver Prévia do Texto"):
+                    st.write(res)
+
+                c_down1, c_down2 = st.columns(2)
+                
+                # Opção 1: Baixar DOCX (Padrão)
+                with c_down1:
+                    st.download_button("📥 Baixar Editável (.docx)", gerar_word(res), f"Contrato_{nome}.docx", use_container_width=True)
+                
+                # Opção 2: Baixar PDF no Timbrado (Se houver upload)
+                with c_down2:
+                    if uploaded_timbrado is not None:
+                        with st.spinner("Fundindo texto com Papel Timbrado..."):
+                            pdf_final = gerar_pdf_com_timbrado(res, uploaded_timbrado)
+                            if pdf_final:
+                                st.download_button("📄 Baixar PDF no Timbrado", pdf_final, f"Contrato_Timbrado_{nome}.pdf", mime="application/pdf", use_container_width=True)
+                            else:
+                                st.error("Erro ao gerar PDF. Verifique se o timbrado é válido.")
+                    else:
+                        st.info("Carregue um PDF Timbrado acima para habilitar esta opção.")
         else:
             st.warning("Preencha pelo menos Nome, CPF e Objeto para gerar.")
 
@@ -798,5 +829,6 @@ elif menu_opcao == "📂 Cofre Digital":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v14.5 | NORD EDITION</center>", unsafe_allow_html=True)
+
 
 
