@@ -30,62 +30,68 @@ except Exception:
     st.stop()
 
 # ==========================================================
-# 3. IA DEDICADA: GEMINI 2.0 (COM RETRY AGRESSIVO)
+# 3. IA DEDICADA: GEMINI 2.5 (ULTRA MODERN)
 # ==========================================================
 def tentar_gerar_conteudo(prompt, ignored_param=None):
     if not API_KEY_FINAL: return "⚠️ Chave Inválida"
     
     genai.configure(api_key=API_KEY_FINAL)
 
-    # --- APENAS MODELOS 2.0 (Conforme solicitado) ---
-    # Prioridade: Versão Flash (Rápida) -> Versão Experimental -> Versão Pro
-    modelos_2_0 = [
-        "gemini-2.0-flash",          
-        "gemini-2.0-flash-exp",
-        "gemini-2.0-pro-exp-02-05" 
+    # --- LISTA DE MODELOS 2.5+ (Conforme solicitado) ---
+    # O código vai tentar um por um.
+    modelos_elite = [
+        "gemini-2.5-flash",          # Versão Estável Rápida
+        "gemini-2.5-pro",            # Versão Estável Potente
+        "gemini-2.5-flash-exp",      # Experimental Rápida
+        "gemini-2.5-pro-exp",        # Experimental Potente
+        "gemini-ultra-2.5"           # Caso disponível na sua chave
     ]
 
     log_erros = []
 
-    for modelo in modelos_2_0:
-        # Sistema de Tentativas (Retry) para vencer o erro 429
+    for modelo in modelos_elite:
         tentativas = 0
-        max_tentativas = 3  # Tenta 3 vezes o MESMO modelo antes de desistir
+        max_tentativas = 3  # Insiste 3x no mesmo modelo antes de trocar
         
         while tentativas < max_tentativas:
             try:
+                # Tenta instanciar o modelo específico
                 model_instance = genai.GenerativeModel(modelo)
                 response = model_instance.generate_content(prompt)
-                return response.text # Sucesso!
+                return response.text # SUCESSO! Retorna o texto.
             
             except Exception as e:
                 erro_msg = str(e)
                 
-                # Se for cota (429), espera e tenta de novo
+                # Tratamento de Erro de Cota (429)
                 if "429" in erro_msg or "quota" in erro_msg.lower():
-                    tempo_espera = (tentativas + 1) * 5  # Espera 5s, 10s, 15s...
+                    tempo_espera = (tentativas + 1) * 5
                     log_erros.append(f"⏳ {modelo}: Cota cheia. Aguardando {tempo_espera}s...")
-                    time.sleep(tempo_espera)
+                    time.sleep(tempo_espera) # Espera o Google liberar
                     tentativas += 1
-                    continue # Volta para o while e tenta de novo
+                    continue
                 
-                # Se for erro de versão (404), não adianta tentar de novo, pula modelo
-                elif "404" in erro_msg:
-                    log_erros.append(f"🚫 {modelo}: Não encontrado (Update Lib).")
-                    break # Sai do while, vai pro próximo modelo da lista
+                # Tratamento de Modelo Inexistente (404)
+                elif "404" in erro_msg or "not found" in erro_msg.lower():
+                    log_erros.append(f"🚫 {modelo}: Não disponível para esta chave/lib.")
+                    break # Pula para o próximo modelo da lista
                 
                 else:
-                    log_erros.append(f"⚠️ {modelo}: {erro_msg[:50]}...")
-                    break # Outro erro, pula modelo
+                    log_erros.append(f"⚠️ {modelo}: {erro_msg[:40]}...")
+                    break # Outro erro, troca de modelo
 
-    return f"""❌ FALHA NA GERAÇÃO 2.0.
+    # Se saiu do loop, nenhum funcionou
+    return f"""❌ FALHA GERAL (MODO 2.5).
     
     Diagnóstico:
-    1. Seus modelos 2.0 estão estourando a cota gratuita (Erro 429).
-    2. O código tentou esperar e reconectar, mas o Google bloqueou temporariamente.
+    O sistema tentou usar apenas modelos da linha 2.5, mas sua chave ou biblioteca não conseguiu conectar.
     
     Log Técnico:
     {chr(10).join(log_erros)}
+    
+    Solução:
+    1. Atualize sua lib: `pip install -U google-generativeai`
+    2. Verifique se sua chave tem acesso ao 'Gemini 2.5' no Google AI Studio.
     """
 
 # ==========================================================
@@ -420,3 +426,4 @@ elif menu_opcao == "📂 Cofre Digital":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v10.0 | GEMINI 2.0 EXCLUSIVE</center>", unsafe_allow_html=True)
+
