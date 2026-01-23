@@ -10,8 +10,7 @@ import pandas as pd
 import base64
 import os
 
-# --- IMPORTAÇÕES SEGURAS PARA GERAÇÃO DE PDF (Timbrado) ---
-# Isso impede que o app quebre se a biblioteca não estiver instalada
+# --- IMPORTAÇÕES SEGURAS PARA GERAÇÃO DE PDF ---
 try:
     from reportlab.pdfgen import canvas
     from reportlab.lib.pagesizes import A4
@@ -24,7 +23,7 @@ except ImportError:
 # 1. CONFIGURAÇÃO VISUAL
 # ==========================================================
 st.set_page_config(
-    page_title="LegalHub Elite v15.1 (Safe)", 
+    page_title="LegalHub Elite v15.5", 
     page_icon="⚖️", 
     layout="wide",
     initial_sidebar_state="collapsed" 
@@ -37,7 +36,6 @@ try:
     API_KEY_FINAL = st.secrets["GOOGLE_API_KEY"]
 except FileNotFoundError:
     st.error("⚠️ ARQUIVO DE SENHA NÃO ENCONTRADO!")
-    st.markdown("Crie a pasta `.streamlit` e o arquivo `secrets.toml` com a chave `GOOGLE_API_KEY`.")
     st.stop()
 except Exception as e:
     st.error(f"⚠️ Erro de configuração: {e}")
@@ -48,45 +46,24 @@ except Exception as e:
 # ==========================================================
 def tentar_gerar_conteudo(prompt, ignored_param=None):
     if not API_KEY_FINAL: return "⚠️ Chave Inválida"
-    
     genai.configure(api_key=API_KEY_FINAL)
 
-    # Lista de Modelos 2.5+
-    modelos_elite = [
-        "gemini-2.5-flash",          
-        "gemini-2.5-pro",            
-        "gemini-2.5-flash-exp",      
-        "gemini-2.5-pro-exp",        
-        "gemini-2.0-flash", 
-        "gemini-2.0-pro-exp-02-05"
-    ]
-
+    modelos_elite = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"]
+    
     log_erros = []
-
     for modelo in modelos_elite:
-        tentativas = 0
-        max_tentativas = 2
-        
-        while tentativas < max_tentativas:
-            try:
-                model_instance = genai.GenerativeModel(modelo)
-                response = model_instance.generate_content(prompt)
-                return response.text
-            
-            except Exception as e:
-                erro_msg = str(e)
-                if "429" in erro_msg or "quota" in erro_msg.lower():
-                    time.sleep(2)
-                    tentativas += 1
-                    continue
-                else:
-                    log_erros.append(f"⚠️ {modelo}: {erro_msg[:20]}...")
-                    break 
-
-    return f"❌ FALHA GERAL. Tente novamente em instantes."
+        try:
+            model_instance = genai.GenerativeModel(modelo)
+            response = model_instance.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            log_erros.append(f"{modelo}: {str(e)[:50]}")
+            time.sleep(1)
+            continue
+    return f"❌ FALHA GERAL. Detalhes: {'; '.join(log_erros)}"
 
 # ==========================================================
-# 4. FUNÇÕES UTILITÁRIAS & PDF
+# 4. FUNÇÕES UTILITÁRIAS & CÁLCULOS
 # ==========================================================
 def get_base64_of_bin_file(bin_file):
     try:
@@ -108,112 +85,143 @@ def extrair_texto_pdf(arquivo):
     except: return ""
 
 def buscar_contexto_juridico(tema, area):
-    # Simulação rápida para evitar travamento em demonstração
-    return ""
+    return "" 
 
-# --- FUNÇÃO CRÍTICA: MISTURAR TEXTO COM TIMBRADO ---
 def gerar_pdf_com_timbrado(texto_contrato, arquivo_timbrado):
-    if not HAS_REPORTLAB:
-        return "MISSING_LIB" # Código de erro interno
-
+    if not HAS_REPORTLAB: return None
     try:
-        # 1. Cria o PDF transparente com o texto
         packet = BytesIO()
         can = canvas.Canvas(packet, pagesize=A4)
         width, height = A4
-        
         can.setFont("Helvetica", 10)
-        # Margens ajustadas para não bater no logo
-        y_position = height - 130 
+        y_position = height - 130
         margin_left = 50
         max_width = width - 100
         
         linhas = texto_contrato.split('\n')
-        
         for linha in linhas:
             wrapped_lines = simpleSplit(linha, "Helvetica", 10, max_width)
             for wrapped in wrapped_lines:
-                if y_position < 100: # Fim da página
+                if y_position < 100:
                     can.showPage()
                     can.setFont("Helvetica", 10)
                     y_position = height - 130
-                
                 can.drawString(margin_left, y_position, wrapped)
                 y_position -= 12
-            y_position -= 5 
-
+            y_position -= 5
         can.save()
         packet.seek(0)
         
-        # 2. Mescla com o Timbrado Original
         new_pdf = PdfReader(packet)
         existing_pdf = PdfReader(arquivo_timbrado)
         output = PdfWriter()
-        
-        # Usa a primeira página do timbrado como fundo para todas
         page_timbrado = existing_pdf.pages[0] 
 
         for i in range(len(new_pdf.pages)):
             page_texto = new_pdf.pages[i]
-            # Clona a página do timbrado para não alterar a original na memória
             page_fundo = PageObject.create_blank_page(width=width, height=height)
             page_fundo.merge_page(page_timbrado)
-            
-            # Mescla o texto sobre o fundo
             page_fundo.merge_page(page_texto)
-            
             output.add_page(page_fundo)
             
         output_stream = BytesIO()
         output.write(output_stream)
         output_stream.seek(0)
         return output_stream
-        
-    except Exception as e:
-        return None
+    except Exception: return None
 
-def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_fgts, ferias_vencidas, aviso_tipo, grau_insalubridade, tem_periculosidade):
-    formato = "%Y-%m-%d"
-    d1 = datetime.strptime(str(admissao), formato)
-    d2 = datetime.strptime(str(demissao), formato)
+# --- LÓGICA DE CÁLCULO TRABALHISTA ROBUSTA (CORREÇÃO APLICADA AQUI) ---
+def calcular_rescisao_clt(admissao, demissao, salario_base, motivo, saldo_fgts_banco, ferias_vencidas, aviso_tipo, grau_insalubridade, tem_periculosidade):
+    # Conversão segura de datas
+    if isinstance(admissao, str): admissao = datetime.strptime(admissao, "%Y-%m-%d").date()
+    if isinstance(demissao, str): demissao = datetime.strptime(demissao, "%Y-%m-%d").date()
+    
     verbas = {}
     
-    sal_min = 1412.00
-    adic_insal = 0
-    if grau_insalubridade == "Mínimo (10%)": adic_insal = sal_min * 0.10
-    elif grau_insalubridade == "Médio (20%)": adic_insal = sal_min * 0.20
-    elif grau_insalubridade == "Máximo (40%)": adic_insal = sal_min * 0.40
+    # 1. Base de Cálculo
+    salario_minimo = 1509.00 # Base 2025
+    adic_insal = 0.0
     
-    adic_peric = salario_base * 0.30 if tem_periculosidade else 0
-    remuneracao = salario_base + max(adic_insal, adic_peric) 
+    if grau_insalubridade == "Mínimo (10%)": adic_insal = salario_minimo * 0.10
+    elif grau_insalubridade == "Médio (20%)": adic_insal = salario_minimo * 0.20
+    elif grau_insalubridade == "Máximo (40%)": adic_insal = salario_minimo * 0.40
     
-    if adic_insal > 0: verbas["Adicional Insalubridade"] = adic_insal
-    if adic_peric > 0: verbas["Adicional Periculosidade"] = adic_peric
+    adic_peric = salario_base * 0.30 if tem_periculosidade else 0.0
+    remuneracao = salario_base + adic_insal + adic_peric # Base para rescisão
+    
+    if adic_insal > 0: verbas["(+) Adicional Insalubridade"] = adic_insal
+    if adic_peric > 0: verbas["(+) Adicional Periculosidade"] = adic_peric
 
-    meses_trab = (d2.year - d1.year) * 12 + d2.month - d1.month
-    anos_completos = meses_trab // 12
-    dias_aviso = min(90, 30 + (3 * anos_completos))
-    verbas["Saldo Salário"] = (remuneracao/30) * d2.day
+    # 2. Aviso Prévio (Lei 12.506)
+    tempo_casa = demissao - admissao
+    anos_completos = int(tempo_casa.days / 365.25)
     
     if motivo == "Demissão sem Justa Causa":
-        if aviso_tipo == "Indenizado":
-            verbas[f"Aviso Prévio ({dias_aviso} dias)"] = (remuneracao/30) * dias_aviso
-            d2 = d2 + timedelta(days=dias_aviso)
-    elif motivo == "Pedido de Demissão" and aviso_tipo == "Não Trabalhado":
-        verbas["Desconto Aviso Prévio"] = -remuneracao
+        dias_aviso = min(90, 30 + (3 * anos_completos))
+    else:
+        dias_aviso = 30 # Pedido de demissão padrão
 
-    meses_ano = d2.month
-    if d2.day < 15: meses_ano -= 1
-    if meses_ano == 0: meses_ano = 12
+    # Projeção do Aviso (Indenizado)
+    data_projetada = demissao
+    if motivo == "Demissão sem Justa Causa" and aviso_tipo == "Indenizado":
+        data_projetada = demissao + timedelta(days=dias_aviso)
+        verbas[f"(+) Aviso Prévio Indenizado ({dias_aviso} dias)"] = (remuneracao / 30) * dias_aviso
 
-    if motivo != "Justa Causa":
-        verbas[f"13º Proporcional ({meses_ano}/12)"] = (remuneracao/12) * meses_ano
-        verbas[f"Férias Prop. ({meses_ano}/12) + 1/3"] = ((remuneracao/12) * meses_ano) * 1.3333
-        if ferias_vencidas: verbas["Férias Vencidas + 1/3"] = remuneracao * 1.3333
+    # 3. Saldo de Salário (Dias corridos)
+    dias_trabalhados = demissao.day
+    val_saldo_salario = (remuneracao / 30) * dias_trabalhados
+    verbas[f"(+) Saldo de Salário ({dias_trabalhados} dias)"] = val_saldo_salario
+
+    # 4. 13º Salário Proporcional (Até data projetada)
+    meses_13 = 0
+    curr = date(data_projetada.year, 1, 1)
+    while curr <= data_projetada:
+        if curr.month == data_projetada.month:
+            if data_projetada.day >= 15: months_to_add = 1
+            else: months_to_add = 0
+        else:
+            if curr >= admissao: months_to_add = 1
+            elif curr.month > admissao.month: months_to_add = 1
+            elif curr.month == admissao.month and admissao.day <= 15: months_to_add = 1
+            else: months_to_add = 0
         
-    if motivo == "Demissão sem Justa Causa": verbas["Multa 40% FGTS"] = saldo_fgts * 0.4
-    elif motivo == "Acordo": verbas["Multa 20% FGTS"] = saldo_fgts * 0.2
+        if months_to_add: meses_13 += 1
+        if curr.month == 12: break
+        curr = curr.replace(month=curr.month+1)
     
+    if motivo != "Justa Causa":
+        verbas[f"(+) 13º Salário Proporcional ({meses_13}/12)"] = (remuneracao / 12) * meses_13
+
+    # 5. Férias
+    if motivo != "Justa Causa":
+        if ferias_vencidas:
+            verbas["(+) Férias Vencidas + 1/3"] = remuneracao * 1.3333
+        
+        # Férias Proporcionais
+        aniversario_ano = date(data_projetada.year, admissao.month, admissao.day)
+        if aniversario_ano > data_projetada:
+            aniversario_ano = date(data_projetada.year - 1, admissao.month, admissao.day)
+            
+        delta_ferias = (data_projetada.year - aniversario_ano.year) * 12 + (data_projetada.month - aniversario_ano.month)
+        if data_projetada.day >= 15: delta_ferias += 1
+        
+        meses_ferias = min(12, delta_ferias)
+        val_ferias = (remuneracao / 12) * meses_ferias
+        verbas[f"(+) Férias Proporcionais ({meses_ferias}/12)"] = val_ferias
+        verbas["(+) 1/3 Sobre Férias Prop."] = val_ferias / 3
+
+    # 6. Multa FGTS (40%)
+    if motivo == "Demissão sem Justa Causa" or motivo == "Acordo (Culpa Recíproca)":
+        fgts_mes = val_saldo_salario * 0.08
+        fgts_13 = ((remuneracao / 12) * meses_13) * 0.08 if motivo != "Justa Causa" else 0
+        fgts_aviso = ((remuneracao / 30) * dias_aviso) * 0.08 if (motivo == "Demissão sem Justa Causa" and aviso_tipo == "Indenizado") else 0
+        
+        # SOMA O SALDO DO BANCO COM O QUE SERIA DEPOSITADO AGORA
+        base_total_fgts = saldo_fgts_banco + fgts_mes + fgts_13 + fgts_aviso
+        
+        multa = 0.40 if motivo == "Demissão sem Justa Causa" else 0.20
+        verbas[f"(+) Multa FGTS {int(multa*100)}% (Base Est.: R$ {base_total_fgts:,.2f})"] = base_total_fgts * multa
+
     return verbas
 
 # ==========================================================
@@ -229,13 +237,11 @@ def local_css():
             --neon-blue: #00F3FF; 
             --neon-red: #FF0055; 
             --text-main: #FFFFFF; 
-            --bg-card: rgba(15, 23, 42, 0.7); /* Card Translúcido */
+            --bg-card: rgba(15, 23, 42, 0.7);
         }}
 
-        /* Fundo com Efeito de Rede Neural / Conexões */
         .stApp {{
             background-color: var(--bg-dark);
-            /* Imagem de fundo sutil de rede conectada */
             background-image: 
                 linear-gradient(rgba(2, 6, 23, 0.92), rgba(2, 6, 23, 0.95)), 
                 url("https://img.freepik.com/free-vector/abstract-technology-particle-background_52683-25766.jpg");
@@ -259,7 +265,6 @@ def local_css():
             font-weight: 700;
         }}
 
-        /* Cards do Dashboard com Efeito de Flutuar e Neon */
         [data-testid="stVerticalBlockBorderWrapper"] {{
             background-color: var(--bg-card);
             border: 1px solid rgba(0, 243, 255, 0.1);
@@ -274,12 +279,10 @@ def local_css():
             box-shadow: 0 0 20px rgba(0, 243, 255, 0.2);
         }}
 
-        /* Texto descritivo dentro dos cards */
         [data-testid="stVerticalBlockBorderWrapper"] p {{
             color: #94a3b8;
         }}
 
-        /* Botões Estilo Tech */
         .stButton>button {{
             border: 1px solid var(--neon-blue);
             color: var(--neon-blue);
@@ -297,7 +300,6 @@ def local_css():
             box-shadow: 0 0 15px var(--neon-blue);
         }}
         
-        /* Inputs Escuros */
         .stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div>div {{
             background-color: rgba(30, 41, 59, 0.6);
             color: white;
@@ -327,7 +329,6 @@ if "navegacao_override" not in st.session_state: st.session_state.navegacao_over
 
 col_logo, col_menu = st.columns([1, 4])
 with col_logo: 
-    # CABEÇALHO ATUALIZADO (COR NEON)
     st.markdown("""
     <div class='header-logo'>
         <h1 class='tech-header' style='margin-bottom: 0px;'>LEGALHUB</h1>
@@ -361,46 +362,37 @@ st.markdown("---")
 # 7. CONTEÚDO DAS TELAS
 # ==========================================================
 
-# --- DASHBOARD (CLEAN DESIGN + DARK NETWORK) ---
+# --- DASHBOARD ---
 if menu_opcao == "📊 Dashboard":
     st.markdown(f"<h2 class='tech-header'>VISÃO GERAL <span style='font-weight:300; font-size: 1.5rem; color:#00F3FF;'>| PAINEL DE CONTROLE</span></h2>", unsafe_allow_html=True)
-    
     st.write("")
     st.markdown("### 🚀 O QUE A INTELIGÊNCIA ARTIFICIAL PODE FAZER POR VOCÊ?")
     st.write("")
 
-    # --- LINHA 1 ---
     c1, c2, c3 = st.columns(3)
-    
     with c1:
         with st.container(border=True):
             st.markdown("#### ✍️ Petições Inteligentes")
             st.caption("Geração de peças processuais complexas (Iniciais, Contestação, Recursos) baseadas nos fatos e na melhor fundamentação jurídica.")
-
     with c2:
         with st.container(border=True):
             st.markdown("#### 🏛️ Preparação Audiência")
             st.caption("Simulador estratégico que cria perguntas para interrogatório, prevê teses da parte contrária e aponta riscos do caso.")
-
     with c3:
         with st.container(border=True):
             st.markdown("#### 📜 Fábrica de Contratos")
             st.caption("Elaboração automática de contratos, procurações e documentos extrajudiciais personalizados com cláusulas de segurança.")
 
-    # --- LINHA 2 ---
     st.write("")
     c4, c5, c6 = st.columns(3)
-
     with c4:
         with st.container(border=True):
             st.markdown("#### 🧮 Cálculos Jurídicos")
             st.caption("Calculadoras precisas para Rescisão Trabalhista, Atualização Cível (TJ), Pensão Alimentícia e Dosimetria Penal.")
-
     with c5:
         with st.container(border=True):
             st.markdown("#### 🧠 Análise de Autos (PDF)")
             st.caption("O sistema lê seus arquivos PDF (Processos, Sentenças) e extrai automaticamente os fatos relevantes para usar nas peças.")
-
     with c6:
         with st.container(border=True):
             st.markdown("#### ⚖️ Jurisprudência Real")
@@ -430,16 +422,13 @@ elif menu_opcao == "✍️ Petições Inteligentes":
     
     st.write("---")
     
-    # LÓGICA NOVA DE PDF (SEGUNDO PLANO)
     uploaded_file = st.file_uploader("📂 Carregar PDF (Opcional - O conteúdo será lido pela IA)", type="pdf")
-    
     texto_do_pdf = ""
     if uploaded_file is not None:
         with st.spinner("Anexando conteúdo aos autos..."):
             texto_do_pdf = extrair_texto_pdf(uploaded_file)
             st.success(f"✅ Documento anexado à memória da IA! ({len(texto_do_pdf)} caracteres identificados)")
 
-    # CAIXA DE TEXTO LIMPA
     fatos_manuais = st.text_area("Fatos / Observações Adicionais", height=150, placeholder="Digite os fatos aqui OU deixe em branco se já carregou o PDF com a narrativa completa...")
     
     busca_real = st.checkbox("🔍 Buscar Jurisprudência Real (STF/STJ/TST)", value=True)
@@ -461,49 +450,43 @@ elif menu_opcao == "✍️ Petições Inteligentes":
         else:
             st.warning("⚠️ Atenção: Informe o **Cliente** e forneça os fatos (PDF ou Digitado).")
 
-# --- CONTRATOS (GERAÇÃO SEPARADA + TIMBRADO) ---
+# --- CONTRATOS ---
 elif menu_opcao == "📜 Contratos":
     st.header("📜 Fábrica de Contratos & Procurações")
-    st.info("O sistema gera o Contrato e a Procuração separadamente para você baixar.")
+    st.info("Preencha os dados abaixo. O sistema gerará automaticamente o **Contrato** e a **Procuração** separados.")
     
     with st.container(border=True):
-        st.subheader("👤 Dados do Contratante (Cliente)")
-        
+        st.subheader("👤 Dados do Cliente (Contratante/Outorgante)")
         c1, c2, c3 = st.columns(3)
         nome = c1.text_input("Nome Completo")
         nacionalidade = c2.text_input("Nacionalidade", value="Brasileiro(a)")
         est_civil = c3.selectbox("Estado Civil", ["Solteiro(a)", "Casado(a)", "Divorciado(a)", "Viúvo(a)", "União Estável"])
-        
         c4, c5, c6 = st.columns(3)
         prof = c4.text_input("Profissão")
         rg = c5.text_input("RG")
         cpf = c6.text_input("CPF")
-        
         c7, c8, c9 = st.columns([2, 1, 1])
         end = c7.text_input("Endereço de Residência (Rua, nº, Bairro, Cidade/UF)")
         cep = c8.text_input("CEP")
         email = c9.text_input("E-mail")
 
     with st.container(border=True):
-        st.subheader("📄 Dados do Contrato")
-        obj = st.text_area("Objeto do Contrato (Ex: Ação Trabalhista contra Empresa X)", height=100)
-        
+        st.subheader("📄 Dados do Objeto e Honorários")
+        obj = st.text_area("Objeto do Contrato / Causa", height=100, placeholder="Ex: Ação Trabalhista contra a empresa X...")
         c_val, c_forma = st.columns(2)
         val = c_val.number_input("Valor Honorários (R$)", step=100.0, format="%.2f")
         forma_pag = c_forma.text_input("Forma de Pagamento (Ex: À vista / 3x no cartão)")
-        
         st.markdown("---")
         st.markdown("##### 📄 Papel Timbrado (Opcional)")
         uploaded_timbrado = st.file_uploader("Carregue seu papel timbrado (PDF) para aplicar nos documentos.", type="pdf")
 
-    if st.button("GERAR DOCUMENTOS", use_container_width=True):
+    if st.button("GERAR CONTRATO E PROCURAÇÃO", use_container_width=True):
         if nome and cpf and obj:
             with st.spinner("Redigindo Contrato e Procuração..."):
                 qualificacao = f"{nome}, {nacionalidade}, {est_civil}, {prof}, portador do RG nº {rg} e CPF nº {cpf}, residente e domiciliado em {end}, CEP {cep}, e-mail {email}"
                 
-                # SEPARADOR INTELIGENTE
                 prompt = f"""
-                Atue como advogado. Redija dois documentos formais.
+                Atue como advogado. Redija dois documentos formais e distintos.
                 
                 DOCUMENTO 1: CONTRATO DE HONORÁRIOS ADVOCATÍCIOS
                 CONTRATANTE: {qualificacao}.
@@ -512,60 +495,63 @@ elif menu_opcao == "📜 Contratos":
                 VALOR: R$ {val} ({forma_pag}).
                 CLÁUSULAS: Padrão da OAB, foro da comarca do cliente.
                 
-                IMPORTANTE: Ao final do contrato, pule uma linha e escreva EXATAMENTE: "###SEPARADOR###"
+                IMPORTANTE: Ao final do contrato, pule 3 linhas e escreva EXATAMENTE: "###SEPARADOR###"
                 
                 DOCUMENTO 2: PROCURAÇÃO AD JUDICIA
                 OUTORGANTE: {qualificacao}.
                 OUTORGADO: LBA Advocacia.
-                PODERES: Gerais para o foro e Especiais para transigir, firmar acordos, receber e dar quitação.
+                PODERES: Gerais para o foro (Cláusula Ad Judicia) e Especiais para transigir, firmar acordos, receber e dar quitação, especificamente para atuar no caso: {obj}.
                 """
                 
                 res = tentar_gerar_conteudo(prompt)
                 
-                # Separação
                 try:
                     partes = res.split("###SEPARADOR###")
                     texto_contrato = partes[0].strip()
-                    texto_procuracao = partes[1].strip() if len(partes) > 1 else "Erro ao gerar procuração."
+                    texto_procuracao = partes[1].strip() if len(partes) > 1 else "Erro: A IA não separou os documentos corretamente. Tente gerar novamente."
                 except:
                     texto_contrato = res
-                    texto_procuracao = "Erro na separação automática. Verifique o texto completo."
+                    texto_procuracao = "Erro no processamento do texto."
 
                 salvar_documento_memoria("Kit Contratação", nome, res)
                 
                 st.success("✅ Documentos Gerados! Baixe abaixo:")
+                st.markdown("---")
                 
                 col_down_con, col_down_proc = st.columns(2)
                 
-                # COLUNA 1: CONTRATO
                 with col_down_con:
-                    st.markdown("### 📄 Contrato")
-                    with st.expander("Ver Texto"): st.write(texto_contrato)
-                    st.download_button("📥 Baixar DOCX", gerar_word(texto_contrato), f"Contrato_{nome}.docx", use_container_width=True)
-                    if uploaded_timbrado:
-                        if HAS_REPORTLAB:
-                            uploaded_timbrado.seek(0)
-                            pdf_con = gerar_pdf_com_timbrado(texto_contrato, uploaded_timbrado)
-                            if pdf_con and pdf_con != "MISSING_LIB": st.download_button("📄 Baixar PDF Timbrado", pdf_con, f"Contrato_{nome}.pdf", mime="application/pdf", use_container_width=True)
-                        else:
-                            st.warning("⚠️ Instale 'reportlab' para gerar PDF.")
+                    with st.container(border=True):
+                        st.markdown("### 📄 1. Contrato")
+                        st.caption("Contrato de Honorários completo.")
+                        with st.expander("👁️ Ver Texto do Contrato"): st.write(texto_contrato)
+                        
+                        st.download_button("📥 Baixar Contrato (.docx)", gerar_word(texto_contrato), f"Contrato_{nome}.docx", use_container_width=True)
+                        
+                        if uploaded_timbrado:
+                            if HAS_REPORTLAB:
+                                uploaded_timbrado.seek(0)
+                                pdf_con = gerar_pdf_com_timbrado(texto_contrato, uploaded_timbrado)
+                                if pdf_con: st.download_button("📄 Baixar PDF Timbrado", pdf_con, f"Contrato_{nome}.pdf", mime="application/pdf", use_container_width=True)
+                            else: st.warning("Instale 'reportlab' para PDF.")
 
-                # COLUNA 2: PROCURAÇÃO
                 with col_down_proc:
-                    st.markdown("### ⚖️ Procuração")
-                    with st.expander("Ver Texto"): st.write(texto_procuracao)
-                    st.download_button("📥 Baixar DOCX", gerar_word(texto_procuracao), f"Procuracao_{nome}.docx", use_container_width=True)
-                    if uploaded_timbrado:
-                        if HAS_REPORTLAB:
-                            uploaded_timbrado.seek(0)
-                            pdf_proc = gerar_pdf_com_timbrado(texto_procuracao, uploaded_timbrado)
-                            if pdf_proc and pdf_proc != "MISSING_LIB": st.download_button("📄 Baixar PDF Timbrado", pdf_proc, f"Procuracao_{nome}.pdf", mime="application/pdf", use_container_width=True)
-                        else:
-                            st.warning("⚠️ Instale 'reportlab' para gerar PDF.")
+                    with st.container(border=True):
+                        st.markdown("### ⚖️ 2. Procuração")
+                        st.caption("Procuração Ad Judicia pronta.")
+                        with st.expander("👁️ Ver Texto da Procuração"): st.write(texto_procuracao)
+                        
+                        st.download_button("📥 Baixar Procuração (.docx)", gerar_word(texto_procuracao), f"Procuracao_{nome}.docx", use_container_width=True)
+                        
+                        if uploaded_timbrado:
+                            if HAS_REPORTLAB:
+                                uploaded_timbrado.seek(0)
+                                pdf_proc = gerar_pdf_com_timbrado(texto_procuracao, uploaded_timbrado)
+                                if pdf_proc: st.download_button("📄 Baixar PDF Timbrado", pdf_proc, f"Procuracao_{nome}.pdf", mime="application/pdf", use_container_width=True)
         else:
-            st.warning("Preencha os dados.")
+            st.warning("⚠️ Preencha Nome, CPF e Objeto para gerar.")
 
-# --- CÁLCULOS JURÍDICOS (COMPLETO E ATUALIZADO) ---
+# --- CÁLCULOS JURÍDICOS (CORRIGIDO) ---
 elif menu_opcao == "🧮 Cálculos Jurídicos":
     st.header("🧮 Calculadoras Jurídicas")
     area_calc = st.selectbox("Área", ["Trabalhista (CLT)", "Cível (Art. 292/Liquidação)", "Família", "Tributária", "Criminal"])
@@ -593,36 +579,26 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
         if st.button("CALCULAR RESCISÃO", use_container_width=True):
             if dem > adm:
                 try:
-                    # Chama a função robusta
+                    # A função agora está acessível porque está no início do código
                     v = calcular_rescisao_clt(adm, dem, sal, motivo, fgts, ferias_venc, aviso, insal, peric)
                     
                     st.markdown("### 🧾 Resultado Detalhado")
-                    # Cria tabela formatada
-                    df_res = pd.DataFrame(list(v.items()), columns=["Verba Rescisória", "Valor (R$)"])
-                    st.dataframe(df_res.style.format({"Valor (R$)": "R$ {:,.2f}"}), use_container_width=True, hide_index=True)
+                    st.table(pd.DataFrame(list(v.items()), columns=["Verba Rescisória", "Valor (R$)"]))
                     
                     total = sum(v.values())
                     st.markdown(f"""
-                    <div style='background-color: rgba(0, 243, 255, 0.15); border: 1px solid #00F3FF; border-radius: 8px; padding: 15px; text-align: center; margin-top: 10px;'>
+                    <div style='background-color: rgba(0, 243, 255, 0.15); border: 1px solid #00F3FF; border-radius: 8px; padding: 15px; text-align: center;'>
                         <h2 style='color: #00F3FF; margin:0;'>TOTAL LÍQUIDO ESTIMADO: R$ {total:,.2f}</h2>
-                        <p style='color: #aaa; font-size: 0.8rem; margin:0;'>*Valores brutos antes de descontos legais (INSS/IRRF).</p>
                     </div>
                     """, unsafe_allow_html=True)
-                except NameError:
-                    st.error("Erro Técnico: A função 'calcular_rescisao_clt' não foi encontrada no topo do código.")
+                except Exception as e:
+                    st.error(f"Erro no cálculo: {e}")
             else:
                 st.warning("A data de demissão deve ser posterior à admissão.")
 
     elif area_calc == "Cível (Art. 292/Liquidação)":
         st.markdown("#### ⚖️ Cálculos Cíveis Completos")
-        
-        tab_divida, tab_banco, tab_imob, tab_causa, tab_hon = st.tabs([
-            "Atualização de Dívidas", 
-            "Bancário & Contratos", 
-            "Imobiliário & Aluguel",
-            "Valor da Causa (CPC)",
-            "Honorários"
-        ])
+        tab_divida, tab_banco, tab_imob, tab_causa, tab_hon = st.tabs(["Atualização Dívidas", "Bancário & Contratos", "Imobiliário & Aluguel", "Valor da Causa", "Honorários"])
         
         with tab_divida:
             st.info("Correção Monetária + Juros de Mora + Danos")
@@ -675,18 +651,15 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
 
     elif area_calc == "Família":
         st.markdown("#### 👨‍👩‍👧‍👦 Pensão Alimentícia")
-        
         tab_fix, tab_rev = st.tabs(["Fixação", "Revisão"])
         with tab_fix:
             c1, c2 = st.columns(2)
             renda = c1.number_input("Renda Líquida Alimentante", value=3000.0)
             filhos = c2.number_input("Número de Filhos", value=1)
-            gastos = st.number_input("Gastos Totais da Criança", value=1000.0)
             
             if st.button("CALCULAR SUGESTÃO"):
                 sugestao_renda = renda * 0.30 
                 st.metric("Teto Sugerido (30% Renda)", f"R$ {sugestao_renda:,.2f}")
-                st.info(f"Isso cobriria {(sugestao_renda/gastos)*100:.1f}% dos gastos informados.")
 
         with tab_rev:
             val_atual = st.number_input("Valor Atual", value=500.0)
@@ -706,7 +679,6 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
 
     elif area_calc == "Criminal":
         st.markdown("#### ⚖️ Dosimetria Penal")
-        
         tab_dos, tab_exec = st.tabs(["Dosimetria", "Execução"])
         with tab_dos:
             c1, c2 = st.columns(2)
@@ -729,7 +701,7 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
                 tempo = pena_tot * pct
                 st.info(f"Tempo para progressão: {tempo:.2f} anos")
 
-# --- SIMULADOR DE AUDIÊNCIA (WAR ROOM 2.0) ---
+# --- SIMULADOR DE AUDIÊNCIA ---
 elif menu_opcao == "🏛️ Simulador Audiência":
     st.markdown("<h2 class='tech-header'>🏛️ WAR ROOM: ESTRATÉGIA DE GUERRA</h2>", unsafe_allow_html=True)
     with st.container(border=True):
@@ -761,7 +733,4 @@ elif menu_opcao == "📂 Cofre Digital":
     else: st.info("Cofre vazio nesta sessão.")
 
 st.markdown("---")
-st.markdown("<center>🔒 LEGALHUB ELITE v15.1 | DARK NETWORK EDITION (SAFE)</center>", unsafe_allow_html=True)
-
-
-
+st.markdown("<center>🔒 LEGALHUB ELITE v15.5 | DARK NETWORK EDITION (SAFE)</center>", unsafe_allow_html=True)
