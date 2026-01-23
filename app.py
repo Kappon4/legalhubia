@@ -170,82 +170,101 @@ def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_f
 def local_css():
     st.markdown(f"""
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;500;700&family=Inter:wght@300;400;600&display=swap');
+        /* Importando fontes modernas */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
         
-        /* --- DEFINIÇÃO DA PALETA NORD (Descanso Visual) --- */
-        :root {{
-            --bg-dark: #2E3440;       /* Nord Polar Night (Fundo) */
-            --bg-card: #3B4252;       /* Nord Lighter (Cards) */
-            --text-main: #ECEFF4;     /* Nord Snow Storm (Texto Suave) */
-            --highlight: #8FBC8F;     /* Verde Sálvia (Destaques) */
-            --accent: #88C0D0;        /* Nord Frost (Secundário) */
-        }}
-
-        /* Aplicação Geral */
+        /* --- CONFIGURAÇÃO GERAL (FUNDO JUSFY) --- */
         .stApp {{
-            background-color: var(--bg-dark);
-            color: var(--text-main);
+            /* Gradiente suave estilo Jusfy: Menta bem claro para Branco */
+            background: linear-gradient(135deg, #F0F9F4 0%, #E6F7F1 50%, #FFFFFF 100%);
+            color: #2C3E50; /* Texto cinza escuro profissional */
             font-family: 'Inter', sans-serif;
         }}
 
-        /* Cabeçalhos */
+        /* --- CABEÇALHOS --- */
         h1, h2, h3, h4, h5, h6 {{
-            font-family: 'Rajdhani', sans-serif;
-            color: var(--text-main) !important;
-            letter-spacing: 1px;
+            font-family: 'Inter', sans-serif;
+            color: #1A2530 !important;
+            font-weight: 700;
         }}
 
-        /* Títulos Tecnológicos (Destaque Sálvia) */
+        /* Título com Gradiente Profissional */
         .tech-header {{
-            background: linear-gradient(90deg, var(--text-main), var(--highlight));
+            background: linear-gradient(90deg, #1A2530, #48C78E); /* Preto para Verde Menta */
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            font-weight: 700;
+            font-weight: 800;
         }}
 
         /* Subtítulo do Logo */
         .header-logo p {{
-            color: var(--highlight) !important;
+            color: #48C78E !important; /* Verde Menta Jusfy */
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
         }}
 
-        /* Botões (Estilo Sálvia Fosco) */
-        .stButton>button {{
-            border: 1px solid var(--highlight);
-            color: var(--highlight);
-            background: transparent;
+        /* --- CARDS FLUTUANTES (EFEITO HOVER) --- */
+        /* Alvo: Containers com borda ativada (st.container(border=True)) */
+        div[data-testid="stVerticalBlockBorderWrapper"] {{
+            background-color: #FFFFFF; /* Card Branco */
+            border: 1px solid #E5E7EB; /* Borda cinza muito sutil */
+            border-radius: 24px; /* Bordas bem arredondadas (Estilo moderno) */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); /* Sombra inicial leve */
+            padding: 25px;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); /* Animação suave */
+        }}
+
+        /* O Efeito de Flutuar ao passar o mouse */
+        div[data-testid="stVerticalBlockBorderWrapper"]:hover {{
+            transform: translateY(-8px); /* Sobe o card */
+            box-shadow: 0 20px 25px -5px rgba(72, 199, 142, 0.15), 0 10px 10px -5px rgba(72, 199, 142, 0.04); /* Sombra verde suave */
+            border-color: #48C78E; /* Borda fica verde */
+        }}
+
+        /* Texto dentro dos cards */
+        div[data-testid="stVerticalBlockBorderWrapper"] p {{
+            color: #64748B; /* Cinza médio para descrições */
+            font-size: 0.95rem;
+        }}
+
+        /* --- BOTÕES (ESTILO JUSFY - VERDE ARREDONDADO) --- */
+        .stButton > button {{
+            background-color: #48C78E; /* Verde Menta Principal */
+            color: white !important;
+            border: none;
+            border-radius: 30px; /* Formato de pílula */
+            padding: 12px 24px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            box-shadow: 0 4px 6px rgba(72, 199, 142, 0.2);
+            transition: all 0.3s ease;
             width: 100%;
-            font-family: 'Rajdhani', sans-serif;
-            letter-spacing: 1px;
-            transition: 0.3s;
-            border-radius: 8px;
         }}
 
-        .stButton>button:hover {{
-            background: var(--highlight);
-            color: #2E3440;
-            border: 1px solid var(--highlight);
-            box-shadow: 0 0 10px rgba(143, 188, 143, 0.3);
+        .stButton > button:hover {{
+            background-color: #3EB57E; /* Verde um pouco mais escuro no hover */
+            transform: scale(1.02); /* Cresce levemente */
+            box-shadow: 0 10px 15px rgba(72, 199, 142, 0.4);
         }}
 
-        /* Containers e Cards */
-        [data-testid="stVerticalBlock"] > [data-testid="stVerticalBlock"] {{
-            background-color: var(--bg-card);
-            border-radius: 10px;
-            padding: 10px;
-            border: 1px solid #4C566A;
-        }}
-        
-        /* Inputs e Caixas de Texto (Fundo Confortável) */
+        /* --- INPUTS E CAMPOS DE TEXTO (VISUAL LIMPO) --- */
         .stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div>div {{
-            background-color: #434C5E;
-            color: #ECEFF4;
-            border: 1px solid #4C566A;
+            background-color: #FFFFFF;
+            color: #2C3E50;
+            border: 1px solid #E2E8F0;
+            border-radius: 12px;
         }}
         
-        /* Ajuste para Datas */
-        input[type="date"] {{
-            background-color: #434C5E;
-            color: #ECEFF4;
+        /* Foco nos inputs */
+        .stTextInput>div>div>input:focus, .stTextArea>div>div>textarea:focus {{
+            border-color: #48C78E;
+            box-shadow: 0 0 0 2px rgba(72, 199, 142, 0.2);
+        }}
+
+        /* Métricas */
+        [data-testid="stMetricValue"] {{
+            color: #1A2530 !important;
         }}
     </style>
     """, unsafe_allow_html=True)
@@ -912,6 +931,7 @@ elif menu_opcao == "📂 Cofre Digital":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v14.5 | NORD EDITION</center>", unsafe_allow_html=True)
+
 
 
 
