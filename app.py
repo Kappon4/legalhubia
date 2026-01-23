@@ -772,3 +772,4 @@ elif menu_opcao == "📂 Cofre Digital":
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v15.1 | DARK NETWORK EDITION (SAFE)</center>", unsafe_allow_html=True)
 
+
