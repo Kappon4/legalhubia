@@ -692,7 +692,7 @@ elif menu_opcao == "🏛️ Simulador Audiência":
     st.markdown("<h2 class='tech-header'>🏛️ WAR ROOM: ESTRATÉGIA DE AUDIÊNCIA</h2>", unsafe_allow_html=True)
     contexto = st.text_area("Resumo do conflito:", height=300)
     
-    if st.button("GERAR ESTRATÉGIA DE GUERRA (2.0)", use_container_width=True):
+    if st.button("GERAR ESTRATÉGIA DE GUERRA (2.5)", use_container_width=True):
         if contexto:
             with st.spinner("IA formulando estratégia..."):
                 prompt = f"Advogado Sênior. Gere estratégia de audiência para: {contexto}. Inclua teses, perguntas e riscos."
@@ -713,5 +713,6 @@ elif menu_opcao == "📂 Cofre Digital":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v10.0 | GEMINI 2.0 EXCLUSIVE</center>", unsafe_allow_html=True)
+
 
 
