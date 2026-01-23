@@ -227,8 +227,16 @@ if "navegacao_override" not in st.session_state: st.session_state.navegacao_over
 
 col_logo, col_menu = st.columns([1, 4])
 with col_logo: 
-    st.markdown("""<div class='header-logo'><h1 class='tech-header'>LEGALHUB<span>ELITE</span></h1></div>""", unsafe_allow_html=True)
-
+    # CABEÇALHO ATUALIZADO COM SUBTÍTULO
+    st.markdown("""
+    <div class='header-logo'>
+        <h1 class='tech-header' style='margin-bottom: 0px;'>LEGALHUB</h1>
+        <p style='color: #00F3FF; font-family: "Rajdhani"; font-size: 0.9rem; letter-spacing: 1px; margin-top: -5px;'>
+            MAIOR EFICIÊNCIA EM MENOS TEMPO
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
 with col_menu:
     mapa_nav = {"Dashboard": "📊 Dashboard", "Redator IA": "✍️ Redator Jurídico", "Contratos": "📜 Contratos", "Calculos": "🧮 Cálculos Jurídicos", "Audiência": "🏛️ Simulador Audiência", "Gestão Casos": "📂 Cofre Digital"}
     opcoes_menu = list(mapa_nav.keys())
@@ -246,35 +254,68 @@ st.markdown("---")
 # 8. CONTEÚDO DAS TELAS
 # ==========================================================
 
-# --- DASHBOARD ---
+# --- DASHBOARD (NOVO GRID DE 6 CARDS) ---
 if menu_opcao == "📊 Dashboard":
-    st.markdown(f"<h2 class='tech-header'>BEM-VINDO AO HUB <span style='font-weight:300; font-size: 1.5rem; color:#64748b;'>| GEMINI 2.0 ONLY</span></h2>", unsafe_allow_html=True)
-    
-    # Mostra a versão da biblioteca (para debug se o 2.0 der 404)
-    import google.generativeai as gai
-    versao_atual = gai.__version__
-    
-    c1, c2, c3 = st.columns(3)
-    c1.metric("DOCS NA SESSÃO", len(st.session_state.meus_docs))
-    c2.metric("LIB VERSION", f"v{versao_atual}")
-    c3.metric("MODO", "2.0 (High Precision)")
-    
-    if versao_atual < "0.8.3":
-        st.warning(f"⚠️ Sua biblioteca v{versao_atual} pode não encontrar o Gemini 2.0. Verifique o requirements.txt.")
+    st.markdown(f"<h2 class='tech-header'>VISÃO GERAL <span style='font-weight:300; font-size: 1.5rem; color:#64748b;'>| PAINEL DE CONTROLE</span></h2>", unsafe_allow_html=True)
     
     st.write("")
-    st.subheader("🛠️ CENTRAL DE COMANDO")
-    r1, r2, r3 = st.columns(3)
-    with r1:
-        if st.button("✍️ NOVA PETIÇÃO", use_container_width=True): st.session_state.navegacao_override = "✍️ Redator Jurídico"; st.rerun()
-    with r2:
-        if st.button("🧮 NOVO CÁLCULO", use_container_width=True): st.session_state.navegacao_override = "🧮 Cálculos Jurídicos"; st.rerun()
-    with r3:
-        if st.button("📜 NOVO CONTRATO", use_container_width=True): st.session_state.navegacao_override = "📜 Contratos"; st.rerun()
+    st.markdown("### 🚀 O QUE A INTELIGÊNCIA ARTIFICIAL PODE FAZER POR VOCÊ?")
+    st.write("")
 
-# --- PETIÇÕES INTELIGENTES (ANTIGO REDATOR IA) ---
+    # --- LINHA 1 ---
+    c1, c2, c3 = st.columns(3)
+    
+    with c1:
+        with st.container(border=True):
+            st.markdown("#### ✍️ Petições Inteligentes")
+            st.caption("Geração de peças processuais complexas (Iniciais, Contestação, Recursos) baseadas nos fatos e na melhor fundamentação jurídica.")
+            if st.button("ABRIR REDATOR", use_container_width=True): 
+                st.session_state.navegacao_override = "✍️ Redator Jurídico"
+                st.rerun()
+
+    with c2:
+        with st.container(border=True):
+            st.markdown("#### 🏛️ Preparação Audiência")
+            st.caption("Simulador estratégico que cria perguntas para interrogatório, prevê teses da parte contrária e aponta riscos do caso.")
+            if st.button("ABRIR SIMULADOR", use_container_width=True): 
+                st.session_state.navegacao_override = "🏛️ Simulador Audiência"
+                st.rerun()
+
+    with c3:
+        with st.container(border=True):
+            st.markdown("#### 📜 Fábrica de Contratos")
+            st.caption("Elaboração automática de contratos, procurações e documentos extrajudiciais personalizados com cláusulas de segurança.")
+            if st.button("CRIAR CONTRATO", use_container_width=True): 
+                st.session_state.navegacao_override = "📜 Contratos"
+                st.rerun()
+
+    # --- LINHA 2 ---
+    st.write("")
+    c4, c5, c6 = st.columns(3)
+
+    with c4:
+        with st.container(border=True):
+            st.markdown("#### 🧮 Cálculos Jurídicos")
+            st.caption("Calculadoras precisas para Rescisão Trabalhista, Atualização Cível (TJ), Pensão Alimentícia e Dosimetria Penal.")
+            if st.button("CALCULAR AGORA", use_container_width=True): 
+                st.session_state.navegacao_override = "🧮 Cálculos Jurídicos"
+                st.rerun()
+
+    with c5:
+        with st.container(border=True):
+            st.markdown("#### 🧠 Análise de Autos (PDF)")
+            st.caption("O sistema lê seus arquivos PDF (Processos, Sentenças) e extrai automaticamente os fatos relevantes para usar nas peças.")
+            st.info("Disponível dentro do Redator")
+
+    with c6:
+        with st.container(border=True):
+            st.markdown("#### ⚖️ Jurisprudência Real")
+            st.caption("Conexão direta com a base de dados dos Tribunais Superiores para encontrar julgados que fundamentam sua tese.")
+            st.info("Integrado na Geração de Peças")
+
+# --- PETIÇÕES INTELIGENTES ---
 elif menu_opcao == "✍️ Redator Jurídico":
-    st.markdown("<h2 class='tech-header'>✍️ PETIÇÕES INTELIGENTES (IA 2.5)</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 class='tech-header'>✍️ PETIÇÕES INTELIGENTES </h2>", unsafe_allow_html=True)
     area = st.selectbox("Área", ["Cível", "Trabalhista", "Criminal", "Tributário", "Previdenciário"])
     
     pecas = []
@@ -310,7 +351,7 @@ elif menu_opcao == "✍️ Redator Jurídico":
     
     busca_real = st.checkbox("🔍 Buscar Jurisprudência Real (STF/STJ/TST)", value=True)
     
-    if st.button("GERAR PEÇA (MODO 2.5)", use_container_width=True):
+    if st.button("GERAR PEÇA", use_container_width=True):
         # Combina o que está oculto (PDF) com o que você digitou
         fatos_completos = f"CONTEÚDO DOS ANEXOS (PDF):\n{texto_do_pdf}\n\nOBSERVAÇÕES/FATOS DIGITADOS:\n{fatos_manuais}".strip()
 
@@ -722,6 +763,7 @@ elif menu_opcao == "📂 Cofre Digital":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v10.0 | GEMINI 2.0 EXCLUSIVE</center>", unsafe_allow_html=True)
+
 
 
 
