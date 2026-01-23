@@ -272,9 +272,9 @@ if menu_opcao == "📊 Dashboard":
     with r3:
         if st.button("📜 NOVO CONTRATO", use_container_width=True): st.session_state.navegacao_override = "📜 Contratos"; st.rerun()
 
-# --- REDATOR IA ---
+# --- PETIÇÕES INTELIGENTES (ANTIGO REDATOR IA) ---
 elif menu_opcao == "✍️ Redator Jurídico":
-    st.markdown("<h2 class='tech-header'>✍️ REDATOR IA AVANÇADO (2.0)</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 class='tech-header'>✍️ PETIÇÕES INTELIGENTES (IA 2.5)</h2>", unsafe_allow_html=True)
     area = st.selectbox("Área", ["Cível", "Trabalhista", "Criminal", "Tributário", "Previdenciário"])
     
     pecas = []
@@ -295,30 +295,39 @@ elif menu_opcao == "✍️ Redator Jurídico":
     adv = c2.text_input("Parte Contrária")
     
     st.write("---")
-    uploaded_file = st.file_uploader("📂 Carregar PDF (Opcional - Extrai fatos automaticamente)", type="pdf")
     
-    fatos_iniciais = ""
+    # LÓGICA NOVA DE PDF (SEGUNDO PLANO)
+    uploaded_file = st.file_uploader("📂 Carregar PDF (Opcional - O conteúdo será lido pela IA)", type="pdf")
+    
+    texto_do_pdf = ""
     if uploaded_file is not None:
-        with st.spinner("Lendo PDF..."):
-            fatos_iniciais = extrair_texto_pdf(uploaded_file)
-            st.success("Texto extraído do PDF com sucesso! Edite abaixo se necessário.")
+        with st.spinner("Anexando conteúdo aos autos..."):
+            texto_do_pdf = extrair_texto_pdf(uploaded_file)
+            st.success(f"✅ Documento anexado à memória da IA! ({len(texto_do_pdf)} caracteres identificados)")
 
-    fatos = st.text_area("Fatos", value=fatos_iniciais, height=150, placeholder="Descreva os fatos ou use o PDF acima...")
+    # CAIXA DE TEXTO LIMPA (PARA INSTRUÇÕES EXTRAS)
+    fatos_manuais = st.text_area("Fatos / Observações Adicionais", height=150, placeholder="Digite os fatos aqui OU deixe em branco se já carregou o PDF com a narrativa completa...")
     
     busca_real = st.checkbox("🔍 Buscar Jurisprudência Real (STF/STJ/TST)", value=True)
     
-    if st.button("GERAR PEÇA (MODO 2.0)", use_container_width=True):
-        if fatos and cli:
-            with st.spinner("Pesquisando e Redigindo com Gemini 2.0 (Isso pode levar alguns segundos)..."):
+    if st.button("GERAR PEÇA (MODO 2.5)", use_container_width=True):
+        # Combina o que está oculto (PDF) com o que você digitou
+        fatos_completos = f"CONTEÚDO DOS ANEXOS (PDF):\n{texto_do_pdf}\n\nOBSERVAÇÕES/FATOS DIGITADOS:\n{fatos_manuais}".strip()
+
+        # Validação: Precisa ter pelo menos um dos dois (PDF ou Texto) + Nome do Cliente
+        if (texto_do_pdf or fatos_manuais) and cli:
+            with st.spinner("Pesquisando e Redigindo com Gemini 2.5..."):
                 ctx = ""
-                if busca_real: ctx = buscar_contexto_juridico(f"{tipo} {fatos}", area)
+                if busca_real: ctx = buscar_contexto_juridico(f"{tipo} {fatos_completos}", area)
                 
-                prompt = f"Advogado {area}. Redija {tipo}. Cliente: {cli} vs {adv}. Fatos: {fatos}. {ctx}. Cite leis e jurisprudência se houver."
+                prompt = f"Advogado {area}. Redija {tipo}. Cliente: {cli} vs {adv}. Fatos: {fatos_completos}. {ctx}. Cite leis e jurisprudência se houver."
                 res = tentar_gerar_conteudo(prompt)
                 st.markdown(res)
                 if "❌" not in res:
                     salvar_documento_memoria(tipo, cli, res)
                     st.download_button("Baixar DOCX", gerar_word(res), f"{tipo}.docx")
+        else:
+            st.warning("⚠️ Atenção: Para gerar a peça, você precisa informar o **Cliente** e fornecer os fatos (seja via **PDF** ou **Digitado**).")
 
 # --- CONTRATOS ---
 elif menu_opcao == "📜 Contratos":
@@ -713,6 +722,7 @@ elif menu_opcao == "📂 Cofre Digital":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v10.0 | GEMINI 2.0 EXCLUSIVE</center>", unsafe_allow_html=True)
+
 
 
 
