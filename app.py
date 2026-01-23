@@ -10,16 +10,21 @@ import pandas as pd
 import base64
 import os
 
-# --- IMPORTAÇÕES PARA GERAÇÃO DE PDF (Timbrado) ---
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.utils import simpleSplit
+# --- IMPORTAÇÕES SEGURAS PARA GERAÇÃO DE PDF (Timbrado) ---
+# Isso impede que o app quebre se a biblioteca não estiver instalada
+try:
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.utils import simpleSplit
+    HAS_REPORTLAB = True
+except ImportError:
+    HAS_REPORTLAB = False
 
 # ==========================================================
 # 1. CONFIGURAÇÃO VISUAL
 # ==========================================================
 st.set_page_config(
-    page_title="LegalHub Elite v15.0 (Dark Network)", 
+    page_title="LegalHub Elite v15.1 (Safe)", 
     page_icon="⚖️", 
     layout="wide",
     initial_sidebar_state="collapsed" 
@@ -108,6 +113,9 @@ def buscar_contexto_juridico(tema, area):
 
 # --- FUNÇÃO CRÍTICA: MISTURAR TEXTO COM TIMBRADO ---
 def gerar_pdf_com_timbrado(texto_contrato, arquivo_timbrado):
+    if not HAS_REPORTLAB:
+        return "MISSING_LIB" # Código de erro interno
+
     try:
         # 1. Cria o PDF transparente com o texto
         packet = BytesIO()
@@ -151,9 +159,7 @@ def gerar_pdf_com_timbrado(texto_contrato, arquivo_timbrado):
             page_fundo = PageObject.create_blank_page(width=width, height=height)
             page_fundo.merge_page(page_timbrado)
             
-            page_texto.merge_page(page_fundo) # O texto fica POR CIMA do fundo?
-            # Na verdade pypdf merge: o que chama merge_page recebe o conteúdo do argumento.
-            # Vamos tentar: Fundo recebe Texto.
+            # Mescla o texto sobre o fundo
             page_fundo.merge_page(page_texto)
             
             output.add_page(page_fundo)
@@ -164,7 +170,6 @@ def gerar_pdf_com_timbrado(texto_contrato, arquivo_timbrado):
         return output_stream
         
     except Exception as e:
-        st.error(f"Erro ao gerar PDF: {e}")
         return None
 
 def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_fgts, ferias_vencidas, aviso_tipo, grau_insalubridade, tem_periculosidade):
@@ -538,9 +543,12 @@ elif menu_opcao == "📜 Contratos":
                     with st.expander("Ver Texto"): st.write(texto_contrato)
                     st.download_button("📥 Baixar DOCX", gerar_word(texto_contrato), f"Contrato_{nome}.docx", use_container_width=True)
                     if uploaded_timbrado:
-                        uploaded_timbrado.seek(0)
-                        pdf_con = gerar_pdf_com_timbrado(texto_contrato, uploaded_timbrado)
-                        if pdf_con: st.download_button("📄 Baixar PDF Timbrado", pdf_con, f"Contrato_{nome}.pdf", mime="application/pdf", use_container_width=True)
+                        if HAS_REPORTLAB:
+                            uploaded_timbrado.seek(0)
+                            pdf_con = gerar_pdf_com_timbrado(texto_contrato, uploaded_timbrado)
+                            if pdf_con and pdf_con != "MISSING_LIB": st.download_button("📄 Baixar PDF Timbrado", pdf_con, f"Contrato_{nome}.pdf", mime="application/pdf", use_container_width=True)
+                        else:
+                            st.warning("⚠️ Instale 'reportlab' para gerar PDF.")
 
                 # COLUNA 2: PROCURAÇÃO
                 with col_down_proc:
@@ -548,9 +556,12 @@ elif menu_opcao == "📜 Contratos":
                     with st.expander("Ver Texto"): st.write(texto_procuracao)
                     st.download_button("📥 Baixar DOCX", gerar_word(texto_procuracao), f"Procuracao_{nome}.docx", use_container_width=True)
                     if uploaded_timbrado:
-                        uploaded_timbrado.seek(0)
-                        pdf_proc = gerar_pdf_com_timbrado(texto_procuracao, uploaded_timbrado)
-                        if pdf_proc: st.download_button("📄 Baixar PDF Timbrado", pdf_proc, f"Procuracao_{nome}.pdf", mime="application/pdf", use_container_width=True)
+                        if HAS_REPORTLAB:
+                            uploaded_timbrado.seek(0)
+                            pdf_proc = gerar_pdf_com_timbrado(texto_procuracao, uploaded_timbrado)
+                            if pdf_proc and pdf_proc != "MISSING_LIB": st.download_button("📄 Baixar PDF Timbrado", pdf_proc, f"Procuracao_{nome}.pdf", mime="application/pdf", use_container_width=True)
+                        else:
+                            st.warning("⚠️ Instale 'reportlab' para gerar PDF.")
         else:
             st.warning("Preencha os dados.")
 
@@ -634,4 +645,4 @@ elif menu_opcao == "📂 Cofre Digital":
     else: st.info("Cofre vazio nesta sessão.")
 
 st.markdown("---")
-st.markdown("<center>🔒 LEGALHUB ELITE v15.0 | DARK NETWORK EDITION</center>", unsafe_allow_html=True)
+st.markdown("<center>🔒 LEGALHUB ELITE v15.1 | DARK NETWORK EDITION (SAFE)</center>", unsafe_allow_html=True)
