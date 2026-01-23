@@ -188,8 +188,6 @@ Python
 # 6. CSS VISUAL (PALETA CONFORTÁVEL - NORD/SÁLVIA)
 # ==========================================================
 def local_css():
-    bg_css = "" 
-    
     st.markdown(f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;500;700&family=Inter:wght@300;400;600&display=swap');
@@ -227,7 +225,7 @@ def local_css():
 
         /* Subtítulo do Logo */
         .header-logo p {{
-            color: var(--highlight) !important; /* Verde Sálvia no subtítulo */
+            color: var(--highlight) !important; 
         }}
 
         /* Botões (Estilo Sálvia Fosco) */
@@ -239,14 +237,14 @@ def local_css():
             font-family: 'Rajdhani', sans-serif;
             letter-spacing: 1px;
             transition: 0.3s;
-            border-radius: 8px; /* Bordas mais suaves */
+            border-radius: 8px; 
         }}
 
         .stButton>button:hover {{
             background: var(--highlight);
-            color: #2E3440; /* Texto escuro no hover para contraste */
+            color: #2E3440; 
             border: 1px solid var(--highlight);
-            box-shadow: 0 0 10px rgba(143, 188, 143, 0.3); /* Brilho suave verde */
+            box-shadow: 0 0 10px rgba(143, 188, 143, 0.3);
         }}
 
         /* Containers e Cards */
@@ -258,7 +256,7 @@ def local_css():
         
         /* Inputs e Caixas de Texto (Fundo Confortável) */
         .stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div>div {{
-            background-color: #434C5E; /* Um pouco mais claro que o fundo */
+            background-color: #434C5E; 
             color: #ECEFF4;
             border: 1px solid #4C566A;
         }}
@@ -822,6 +820,7 @@ elif menu_opcao == "📂 Cofre Digital":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v10.0 | GEMINI 2.0 EXCLUSIVE</center>", unsafe_allow_html=True)
+
 
 
 
