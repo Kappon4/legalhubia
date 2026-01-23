@@ -388,7 +388,7 @@ elif menu_opcao == "✍️ Petições Inteligentes":
     
     busca_real = st.checkbox("🔍 Buscar Jurisprudência Real (STF/STJ/TST)", value=True)
     
-    if st.button("GERAR PEÇA (MODO 2.5)", use_container_width=True):
+    if st.button("GERAR PEÇA", use_container_width=True):
         fatos_completos = f"CONTEÚDO DOS ANEXOS (PDF):\n{texto_do_pdf}\n\nOBSERVAÇÕES/FATOS DIGITADOS:\n{fatos_manuais}".strip()
 
         if (texto_do_pdf or fatos_manuais) and cli:
@@ -798,3 +798,4 @@ elif menu_opcao == "📂 Cofre Digital":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v14.5 | NORD EDITION</center>", unsafe_allow_html=True)
+
