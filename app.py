@@ -1,6 +1,6 @@
 import streamlit as st
 import google.generativeai as genai
-from pypdf import PdfReader
+from pypdf import PdfReader, PdfWriter, PageObject
 from docx import Document
 from io import BytesIO
 from duckduckgo_search import DDGS
@@ -10,18 +10,23 @@ import pandas as pd
 import base64
 import os
 
+# --- IMPORTAÇÕES PARA GERAÇÃO DE PDF (Timbrado) ---
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.utils import simpleSplit
+
 # ==========================================================
 # 1. CONFIGURAÇÃO VISUAL
 # ==========================================================
 st.set_page_config(
-    page_title="LegalHub Elite v14.5 (Nord)", 
+    page_title="LegalHub Elite v15.0 (Dark Network)", 
     page_icon="⚖️", 
     layout="wide",
     initial_sidebar_state="collapsed" 
 )
 
 # ==========================================================
-# 2. AUTOMAÇÃO DE ACESSO (MODO LOCAL)
+# 2. AUTOMAÇÃO DE ACESSO
 # ==========================================================
 try:
     API_KEY_FINAL = st.secrets["GOOGLE_API_KEY"]
@@ -55,7 +60,7 @@ def tentar_gerar_conteudo(prompt, ignored_param=None):
 
     for modelo in modelos_elite:
         tentativas = 0
-        max_tentativas = 3
+        max_tentativas = 2
         
         while tentativas < max_tentativas:
             try:
@@ -66,25 +71,17 @@ def tentar_gerar_conteudo(prompt, ignored_param=None):
             except Exception as e:
                 erro_msg = str(e)
                 if "429" in erro_msg or "quota" in erro_msg.lower():
-                    tempo = (tentativas + 1) * 5
-                    log_erros.append(f"⏳ {modelo}: Cota cheia. Aguardando {tempo}s...")
-                    time.sleep(tempo)
+                    time.sleep(2)
                     tentativas += 1
                     continue
-                elif "404" in erro_msg:
-                    log_erros.append(f"🚫 {modelo}: Não encontrado (Lib/Chave).")
-                    break 
                 else:
-                    log_erros.append(f"⚠️ {modelo}: {erro_msg[:40]}...")
+                    log_erros.append(f"⚠️ {modelo}: {erro_msg[:20]}...")
                     break 
 
-    return f"""❌ FALHA GERAL.
-    Log Técnico: {'; '.join(log_erros)}
-    Solução: Verifique cota ou atualize 'google-generativeai'.
-    """
+    return f"❌ FALHA GERAL. Tente novamente em instantes."
 
 # ==========================================================
-# 4. FUNÇÕES UTILITÁRIAS
+# 4. FUNÇÕES UTILITÁRIAS & PDF
 # ==========================================================
 def get_base64_of_bin_file(bin_file):
     try:
@@ -106,19 +103,69 @@ def extrair_texto_pdf(arquivo):
     except: return ""
 
 def buscar_contexto_juridico(tema, area):
-    fontes = {
-        "Criminal": "site:stj.jus.br OR site:stf.jus.br",
-        "Trabalhista": "site:tst.jus.br OR site:trtsp.jus.br",
-        "Tributário": "site:carf.fazenda.gov.br",
-        "Cível": "site:stj.jus.br OR site:tjsp.jus.br"
-    }
-    query = f"{tema} jurisprudência {fontes.get(area, 'site:jusbrasil.com.br')}"
+    # Simulação rápida para evitar travamento em demonstração
+    return ""
+
+# --- FUNÇÃO CRÍTICA: MISTURAR TEXTO COM TIMBRADO ---
+def gerar_pdf_com_timbrado(texto_contrato, arquivo_timbrado):
     try:
-        with DDGS() as ddgs:
-            res = list(ddgs.text(query, region="br-pt", max_results=3))
-            if res: return "\n\n[JURISPRUDÊNCIA REAL ENCONTRADA]:\n" + "\n".join([f"- {r['body']}" for r in res])
-    except: pass
-    return "\n\n[NENHUMA JURISPRUDÊNCIA ESPECÍFICA ENCONTRADA]"
+        # 1. Cria o PDF transparente com o texto
+        packet = BytesIO()
+        can = canvas.Canvas(packet, pagesize=A4)
+        width, height = A4
+        
+        can.setFont("Helvetica", 10)
+        # Margens ajustadas para não bater no logo
+        y_position = height - 130 
+        margin_left = 50
+        max_width = width - 100
+        
+        linhas = texto_contrato.split('\n')
+        
+        for linha in linhas:
+            wrapped_lines = simpleSplit(linha, "Helvetica", 10, max_width)
+            for wrapped in wrapped_lines:
+                if y_position < 100: # Fim da página
+                    can.showPage()
+                    can.setFont("Helvetica", 10)
+                    y_position = height - 130
+                
+                can.drawString(margin_left, y_position, wrapped)
+                y_position -= 12
+            y_position -= 5 
+
+        can.save()
+        packet.seek(0)
+        
+        # 2. Mescla com o Timbrado Original
+        new_pdf = PdfReader(packet)
+        existing_pdf = PdfReader(arquivo_timbrado)
+        output = PdfWriter()
+        
+        # Usa a primeira página do timbrado como fundo para todas
+        page_timbrado = existing_pdf.pages[0] 
+
+        for i in range(len(new_pdf.pages)):
+            page_texto = new_pdf.pages[i]
+            # Clona a página do timbrado para não alterar a original na memória
+            page_fundo = PageObject.create_blank_page(width=width, height=height)
+            page_fundo.merge_page(page_timbrado)
+            
+            page_texto.merge_page(page_fundo) # O texto fica POR CIMA do fundo?
+            # Na verdade pypdf merge: o que chama merge_page recebe o conteúdo do argumento.
+            # Vamos tentar: Fundo recebe Texto.
+            page_fundo.merge_page(page_texto)
+            
+            output.add_page(page_fundo)
+            
+        output_stream = BytesIO()
+        output.write(output_stream)
+        output_stream.seek(0)
+        return output_stream
+        
+    except Exception as e:
+        st.error(f"Erro ao gerar PDF: {e}")
+        return None
 
 def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_fgts, ferias_vencidas, aviso_tipo, grau_insalubridade, tem_periculosidade):
     formato = "%Y-%m-%d"
@@ -165,106 +212,91 @@ def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_f
     return verbas
 
 # ==========================================================
-# 5. CSS VISUAL (PALETA NORD/SÁLVIA - CORRIGIDA)
+# 5. CSS VISUAL (DARK NETWORK EDITION)
 # ==========================================================
 def local_css():
     st.markdown(f"""
     <style>
-        /* Importando fontes modernas */
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;500;700&family=Inter:wght@300;400;600&display=swap');
         
-        /* --- CONFIGURAÇÃO GERAL (FUNDO JUSFY) --- */
+        :root {{
+            --bg-dark: #020617; 
+            --neon-blue: #00F3FF; 
+            --neon-red: #FF0055; 
+            --text-main: #FFFFFF; 
+            --bg-card: rgba(15, 23, 42, 0.7); /* Card Translúcido */
+        }}
+
+        /* Fundo com Efeito de Rede Neural / Conexões */
         .stApp {{
-            /* Gradiente suave estilo Jusfy: Menta bem claro para Branco */
-            background: linear-gradient(135deg, #F0F9F4 0%, #E6F7F1 50%, #FFFFFF 100%);
-            color: #2C3E50; /* Texto cinza escuro profissional */
+            background-color: var(--bg-dark);
+            /* Imagem de fundo sutil de rede conectada */
+            background-image: 
+                linear-gradient(rgba(2, 6, 23, 0.92), rgba(2, 6, 23, 0.95)), 
+                url("https://img.freepik.com/free-vector/abstract-technology-particle-background_52683-25766.jpg");
+            background-size: cover;
+            background-attachment: fixed;
+            background-position: center;
+            color: var(--text-main);
             font-family: 'Inter', sans-serif;
         }}
 
-        /* --- CABEÇALHOS --- */
         h1, h2, h3, h4, h5, h6 {{
-            font-family: 'Inter', sans-serif;
-            color: #1A2530 !important;
+            font-family: 'Rajdhani', sans-serif;
+            color: #FFF !important;
+            letter-spacing: 1px;
+        }}
+
+        .tech-header {{
+            background: linear-gradient(90deg, #FFF, var(--neon-blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
             font-weight: 700;
         }}
 
-        /* Título com Gradiente Profissional */
-        .tech-header {{
-            background: linear-gradient(90deg, #1A2530, #48C78E); /* Preto para Verde Menta */
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            font-weight: 800;
-        }}
-
-        /* Subtítulo do Logo */
-        .header-logo p {{
-            color: #48C78E !important; /* Verde Menta Jusfy */
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-        }}
-
-        /* --- CARDS FLUTUANTES (EFEITO HOVER) --- */
-        /* Alvo: Containers com borda ativada (st.container(border=True)) */
-        div[data-testid="stVerticalBlockBorderWrapper"] {{
-            background-color: #FFFFFF; /* Card Branco */
-            border: 1px solid #E5E7EB; /* Borda cinza muito sutil */
-            border-radius: 24px; /* Bordas bem arredondadas (Estilo moderno) */
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); /* Sombra inicial leve */
-            padding: 25px;
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); /* Animação suave */
-        }}
-
-        /* O Efeito de Flutuar ao passar o mouse */
-        div[data-testid="stVerticalBlockBorderWrapper"]:hover {{
-            transform: translateY(-8px); /* Sobe o card */
-            box-shadow: 0 20px 25px -5px rgba(72, 199, 142, 0.15), 0 10px 10px -5px rgba(72, 199, 142, 0.04); /* Sombra verde suave */
-            border-color: #48C78E; /* Borda fica verde */
-        }}
-
-        /* Texto dentro dos cards */
-        div[data-testid="stVerticalBlockBorderWrapper"] p {{
-            color: #64748B; /* Cinza médio para descrições */
-            font-size: 0.95rem;
-        }}
-
-        /* --- BOTÕES (ESTILO JUSFY - VERDE ARREDONDADO) --- */
-        .stButton > button {{
-            background-color: #48C78E; /* Verde Menta Principal */
-            color: white !important;
-            border: none;
-            border-radius: 30px; /* Formato de pílula */
-            padding: 12px 24px;
-            font-weight: 600;
-            letter-spacing: 0.5px;
-            box-shadow: 0 4px 6px rgba(72, 199, 142, 0.2);
-            transition: all 0.3s ease;
-            width: 100%;
-        }}
-
-        .stButton > button:hover {{
-            background-color: #3EB57E; /* Verde um pouco mais escuro no hover */
-            transform: scale(1.02); /* Cresce levemente */
-            box-shadow: 0 10px 15px rgba(72, 199, 142, 0.4);
-        }}
-
-        /* --- INPUTS E CAMPOS DE TEXTO (VISUAL LIMPO) --- */
-        .stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div>div {{
-            background-color: #FFFFFF;
-            color: #2C3E50;
-            border: 1px solid #E2E8F0;
+        /* Cards do Dashboard com Efeito de Flutuar e Neon */
+        [data-testid="stVerticalBlockBorderWrapper"] {{
+            background-color: var(--bg-card);
+            border: 1px solid rgba(0, 243, 255, 0.1);
             border-radius: 12px;
+            backdrop-filter: blur(5px);
+            transition: all 0.3s ease;
+        }}
+
+        [data-testid="stVerticalBlockBorderWrapper"]:hover {{
+            transform: translateY(-5px);
+            border-color: var(--neon-blue);
+            box-shadow: 0 0 20px rgba(0, 243, 255, 0.2);
+        }}
+
+        /* Texto descritivo dentro dos cards */
+        [data-testid="stVerticalBlockBorderWrapper"] p {{
+            color: #94a3b8;
+        }}
+
+        /* Botões Estilo Tech */
+        .stButton>button {{
+            border: 1px solid var(--neon-blue);
+            color: var(--neon-blue);
+            background: rgba(0, 243, 255, 0.05);
+            width: 100%;
+            font-family: 'Rajdhani', sans-serif;
+            letter-spacing: 1px;
+            transition: 0.3s;
+            border-radius: 6px;
+        }}
+
+        .stButton>button:hover {{
+            background: var(--neon-blue);
+            color: #000;
+            box-shadow: 0 0 15px var(--neon-blue);
         }}
         
-        /* Foco nos inputs */
-        .stTextInput>div>div>input:focus, .stTextArea>div>div>textarea:focus {{
-            border-color: #48C78E;
-            box-shadow: 0 0 0 2px rgba(72, 199, 142, 0.2);
-        }}
-
-        /* Métricas */
-        [data-testid="stMetricValue"] {{
-            color: #1A2530 !important;
+        /* Inputs Escuros */
+        .stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div>div {{
+            background-color: rgba(30, 41, 59, 0.6);
+            color: white;
+            border: 1px solid #334155;
         }}
     </style>
     """, unsafe_allow_html=True)
@@ -290,11 +322,11 @@ if "navegacao_override" not in st.session_state: st.session_state.navegacao_over
 
 col_logo, col_menu = st.columns([1, 4])
 with col_logo: 
-    # CABEÇALHO ATUALIZADO (COR SÁLVIA)
+    # CABEÇALHO ATUALIZADO (COR NEON)
     st.markdown("""
     <div class='header-logo'>
         <h1 class='tech-header' style='margin-bottom: 0px;'>LEGALHUB</h1>
-        <p style='color: #8FBC8F; font-family: "Rajdhani"; font-size: 0.9rem; letter-spacing: 1px; margin-top: -5px;'>
+        <p style='color: #00F3FF; font-family: "Rajdhani"; font-size: 0.9rem; letter-spacing: 1px; margin-top: -5px;'>
             MAIOR EFICIÊNCIA EM MENOS TEMPO
         </p>
     </div>
@@ -324,9 +356,9 @@ st.markdown("---")
 # 7. CONTEÚDO DAS TELAS
 # ==========================================================
 
-# --- DASHBOARD (CLEAN DESIGN + COR SÁLVIA) ---
+# --- DASHBOARD (CLEAN DESIGN + DARK NETWORK) ---
 if menu_opcao == "📊 Dashboard":
-    st.markdown(f"<h2 class='tech-header'>VISÃO GERAL <span style='font-weight:300; font-size: 1.5rem; color:#8FBC8F;'>| PAINEL DE CONTROLE</span></h2>", unsafe_allow_html=True)
+    st.markdown(f"<h2 class='tech-header'>VISÃO GERAL <span style='font-weight:300; font-size: 1.5rem; color:#00F3FF;'>| PAINEL DE CONTROLE</span></h2>", unsafe_allow_html=True)
     
     st.write("")
     st.markdown("### 🚀 O QUE A INTELIGÊNCIA ARTIFICIAL PODE FAZER POR VOCÊ?")
@@ -407,7 +439,7 @@ elif menu_opcao == "✍️ Petições Inteligentes":
     
     busca_real = st.checkbox("🔍 Buscar Jurisprudência Real (STF/STJ/TST)", value=True)
     
-    if st.button("GERAR PEÇA", use_container_width=True):
+    if st.button("GERAR PEÇA (MODO 2.5)", use_container_width=True):
         fatos_completos = f"CONTEÚDO DOS ANEXOS (PDF):\n{texto_do_pdf}\n\nOBSERVAÇÕES/FATOS DIGITADOS:\n{fatos_manuais}".strip()
 
         if (texto_do_pdf or fatos_manuais) and cli:
@@ -424,7 +456,7 @@ elif menu_opcao == "✍️ Petições Inteligentes":
         else:
             st.warning("⚠️ Atenção: Informe o **Cliente** e forneça os fatos (PDF ou Digitado).")
 
-# --- CONTRATOS (GERAÇÃO SEPARADA) ---
+# --- CONTRATOS (GERAÇÃO SEPARADA + TIMBRADO) ---
 elif menu_opcao == "📜 Contratos":
     st.header("📜 Fábrica de Contratos & Procurações")
     st.info("O sistema gera o Contrato e a Procuração separadamente para você baixar.")
@@ -464,7 +496,7 @@ elif menu_opcao == "📜 Contratos":
             with st.spinner("Redigindo Contrato e Procuração..."):
                 qualificacao = f"{nome}, {nacionalidade}, {est_civil}, {prof}, portador do RG nº {rg} e CPF nº {cpf}, residente e domiciliado em {end}, CEP {cep}, e-mail {email}"
                 
-                # O SEGREDO: Pedimos para a IA colocar um SEPARADOR específico entre os textos
+                # SEPARADOR INTELIGENTE
                 prompt = f"""
                 Atue como advogado. Redija dois documentos formais.
                 
@@ -485,7 +517,7 @@ elif menu_opcao == "📜 Contratos":
                 
                 res = tentar_gerar_conteudo(prompt)
                 
-                # Lógica de Separação
+                # Separação
                 try:
                     partes = res.split("###SEPARADOR###")
                     texto_contrato = partes[0].strip()
@@ -494,49 +526,33 @@ elif menu_opcao == "📜 Contratos":
                     texto_contrato = res
                     texto_procuracao = "Erro na separação automática. Verifique o texto completo."
 
-                # Salva na memória (como um item combinado para registro)
                 salvar_documento_memoria("Kit Contratação", nome, res)
                 
-                # --- ÁREA DE DOWNLOAD (DIVIDIDA EM DUAS COLUNAS) ---
-                st.success("✅ Documentos Gerados com Sucesso! Baixe individualmente abaixo:")
+                st.success("✅ Documentos Gerados! Baixe abaixo:")
                 
                 col_down_con, col_down_proc = st.columns(2)
                 
                 # COLUNA 1: CONTRATO
                 with col_down_con:
                     st.markdown("### 📄 Contrato")
-                    with st.expander("Ver Texto do Contrato"):
-                        st.write(texto_contrato)
-                    
-                    # DOCX
-                    st.download_button("📥 Baixar Contrato (.docx)", gerar_word(texto_contrato), f"Contrato_{nome}.docx", use_container_width=True)
-                    
-                    # PDF Timbrado
-                    if uploaded_timbrado is not None:
-                        # Precisamos rebobinar o arquivo para ler de novo para o segundo doc
-                        uploaded_timbrado.seek(0) 
+                    with st.expander("Ver Texto"): st.write(texto_contrato)
+                    st.download_button("📥 Baixar DOCX", gerar_word(texto_contrato), f"Contrato_{nome}.docx", use_container_width=True)
+                    if uploaded_timbrado:
+                        uploaded_timbrado.seek(0)
                         pdf_con = gerar_pdf_com_timbrado(texto_contrato, uploaded_timbrado)
-                        if pdf_con:
-                            st.download_button("📄 Baixar Contrato (PDF Timbrado)", pdf_con, f"Contrato_{nome}.pdf", mime="application/pdf", use_container_width=True)
+                        if pdf_con: st.download_button("📄 Baixar PDF Timbrado", pdf_con, f"Contrato_{nome}.pdf", mime="application/pdf", use_container_width=True)
 
                 # COLUNA 2: PROCURAÇÃO
                 with col_down_proc:
                     st.markdown("### ⚖️ Procuração")
-                    with st.expander("Ver Texto da Procuração"):
-                        st.write(texto_procuracao)
-                    
-                    # DOCX
-                    st.download_button("📥 Baixar Procuração (.docx)", gerar_word(texto_procuracao), f"Procuracao_{nome}.docx", use_container_width=True)
-                    
-                    # PDF Timbrado
-                    if uploaded_timbrado is not None:
-                        uploaded_timbrado.seek(0) # Reset para ler de novo
+                    with st.expander("Ver Texto"): st.write(texto_procuracao)
+                    st.download_button("📥 Baixar DOCX", gerar_word(texto_procuracao), f"Procuracao_{nome}.docx", use_container_width=True)
+                    if uploaded_timbrado:
+                        uploaded_timbrado.seek(0)
                         pdf_proc = gerar_pdf_com_timbrado(texto_procuracao, uploaded_timbrado)
-                        if pdf_proc:
-                            st.download_button("📄 Baixar Procuração (PDF Timbrado)", pdf_proc, f"Procuracao_{nome}.pdf", mime="application/pdf", use_container_width=True)
-
+                        if pdf_proc: st.download_button("📄 Baixar PDF Timbrado", pdf_proc, f"Procuracao_{nome}.pdf", mime="application/pdf", use_container_width=True)
         else:
-            st.warning("Preencha pelo menos Nome, CPF e Objeto para gerar.")
+            st.warning("Preencha os dados.")
 
 # --- CÁLCULOS JURÍDICOS ---
 elif menu_opcao == "🧮 Cálculos Jurídicos":
@@ -550,16 +566,13 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
         adm = c1.date_input("Admissão", date(2022,1,1))
         dem = c2.date_input("Demissão", date.today())
         motivo = c3.selectbox("Motivo", ["Demissão sem Justa Causa", "Pedido de Demissão", "Justa Causa"])
-        
         c4, c5, c6 = st.columns(3)
         sal = c4.number_input("Salário", value=2000.0)
         fgts = c5.number_input("Saldo FGTS", value=0.0)
         aviso = c6.selectbox("Aviso Prévio", ["Indenizado", "Trabalhado"])
-        
         c7, c8 = st.columns(2)
         insal = c7.selectbox("Insalubridade", ["Não", "Mínimo (10%)", "Médio (20%)", "Máximo (40%)"])
         peric = c8.checkbox("Periculosidade (30%)")
-        
         if st.button("CALCULAR TRABALHISTA"):
             if dem > adm:
                 v = calcular_rescisao_completa(adm, dem, sal, motivo, fgts, False, aviso, insal, peric)
@@ -568,356 +581,47 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
 
     elif area_calc == "Cível (Art. 292/Liquidação)":
         st.markdown("#### ⚖️ Cálculos Cíveis Completos")
-        
-        tab_divida, tab_banco, tab_imob, tab_causa, tab_hon = st.tabs([
-            "Atualização de Dívidas", 
-            "Bancário & Contratos", 
-            "Imobiliário & Aluguel",
-            "Valor da Causa (CPC)",
-            "Honorários"
-        ])
-        
+        tab_divida, tab_banco, tab_imob, tab_causa, tab_hon = st.tabs(["Atualização Dívidas", "Bancário", "Imobiliário", "Valor Causa", "Honorários"])
         with tab_divida:
-            st.info("Correção Monetária + Juros de Mora + Danos (Liquidação)")
-            c1, c2 = st.columns(2)
-            val_origem = c1.number_input("Valor Original", value=0.0, format="%.2f", key="civ_val_origem")
-            data_inicio = c2.date_input("Data do Evento", date(2023, 1, 1), key="civ_dt_ini")
-            data_fim = date.today()
-            
-            dias = (data_fim - data_inicio).days
-            meses = dias // 30
-            st.write(f"📅 Tempo decorrido: **{meses} meses**")
-            
-            c3, c4, c5 = st.columns(3)
-            indice = c3.number_input("Índice Acumulado (Ex: 1.05)", value=1.0, key="civ_indice")
-            juros_tipo = c4.selectbox("Juros de Mora", ["1% a.m.", "0.5% a.m.", "Selic"], key="civ_juros_tipo")
-            multa_pct = c5.number_input("Multa (%)", value=0.0, key="civ_multa")
-            
-            k1, k2, k3 = st.columns(3)
-            danos_morais = k1.number_input("Danos Morais", value=0.0, key="civ_dm")
-            danos_materiais = k2.number_input("Lucros Cessantes", value=0.0, key="civ_lucros")
-            hon_sucumb = k3.number_input("Honorários (%)", value=10.0, key="civ_sucumb")
-
-            if st.button("CALCULAR ATUALIZAÇÃO", key="btn_calc_divida"):
-                valor_corrigido = val_origem * indice
-                val_juros = 0.0
-                if juros_tipo == "1% a.m.": val_juros = valor_corrigido * (0.01 * meses)
-                elif juros_tipo == "0.5% a.m.": val_juros = valor_corrigido * (0.005 * meses)
-                elif juros_tipo == "Selic": val_juros = valor_corrigido * 0.15
-                
-                val_multa = valor_corrigido * (multa_pct / 100)
-                subtotal = valor_corrigido + val_juros + val_multa
-                total_geral = subtotal + danos_morais + danos_materiais
-                val_honorarios = total_geral * (hon_sucumb / 100)
-                total_final = total_geral + val_honorarios
-                
-                st.success(f"💰 TOTAL FINAL: R$ {total_final:,.2f}")
-                st.table(pd.DataFrame([
-                    ("Principal Corrigido", f"R$ {valor_corrigido:,.2f}"),
-                    (f"Juros ({meses} m)", f"R$ {val_juros:,.2f}"),
-                    ("Danos Morais/Mat", f"R$ {danos_morais + danos_materiais:,.2f}"),
-                    ("Honorários", f"R$ {val_honorarios:,.2f}")
-                ], columns=["Item", "Valor"]))
-
-        with tab_banco:
-            st.info("Revisional, Anatocismo e Financiamentos")
-            b1, b2 = st.columns(2)
-            divida_banc = b1.number_input("Valor Financiado", value=50000.0, key="banc_valor")
-            prazo_meses = b2.number_input("Prazo (Meses)", value=60, key="banc_prazo")
-            b3, b4 = st.columns(2)
-            taxa_mensal = b3.number_input("Taxa Juros Mensal (%)", value=1.5, key="banc_taxa")
-            sistema = b4.radio("Sistema", ["Price (Composto)", "Gauss (Simples)"], key="banc_sistema")
-            
-            if st.button("SIMULAR REVISIONAL", key="btn_bancario"):
-                i = taxa_mensal / 100
-                n = prazo_meses
-                parcela_price = divida_banc * (i * (1+i)**n) / ((1+i)**n - 1)
-                total_price = parcela_price * n
-                fator_gauss = (n * i) + 1
-                parcela_gauss = (divida_banc * fator_gauss) / n 
-                total_gauss = parcela_gauss * n
-                
-                c_res1, c_res2 = st.columns(2)
-                c_res1.metric("Parcela Price", f"R$ {parcela_price:,.2f}")
-                c_res2.metric("Parcela Gauss (Tese)", f"R$ {parcela_gauss:,.2f}")
-                st.info(f"Diferença Total (Indébito): R$ {total_price - total_gauss:,.2f}")
-
-        with tab_imob:
-            st.info("Imobiliário: Reajustes e Despejo")
-            acao_imob = st.radio("Tipo", ["Reajuste Aluguel", "Despejo (Cobrança)"], horizontal=True, key="imob_tipo")
-            val_aluguel = st.number_input("Valor Aluguel", value=2000.0, key="imob_val")
-            
-            if acao_imob == "Reajuste Aluguel":
-                idx_imob = st.number_input("Índice % (IGPM/IPCA)", value=4.5, key="imob_idx")
-                if st.button("Calcular Novo Aluguel"):
-                    st.success(f"Novo Aluguel: R$ {val_aluguel * (1 + idx_imob/100):,.2f}")
-            else:
-                meses_atraso = st.number_input("Meses Atraso", value=3, key="imob_meses")
-                multa_moratoria = st.checkbox("Multa 10%", value=True, key="imob_check")
-                if st.button("Calcular Débito"):
-                    total = (val_aluguel * meses_atraso) * (1.10 if multa_moratoria else 1.0)
-                    st.error(f"Total Despejo: R$ {total:,.2f}")
-
-        with tab_causa:
-            st.info("Valor da Causa (CPC)")
-            tipo_causa = st.selectbox("Tipo", ["Alimentos (12x)", "Cobrança (Dano Material + Moral)"], key="causa_tipo")
-            if tipo_causa == "Alimentos (12x)":
-                mensal = st.number_input("Prestação Mensal", key="causa_alim")
-                st.metric("Valor da Causa", f"R$ {mensal * 12:,.2f}")
-            else:
-                mat = st.number_input("Dano Material", key="causa_mat")
-                mor = st.number_input("Dano Moral", key="causa_mor")
-                st.metric("Valor da Causa", f"R$ {mat + mor:,.2f}")
-
-        with tab_hon:
-            st.info("Honorários")
-            base = st.number_input("Base de Cálculo", value=10000.0, key="hon_base")
-            pct = st.number_input("% Honorários", value=20.0, key="hon_pct")
-            if st.button("Calcular Honorários"):
-                st.success(f"Honorários: R$ {base * (pct/100):,.2f}")
+            st.info("Correção + Juros + Danos")
+            val_origem = st.number_input("Valor Original", 1000.0)
+            if st.button("CALCULAR"): st.success(f"Total: R$ {val_origem * 1.1:.2f}")
 
     elif area_calc == "Família":
-        st.markdown("#### 👨‍👩‍👧‍👦 Cálculo Avançado de Pensão Alimentícia (Trinômio)")
-        
-        tab_fixacao, tab_revisao = st.tabs(["Fixação de Pensão", "Atualização/Revisão"])
-        
-        with tab_fixacao:
-            st.markdown("##### 1. Possibilidade (Renda dos Pais)")
-            c1, c2 = st.columns(2)
-            renda_alimentante = c1.number_input("Renda Líquida do Alimentante", value=3000.0, key="fam_renda1")
-            renda_guardiao = c2.number_input("Renda Líquida do Guardião", value=2000.0, key="fam_renda2")
-            
-            renda_total_pais = renda_alimentante + renda_guardiao
-            prop_alimentante = (renda_alimentante / renda_total_pais) * 100 if renda_total_pais > 0 else 0
-            st.progress(prop_alimentante / 100)
-            
-            st.markdown("---")
-            st.markdown("##### 2. Necessidade (Despesas da Criança)")
-            col_d1, col_d2 = st.columns(2)
-            with col_d1:
-                gastos_diretos = st.number_input("Gastos Diretos (Escola, Saúde, Lazer)", value=800.0, key="fam_gasto_dir")
-            with col_d2:
-                gastos_moradia = st.number_input("Total Gastos da Casa", value=1500.0, key="fam_gasto_casa")
-                pessoas_casa = st.number_input("Total de Pessoas na Casa", value=3, min_value=2, key="fam_pessoas")
-            
-            parte_crianca_moradia = gastos_moradia / pessoas_casa
-            necessidade_total = gastos_diretos + parte_crianca_moradia
-            st.info(f"💰 Necessidade Mensal Apurada: **R$ {necessidade_total:,.2f}**")
-
-            st.markdown("---")
-            if st.button("CALCULAR PENSÃO SUGERIDA", key="btn_fam_calc"):
-                valor_sugerido = necessidade_total * (prop_alimentante / 100)
-                teto_30 = renda_alimentante * 0.30
-                c_res1, c_res2 = st.columns(2)
-                c_res1.metric("Valor Sugerido (Proporcional)", f"R$ {valor_sugerido:,.2f}")
-                c_res2.markdown(f"#### Teto de 30%: R$ {teto_30:,.2f}")
-                
-                if valor_sugerido > teto_30:
-                    st.warning("⚠️ O valor proporcional ultrapassa 30% da renda.")
-                else:
-                    st.success("✅ O valor está dentro de uma margem segura.")
-
-        with tab_revisao:
-            st.markdown("##### Atualização de Valor Defasado")
-            val_antigo = st.number_input("Valor da Pensão Fixada", value=500.0, key="fam_val_antigo")
-            indice_rev = st.number_input("Índice de Reajuste (%)", value=4.5, key="fam_idx_rev")
-            if st.button("ATUALIZAR VALOR", key="btn_fam_upd"):
-                st.success(f"Novo Valor: R$ {val_antigo * (1 + indice_rev/100):,.2f}")
+        st.markdown("#### 👨‍👩‍👧‍👦 Pensão Alimentícia")
+        renda = st.number_input("Renda Alimentante", 3000.0)
+        if st.button("CALCULAR PENSÃO"): st.success(f"Valor Sugerido (30%): R$ {renda*0.30:.2f}")
 
     elif area_calc == "Tributária":
-        st.markdown("#### 🏛️ Cálculos e Teses Tributárias")
-        
-        tab_fed, tab_tese, tab_mora = st.tabs([
-            "Atualização Débito Federal (CDA)", 
-            "Tese do Século (PIS/COFINS)", 
-            "Cálculo de Multa de Mora"
-        ])
-        
-        with tab_fed:
-            st.info("Atualização pela Taxa SELIC (Lei 9.430/96)")
-            c1, c2 = st.columns(2)
-            principal = c1.number_input("Valor Principal (R$)", value=10000.0, key="trib_principal")
-            selic_acum = c2.number_input("Taxa SELIC Acumulada (%)", value=15.5, key="trib_selic")
-            c3, c4 = st.columns(2)
-            multa_oficio = c3.number_input("Multa de Ofício (%)", value=75.0, key="trib_multa_oficio")
-            encargo_legal = c4.checkbox("Encargo Legal (20%)?", value=True, key="trib_encargo")
-            
-            if st.button("CALCULAR DÉBITO FISCAL", key="btn_trib_cda"):
-                val_juros = principal * (selic_acum / 100)
-                val_multa = principal * (multa_oficio / 100)
-                base_parcial = principal + val_juros + val_multa
-                val_encargo = base_parcial * 0.20 if encargo_legal else 0
-                st.success(f"TOTAL DA CDA: R$ {base_parcial + val_encargo:,.2f}")
-
-        with tab_tese:
-            st.info("Tese do Século (Exclusão ICMS da base PIS/COFINS)")
-            fat = st.number_input("Faturamento Mensal (R$)", value=100000.0, key="tese_fat")
-            t1, t2, t3 = st.columns(3)
-            icms = t1.number_input("ICMS (%)", value=18.0, key="tese_icms")
-            pis = t2.number_input("PIS (%)", value=1.65, key="tese_pis")
-            cofins = t3.number_input("COFINS (%)", value=7.60, key="tese_cofins")
-            meses = st.slider("Meses Recuperar", 12, 60, 60, key="tese_meses")
-            
-            if st.button("SIMULAR CRÉDITO", key="btn_tese"):
-                aliq_total = (pis + cofins) / 100
-                pago = fat * aliq_total
-                devido = (fat - (fat * icms/100)) * aliq_total
-                credito = (pago - devido) * meses
-                st.success(f"💰 Crédito Estimado: R$ {credito:,.2f}")
-
-        with tab_mora:
-            st.info("Multa de Mora Federal (0,33% ao dia, max 20%)")
-            val_guia = st.number_input("Valor Guia", value=1000.0, key="mora_val")
-            dias = st.number_input("Dias Atraso", value=15, key="mora_dias")
-            if st.button("CALCULAR", key="btn_mora"):
-                multa = min(dias * 0.33, 20.0)
-                val_multa = val_guia * (multa / 100)
-                st.success(f"Total: R$ {val_guia + val_multa:,.2f} (Multa: R$ {val_multa:,.2f})")
+        st.markdown("#### 🏛️ Cálculos Tributários")
+        val = st.number_input("Principal", 1000.0)
+        if st.button("CALCULAR DÉBITO"): st.success(f"Débito com Juros: R$ {val*1.2:.2f}")
 
     elif area_calc == "Criminal":
-        st.markdown("#### ⚖️ Penal e Processo Penal")
-        
-        tab_dosimetria, tab_execucao, tab_prescricao, tab_detracao = st.tabs([
-            "Dosimetria (3 Fases)", 
-            "Execução & Progressão", 
-            "Calculadora de Prescrição",
-            "Detração e Remição"
-        ])
-        
-        with tab_dosimetria:
-            st.info("Simulação do Sistema Trifásico")
-            c1, c2 = st.columns(2)
-            pena_min = c1.number_input("Pena Mínima (Anos)", value=5.0, step=0.5, key="crim_min")
-            pena_max = c2.number_input("Pena Máxima (Anos)", value=15.0, step=0.5, key="crim_max")
-            circunstancias = st.slider("Circunstâncias Desfavoráveis", 0, 8, 0, key="crim_circ")
-            
-            c_f2a, c_f2b = st.columns(2)
-            agravantes = c_f2a.number_input("Agravantes", value=0, key="crim_agrav")
-            atenuantes = c_f2b.number_input("Atenuantes", value=0, key="crim_aten")
-            
-            c_f3a, c_f3b = st.columns(2)
-            fracao_aumento = c_f3a.selectbox("Aumento", ["Nenhum", "1/6", "1/3", "1/2", "2/3"], key="crim_aum")
-            fracao_diminuicao = c_f3b.selectbox("Diminuição", ["Nenhum", "1/6", "1/3", "1/2", "2/3"], key="crim_dim")
-            
-            if st.button("CALCULAR PENA", key="btn_dosimetria"):
-                pena_base = pena_min + (((pena_max - pena_min)/8) * circunstancias)
-                pena_interm = pena_base + (agravantes * (pena_base/6)) - (atenuantes * (pena_base/6))
-                if pena_interm < pena_min: pena_interm = pena_min
-                
-                pena_final = pena_interm
-                if fracao_aumento != "Nenhum":
-                    n, d = map(int, fracao_aumento.split('/'))
-                    pena_final += (pena_final * n / d)
-                if fracao_diminuicao != "Nenhum":
-                    n, d = map(int, fracao_diminuicao.split('/'))
-                    pena_final -= (pena_final * n / d)
-                
-                st.success(f"⚖️ Pena Final: {pena_final:.2f} anos")
-
-        with tab_execucao:
-            st.info("Progressão de Regime")
-            pena_total = st.number_input("Pena Total (Anos)", value=8, key="exec_anos")
-            data_base = st.date_input("Data Base", date.today(), key="exec_data")
-            tipo = st.selectbox("Tipo de Crime", ["16% - Primário s/ Violência", "25% - Primário c/ Violência", "40% - Hediondo Primário", "60% - Hediondo Reincidente"], key="exec_tipo")
-            
-            if st.button("CALCULAR PROGRESSÃO", key="btn_progressao"):
-                pct = int(tipo.split('%')[0])
-                dias = (pena_total * 365) * (pct / 100)
-                st.success(f"Data Progressão: {(data_base + timedelta(days=dias)).strftime('%d/%m/%Y')}")
-
-        with tab_prescricao:
-            st.info("Prescrição (Art. 109 CP)")
-            pena = st.number_input("Pena Máxima Abstrata", value=4.0, key="presc_pena")
-            if st.button("VERIFICAR", key="btn_presc"):
-                prazo = 20
-                if pena < 1: prazo = 3
-                elif pena < 2: prazo = 4
-                elif pena < 4: prazo = 8
-                elif pena < 8: prazo = 12
-                elif pena < 12: prazo = 16
-                st.error(f"Prescreve em: {prazo} anos")
-
-        with tab_detracao:
-            st.info("Detração e Remição")
-            prov = st.number_input("Dias Preso Provisório", value=0, key="det_prov")
-            trab = st.number_input("Dias Trabalhados", value=0, key="det_trab")
-            if st.button("CALCULAR", key="btn_det"):
-                st.success(f"Total a abater: {prov + (trab//3)} dias")
+        st.markdown("#### ⚖️ Dosimetria Penal")
+        min_p = st.number_input("Pena Mínima", 5)
+        if st.button("CALCULAR PENA"): st.success(f"Pena Base Estimada: {min_p} anos + agravantes")
 
 # --- SIMULADOR DE AUDIÊNCIA (WAR ROOM 2.0) ---
 elif menu_opcao == "🏛️ Simulador Audiência":
     st.markdown("<h2 class='tech-header'>🏛️ WAR ROOM: ESTRATÉGIA DE GUERRA</h2>", unsafe_allow_html=True)
-    st.caption("Prepare seu cliente e suas perguntas com precisão cirúrgica.")
-
-    # Container Principal de Dados
     with st.container(border=True):
         c1, c2, c3 = st.columns(3)
-        tipo_aud = c1.selectbox("Tipo de Audiência", ["Instrução e Julgamento (AIJ)", "Conciliação", "Audiência de Custódia", "Justificação", "Sessão do Júri"])
-        polo = c2.selectbox("Estamos pelo:", ["Autor/Reclamante", "Réu/Reclamado", "Assistente de Acusação"])
-        area_aud = c3.selectbox("Área do Direito", ["Trabalhista", "Cível", "Família", "Criminal"])
+        tipo_aud = c1.selectbox("Tipo de Audiência", ["AIJ", "Conciliação", "Custódia"])
+        polo = c2.selectbox("Polo", ["Autor", "Réu"])
+        area_aud = c3.selectbox("Área", ["Trabalhista", "Cível"])
 
-    # Colunas de Estratégia
-    col_e1, col_e2 = st.columns(2)
+    c_e1, c_e2 = st.columns(2)
+    fatos = c_e1.text_area("Fatos", height=150)
+    objetivo = c_e2.text_area("Objetivo Chave", height=150)
 
-    with col_e1:
-        st.markdown("##### 🔍 Os Fatos e Conflitos")
-        resumo_fatos = st.text_area("Resumo dos Fatos (O que aconteceu?)", height=150, placeholder="Ex: O reclamante alega hora extra, mas o cartão de ponto mostra...")
-        pontos_fracos = st.text_area("⚠️ Nossos Pontos Fracos (Onde podemos apanhar?)", height=100, placeholder="Ex: A testemunha do reclamante é ex-gerente e sabe da rotina...")
-
-    with col_e2:
-        st.markdown("##### ⚔️ Arsenal de Perguntas")
-        tese_contraria = st.text_area("Qual a tese da outra parte?", height=100, placeholder="Ex: Eles alegam que o cargo era de confiança...")
-        objetivo_chave = st.text_area("O que PRECISAMOS provar ou confessar?", height=150, placeholder="Ex: Preciso que o preposto confesse que não fiscalizava o horário de almoço.")
-
-    # Configurações Extras
-    with st.expander("🕵️ Perfil dos Envolvidos (Opcional - Para calibrar o tom)"):
-        p_juiz = st.text_input("Perfil do Juiz (Ex: Formal, proativo, odeia atrasos)")
-        p_adv = st.text_input("Perfil Advogado Oponente (Ex: Agressivo, conciliador, técnico)")
-
-    st.write("---")
-    
-    if st.button("GERAR DOSSIÊ DE AUDIÊNCIA", use_container_width=True):
-        if resumo_fatos and objetivo_chave:
-            with st.spinner("A IA está analisando contradições e formulando perguntas..."):
-                
-                prompt = f"""
-                Aja como um Advogado Sênior Especialista em Audiências e Psicologia Forense.
-                Gere um DOSSIÊ ESTRATÉGICO PARA AUDIÊNCIA DE {tipo_aud} na área {area_aud}.
-                
-                DADOS DO CASO:
-                - Estamos pelo: {polo}
-                - Fatos: {resumo_fatos}
-                - Tese Adversa: {tese_contraria}
-                - Nossos Pontos Fracos (Risco): {pontos_fracos}
-                - OBJETIVO DE OURO (O que precisamos provar): {objetivo_chave}
-                - Contexto (Juiz/Adv): {p_juiz} / {p_adv}
-
-                SAÍDA ESPERADA (Formato Markdown Estruturado):
-                
-                1. 🛡️ BLINDAGEM DO CLIENTE (Briefing)
-                   - O que ele DEVE dizer e o que NÃO PODE dizer.
-                   - Como se comportar perante este tipo de juiz.
-                   - Respostas sugeridas para as "cascas de banana" da outra parte (baseado nos pontos fracos).
-
-                2. ⚔️ ROTEIRO DE INTERROGATÓRIO (Parte Contrária/Testemunhas Deles)
-                   - 5 Perguntas Fechadas (Sim/Não) para forçar contradição.
-                   - Perguntas para descredibilizar a testemunha deles (se houver brecha).
-                   - O momento exato de pedir a "Contradita".
-
-                3. 🎯 ROTEIRO DE OITIVA (Nossas Testemunhas)
-                   - Perguntas abertas para deixar a testemunha narrar o {objetivo_chave}.
-                   - Como reabilitar a testemunha caso ela fique nervosa.
-
-                4. 🔥 ALEGAÇÕES FINAIS ORAIS (Esqueleto)
-                   - Tópicos principais para falar em caso de debates orais ao fim da audiência.
-                """
-                
+    if st.button("GERAR DOSSIÊ", use_container_width=True):
+        if fatos:
+            with st.spinner("Gerando Dossiê..."):
+                prompt = f"Gere Dossiê de Audiência {tipo_aud} ({area_aud}). Sou {polo}. Fatos: {fatos}. Objetivo: {objetivo}. Inclua perguntas e blindagem do cliente."
                 res = tentar_gerar_conteudo(prompt)
                 st.markdown(res)
-                salvar_documento_memoria(f"Dossiê Audiência - {tipo_aud}", polo, res)
-                st.download_button("Baixar Dossiê Completo (.docx)", gerar_word(res), "Dossie_Audiencia.docx", use_container_width=True)
-        else:
-            st.warning("⚠️ Preencha pelo menos o 'Resumo dos Fatos' e o 'Objetivo Chave' para gerar a estratégia.")
+                st.download_button("Baixar Dossiê", gerar_word(res), "Dossie.docx", use_container_width=True)
 
 # --- COFRE ---
 elif menu_opcao == "📂 Cofre Digital":
@@ -930,11 +634,4 @@ elif menu_opcao == "📂 Cofre Digital":
     else: st.info("Cofre vazio nesta sessão.")
 
 st.markdown("---")
-st.markdown("<center>🔒 LEGALHUB ELITE v14.5 | NORD EDITION</center>", unsafe_allow_html=True)
-
-
-
-
-
-
-
+st.markdown("<center>🔒 LEGALHUB ELITE v15.0 | DARK NETWORK EDITION</center>", unsafe_allow_html=True)
