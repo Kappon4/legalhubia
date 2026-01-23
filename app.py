@@ -857,7 +857,7 @@ elif menu_opcao == "🏛️ Simulador Audiência":
 
     st.write("---")
     
-    if st.button("GERAR DOSSIÊ DE AUDIÊNCIA (IA 2.5)", use_container_width=True):
+    if st.button("GERAR DOSSIÊ DE AUDIÊNCIA", use_container_width=True):
         if resumo_fatos and objetivo_chave:
             with st.spinner("A IA está analisando contradições e formulando perguntas..."):
                 
@@ -912,6 +912,7 @@ elif menu_opcao == "📂 Cofre Digital":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v14.5 | NORD EDITION</center>", unsafe_allow_html=True)
+
 
 
 
