@@ -436,7 +436,7 @@ elif menu_opcao == "📜 Contratos":
         val = c_val.number_input("Valor Honorários (R$)", step=100.0, format="%.2f")
         forma_pag = c_forma.text_input("Forma de Pagamento (Ex: À vista / 3x no cartão)")
 
-    if st.button("GERAR CONTRATO (MODO 2.5)", use_container_width=True):
+    if st.button("GERAR CONTRATO", use_container_width=True):
         if nome and cpf and obj:
             with st.spinner("Redigindo com Gemini 2.5..."):
                 qualificacao = f"{nome}, {nacionalidade}, {est_civil}, {prof}, portador do RG nº {rg} e CPF nº {cpf}, residente e domiciliado em {end}, CEP {cep}, e-mail {email}"
@@ -798,4 +798,5 @@ elif menu_opcao == "📂 Cofre Digital":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v14.5 | NORD EDITION</center>", unsafe_allow_html=True)
+
 
