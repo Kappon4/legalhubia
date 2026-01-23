@@ -178,31 +178,91 @@ def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_f
     
     return verbas
 
+Aqui está o código CSS atualizado para aplicar a paleta que você escolheu (estilo "Nord/Sálvia"), focada em conforto visual para longas horas de trabalho.
+
+Substitua a função local_css() inteira (por volta da linha 200 no seu código atual) por esta versão:
+
+Python
+
 # ==========================================================
-# 6. CSS VISUAL
+# 6. CSS VISUAL (PALETA CONFORTÁVEL - NORD/SÁLVIA)
 # ==========================================================
 def local_css():
-    bg_image_b64 = get_base64_of_bin_file("unnamed.jpg")
-    bg_css = f"""
-    .stApp::before {{
-        content: ""; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-        width: 60%; height: 60%; background-image: url("data:image/jpeg;base64,{bg_image_b64}");
-        background-size: contain; background-repeat: no-repeat; background-position: center;
-        opacity: 0.08; z-index: 0; pointer-events: none; animation: float-logo 15s ease-in-out infinite;
-    }}
-    @keyframes float-logo {{ 0%, 100% {{ transform: translate(-50%, -50%) translateY(0px); }} 50% {{ transform: translate(-50%, -50%) translateY(-20px); }} }}
-    """ if bg_image_b64 else ""
+    # Removemos a imagem de fundo para garantir o conforto visual da cor sólida
+    bg_css = "" 
     
     st.markdown(f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;500;700&family=Inter:wght@300;400;600&display=swap');
-        :root {{ --bg-dark: #020617; --neon-blue: #00F3FF; --neon-red: #FF0055; --text-main: #FFFFFF; --bg-card: rgba(15, 23, 42, 0.6); }}
-        .stApp {{ background-color: var(--bg-dark); color: var(--text-main); font-family: 'Inter'; }}
-        {bg_css}
-        h1, h2, h3, h4, h5, h6 {{ font-family: 'Rajdhani'; color: #FFF !important; text-transform: uppercase; letter-spacing: 1.5px; z-index: 1; position: relative; }}
-        .tech-header {{ background: linear-gradient(90deg, #FFF, var(--neon-blue)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 700; }}
-        .stButton>button {{ border: 1px solid var(--neon-blue); color: var(--neon-blue); background: transparent; width: 100%; font-family: 'Rajdhani'; letter-spacing: 1px; transition: 0.3s; }}
-        .stButton>button:hover {{ background: var(--neon-blue); color: #000; box-shadow: 0 0 15px var(--neon-blue); border: 1px solid var(--neon-blue); }}
+        
+        /* --- DEFINIÇÃO DA PALETA (Baseada no Nord & Sálvia) --- */
+        :root {{
+            --bg-dark: #2E3440;       /* Nord Polar Night (Fundo Principal - Conforto) */
+            --bg-card: #3B4252;       /* Nord Polar Night Lighter (Cards) */
+            --text-main: #ECEFF4;     /* Nord Snow Storm (Texto Leitura - não é branco puro) */
+            --highlight: #8FBC8F;     /* Verde Sálvia (Destaques e Botões) */
+            --accent: #88C0D0;        /* Nord Frost (Detalhes secundários) */
+        }}
+
+        /* Aplicação Geral */
+        .stApp {{
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+        }}
+
+        /* Cabeçalhos */
+        h1, h2, h3, h4, h5, h6 {{
+            font-family: 'Rajdhani', sans-serif;
+            color: var(--text-main) !important;
+            letter-spacing: 1px;
+        }}
+
+        /* Títulos Tecnológicos (Destaque Sálvia) */
+        .tech-header {{
+            background: linear-gradient(90deg, var(--text-main), var(--highlight));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 700;
+        }}
+
+        /* Subtítulo do Logo */
+        .header-logo p {{
+            color: var(--highlight) !important; /* Verde Sálvia no subtítulo */
+        }}
+
+        /* Botões (Estilo Sálvia Fosco) */
+        .stButton>button {{
+            border: 1px solid var(--highlight);
+            color: var(--highlight);
+            background: transparent;
+            width: 100%;
+            font-family: 'Rajdhani', sans-serif;
+            letter-spacing: 1px;
+            transition: 0.3s;
+            border-radius: 8px; /* Bordas mais suaves */
+        }}
+
+        .stButton>button:hover {{
+            background: var(--highlight);
+            color: #2E3440; /* Texto escuro no hover para contraste */
+            border: 1px solid var(--highlight);
+            box-shadow: 0 0 10px rgba(143, 188, 143, 0.3); /* Brilho suave verde */
+        }}
+
+        /* Containers e Cards */
+        [data-testid="stVerticalBlock"] > [data-testid="stVerticalBlock"] {{
+            background-color: var(--bg-card);
+            border-radius: 10px;
+            padding: 10px;
+        }}
+        
+        /* Inputs e Caixas de Texto (Fundo Confortável) */
+        .stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div>div {{
+            background-color: #434C5E; /* Um pouco mais claro que o fundo */
+            color: #ECEFF4;
+            border: 1px solid #4C566A;
+        }}
     </style>
     """, unsafe_allow_html=True)
 local_css()
@@ -763,6 +823,7 @@ elif menu_opcao == "📂 Cofre Digital":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v10.0 | GEMINI 2.0 EXCLUSIVE</center>", unsafe_allow_html=True)
+
 
 
 
