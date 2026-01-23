@@ -825,19 +825,80 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
             if st.button("CALCULAR", key="btn_det"):
                 st.success(f"Total a abater: {prov + (trab//3)} dias")
 
-# --- SIMULADOR DE AUDIÊNCIA ---
+# --- SIMULADOR DE AUDIÊNCIA (WAR ROOM 2.0) ---
 elif menu_opcao == "🏛️ Simulador Audiência":
-    st.markdown("<h2 class='tech-header'>🏛️ WAR ROOM: ESTRATÉGIA DE AUDIÊNCIA</h2>", unsafe_allow_html=True)
-    contexto = st.text_area("Resumo do conflito:", height=300)
+    st.markdown("<h2 class='tech-header'>🏛️ WAR ROOM: ESTRATÉGIA DE GUERRA</h2>", unsafe_allow_html=True)
+    st.caption("Prepare seu cliente e suas perguntas com precisão cirúrgica.")
+
+    # Container Principal de Dados
+    with st.container(border=True):
+        c1, c2, c3 = st.columns(3)
+        tipo_aud = c1.selectbox("Tipo de Audiência", ["Instrução e Julgamento (AIJ)", "Conciliação", "Audiência de Custódia", "Justificação", "Sessão do Júri"])
+        polo = c2.selectbox("Estamos pelo:", ["Autor/Reclamante", "Réu/Reclamado", "Assistente de Acusação"])
+        area_aud = c3.selectbox("Área do Direito", ["Trabalhista", "Cível", "Família", "Criminal"])
+
+    # Colunas de Estratégia
+    col_e1, col_e2 = st.columns(2)
+
+    with col_e1:
+        st.markdown("##### 🔍 Os Fatos e Conflitos")
+        resumo_fatos = st.text_area("Resumo dos Fatos (O que aconteceu?)", height=150, placeholder="Ex: O reclamante alega hora extra, mas o cartão de ponto mostra...")
+        pontos_fracos = st.text_area("⚠️ Nossos Pontos Fracos (Onde podemos apanhar?)", height=100, placeholder="Ex: A testemunha do reclamante é ex-gerente e sabe da rotina...")
+
+    with col_e2:
+        st.markdown("##### ⚔️ Arsenal de Perguntas")
+        tese_contraria = st.text_area("Qual a tese da outra parte?", height=100, placeholder="Ex: Eles alegam que o cargo era de confiança...")
+        objetivo_chave = st.text_area("O que PRECISAMOS provar ou confessar?", height=150, placeholder="Ex: Preciso que o preposto confesse que não fiscalizava o horário de almoço.")
+
+    # Configurações Extras
+    with st.expander("🕵️ Perfil dos Envolvidos (Opcional - Para calibrar o tom)"):
+        p_juiz = st.text_input("Perfil do Juiz (Ex: Formal, proativo, odeia atrasos)")
+        p_adv = st.text_input("Perfil Advogado Oponente (Ex: Agressivo, conciliador, técnico)")
+
+    st.write("---")
     
-    if st.button("GERAR ESTRATÉGIA DE GUERRA (2.5)", use_container_width=True):
-        if contexto:
-            with st.spinner("IA formulando estratégia..."):
-                prompt = f"Advogado Sênior. Gere estratégia de audiência para: {contexto}. Inclua teses, perguntas e riscos."
+    if st.button("GERAR DOSSIÊ DE AUDIÊNCIA (IA 2.5)", use_container_width=True):
+        if resumo_fatos and objetivo_chave:
+            with st.spinner("A IA está analisando contradições e formulando perguntas..."):
+                
+                prompt = f"""
+                Aja como um Advogado Sênior Especialista em Audiências e Psicologia Forense.
+                Gere um DOSSIÊ ESTRATÉGICO PARA AUDIÊNCIA DE {tipo_aud} na área {area_aud}.
+                
+                DADOS DO CASO:
+                - Estamos pelo: {polo}
+                - Fatos: {resumo_fatos}
+                - Tese Adversa: {tese_contraria}
+                - Nossos Pontos Fracos (Risco): {pontos_fracos}
+                - OBJETIVO DE OURO (O que precisamos provar): {objetivo_chave}
+                - Contexto (Juiz/Adv): {p_juiz} / {p_adv}
+
+                SAÍDA ESPERADA (Formato Markdown Estruturado):
+                
+                1. 🛡️ BLINDAGEM DO CLIENTE (Briefing)
+                   - O que ele DEVE dizer e o que NÃO PODE dizer.
+                   - Como se comportar perante este tipo de juiz.
+                   - Respostas sugeridas para as "cascas de banana" da outra parte (baseado nos pontos fracos).
+
+                2. ⚔️ ROTEIRO DE INTERROGATÓRIO (Parte Contrária/Testemunhas Deles)
+                   - 5 Perguntas Fechadas (Sim/Não) para forçar contradição.
+                   - Perguntas para descredibilizar a testemunha deles (se houver brecha).
+                   - O momento exato de pedir a "Contradita".
+
+                3. 🎯 ROTEIRO DE OITIVA (Nossas Testemunhas)
+                   - Perguntas abertas para deixar a testemunha narrar o {objetivo_chave}.
+                   - Como reabilitar a testemunha caso ela fique nervosa.
+
+                4. 🔥 ALEGAÇÕES FINAIS ORAIS (Esqueleto)
+                   - Tópicos principais para falar em caso de debates orais ao fim da audiência.
+                """
+                
                 res = tentar_gerar_conteudo(prompt)
                 st.markdown(res)
-                salvar_documento_memoria("Estratégia", "Audiência", res)
-                st.download_button("Baixar Roteiro", gerar_word(res), "Roteiro.docx")
+                salvar_documento_memoria(f"Dossiê Audiência - {tipo_aud}", polo, res)
+                st.download_button("Baixar Dossiê Completo (.docx)", gerar_word(res), "Dossie_Audiencia.docx", use_container_width=True)
+        else:
+            st.warning("⚠️ Preencha pelo menos o 'Resumo dos Fatos' e o 'Objetivo Chave' para gerar a estratégia.")
 
 # --- COFRE ---
 elif menu_opcao == "📂 Cofre Digital":
@@ -851,6 +912,7 @@ elif menu_opcao == "📂 Cofre Digital":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v14.5 | NORD EDITION</center>", unsafe_allow_html=True)
+
 
 
 
