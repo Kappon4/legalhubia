@@ -238,7 +238,15 @@ with col_logo:
     """, unsafe_allow_html=True)
     
 with col_menu:
-    mapa_nav = {"Dashboard": "📊 Dashboard", "Redator IA": "✍️ Redator Jurídico", "Contratos": "📜 Contratos", "Calculos": "🧮 Cálculos Jurídicos", "Audiência": "🏛️ Simulador Audiência", "Gestão Casos": "📂 Cofre Digital"}
+    # Atualizei a chave "Redator IA" para "Petições Inteligentes" e o valor correspondente
+    mapa_nav = {
+        "Dashboard": "📊 Dashboard", 
+        "Petições Inteligentes": "✍️ Petições Inteligentes", 
+        "Contratos": "📜 Contratos", 
+        "Calculos": "🧮 Cálculos Jurídicos", 
+        "Audiência": "🏛️ Simulador Audiência", 
+        "Gestão Casos": "📂 Cofre Digital"
+    }
     opcoes_menu = list(mapa_nav.keys())
     idx_radio = 0
     if st.session_state.navegacao_override:
@@ -269,25 +277,19 @@ if menu_opcao == "📊 Dashboard":
         with st.container(border=True):
             st.markdown("#### ✍️ Petições Inteligentes")
             st.caption("Geração de peças processuais complexas (Iniciais, Contestação, Recursos) baseadas nos fatos e na melhor fundamentação jurídica.")
-            if st.button("ABRIR REDATOR", use_container_width=True): 
-                st.session_state.navegacao_override = "✍️ Redator Jurídico"
-                st.rerun()
+            # Botão removido aqui
 
     with c2:
         with st.container(border=True):
             st.markdown("#### 🏛️ Preparação Audiência")
             st.caption("Simulador estratégico que cria perguntas para interrogatório, prevê teses da parte contrária e aponta riscos do caso.")
-            if st.button("ABRIR SIMULADOR", use_container_width=True): 
-                st.session_state.navegacao_override = "🏛️ Simulador Audiência"
-                st.rerun()
+            # Botão removido aqui
 
     with c3:
         with st.container(border=True):
             st.markdown("#### 📜 Fábrica de Contratos")
             st.caption("Elaboração automática de contratos, procurações e documentos extrajudiciais personalizados com cláusulas de segurança.")
-            if st.button("CRIAR CONTRATO", use_container_width=True): 
-                st.session_state.navegacao_override = "📜 Contratos"
-                st.rerun()
+            # Botão removido aqui
 
     # --- LINHA 2 ---
     st.write("")
@@ -297,21 +299,19 @@ if menu_opcao == "📊 Dashboard":
         with st.container(border=True):
             st.markdown("#### 🧮 Cálculos Jurídicos")
             st.caption("Calculadoras precisas para Rescisão Trabalhista, Atualização Cível (TJ), Pensão Alimentícia e Dosimetria Penal.")
-            if st.button("CALCULAR AGORA", use_container_width=True): 
-                st.session_state.navegacao_override = "🧮 Cálculos Jurídicos"
-                st.rerun()
+            # Botão removido aqui
 
     with c5:
         with st.container(border=True):
             st.markdown("#### 🧠 Análise de Autos (PDF)")
             st.caption("O sistema lê seus arquivos PDF (Processos, Sentenças) e extrai automaticamente os fatos relevantes para usar nas peças.")
-            st.info("Disponível dentro do Redator")
+            # Info box removida aqui
 
     with c6:
         with st.container(border=True):
             st.markdown("#### ⚖️ Jurisprudência Real")
             st.caption("Conexão direta com a base de dados dos Tribunais Superiores para encontrar julgados que fundamentam sua tese.")
-            st.info("Integrado na Geração de Peças")
+            # Info box removida aqui
 
 # --- PETIÇÕES INTELIGENTES ---
 elif menu_opcao == "✍️ Redator Jurídico":
@@ -763,6 +763,7 @@ elif menu_opcao == "📂 Cofre Digital":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v10.0 | GEMINI 2.0 EXCLUSIVE</center>", unsafe_allow_html=True)
+
 
 
 
