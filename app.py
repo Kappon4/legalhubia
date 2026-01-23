@@ -188,7 +188,6 @@ Python
 # 6. CSS VISUAL (PALETA CONFORTÁVEL - NORD/SÁLVIA)
 # ==========================================================
 def local_css():
-    # Removemos a imagem de fundo para garantir o conforto visual da cor sólida
     bg_css = "" 
     
     st.markdown(f"""
@@ -823,6 +822,7 @@ elif menu_opcao == "📂 Cofre Digital":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v10.0 | GEMINI 2.0 EXCLUSIVE</center>", unsafe_allow_html=True)
+
 
 
 
