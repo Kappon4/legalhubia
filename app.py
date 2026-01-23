@@ -592,21 +592,24 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
 
         if st.button("CALCULAR RESCISÃO", use_container_width=True):
             if dem > adm:
-                # Chama a função robusta (certifique-se que a função 'calcular_rescisao_clt' está no início do arquivo)
                 try:
+                    # Chama a função robusta
                     v = calcular_rescisao_clt(adm, dem, sal, motivo, fgts, ferias_venc, aviso, insal, peric)
                     
                     st.markdown("### 🧾 Resultado Detalhado")
-                    st.table(pd.DataFrame(list(v.items()), columns=["Verba Rescisória", "Valor (R$)"]))
+                    # Cria tabela formatada
+                    df_res = pd.DataFrame(list(v.items()), columns=["Verba Rescisória", "Valor (R$)"])
+                    st.dataframe(df_res.style.format({"Valor (R$)": "R$ {:,.2f}"}), use_container_width=True, hide_index=True)
                     
                     total = sum(v.values())
                     st.markdown(f"""
-                    <div style='background-color: rgba(0, 243, 255, 0.15); border: 1px solid #00F3FF; border-radius: 8px; padding: 15px; text-align: center;'>
+                    <div style='background-color: rgba(0, 243, 255, 0.15); border: 1px solid #00F3FF; border-radius: 8px; padding: 15px; text-align: center; margin-top: 10px;'>
                         <h2 style='color: #00F3FF; margin:0;'>TOTAL LÍQUIDO ESTIMADO: R$ {total:,.2f}</h2>
+                        <p style='color: #aaa; font-size: 0.8rem; margin:0;'>*Valores brutos antes de descontos legais (INSS/IRRF).</p>
                     </div>
                     """, unsafe_allow_html=True)
                 except NameError:
-                    st.error("Erro: A função de cálculo atualizada 'calcular_rescisao_clt' não foi encontrada. Verifique se copiou as funções utilitárias no início do código.")
+                    st.error("Erro Técnico: A função 'calcular_rescisao_clt' não foi encontrada no topo do código.")
             else:
                 st.warning("A data de demissão deve ser posterior à admissão.")
 
@@ -626,7 +629,6 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
             c1, c2 = st.columns(2)
             val_origem = c1.number_input("Valor Original", value=1000.0, format="%.2f", key="civ_val")
             data_inicio = c2.date_input("Data do Evento", date(2023, 1, 1), key="civ_data")
-            
             c3, c4, c5 = st.columns(3)
             indice = c3.number_input("Índice Acumulado (Ex: 1.05)", value=1.0, step=0.01)
             juros_tipo = c4.selectbox("Juros de Mora", ["1% a.m.", "0.5% a.m.", "Selic"])
@@ -635,54 +637,44 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
             if st.button("CALCULAR DÍVIDA", key="btn_civ"):
                 meses = (date.today() - data_inicio).days // 30
                 val_corr = val_origem * indice
-                
-                val_juros = 0
-                if juros_tipo == "1% a.m.": val_juros = val_corr * (0.01 * meses)
-                elif juros_tipo == "Selic": val_juros = val_corr * 0.15 # Estimativa
-                
+                val_juros = val_corr * (0.01 * meses) if juros_tipo == "1% a.m." else val_corr * 0.15
                 val_multa = val_corr * (multa_pct / 100)
                 total = val_corr + val_juros + val_multa
-                
                 st.success(f"Total Atualizado: R$ {total:,.2f}")
-                st.caption(f"Principal: R$ {val_corr:.2f} | Juros ({meses}m): R$ {val_juros:.2f} | Multa: R$ {val_multa:.2f}")
 
         with tab_banco:
-            st.info("Simulação Price vs Gauss (Revisional)")
+            st.info("Simulação Price vs Gauss")
             b1, b2 = st.columns(2)
             valor_fin = b1.number_input("Valor Financiado", value=50000.0)
             taxa = b2.number_input("Taxa Mensal (%)", value=1.5)
             prazo = st.number_input("Parcelas", value=60)
-            
             if st.button("SIMULAR REVISIONAL"):
                 i = taxa/100
                 price = valor_fin * (i * (1+i)**prazo) / ((1+i)**prazo - 1)
                 gauss = (valor_fin * ((prazo * i) + 1)) / prazo
                 st.metric("Parcela Banco (Price)", f"R$ {price:.2f}")
-                st.metric("Parcela Justa (Gauss)", f"R$ {gauss:.2f}", delta=f"Economia: R$ {price-gauss:.2f}/mês")
+                st.metric("Parcela Justa (Gauss)", f"R$ {gauss:.2f}", delta=f"Economia: R$ {price-gauss:.2f}")
 
         with tab_imob:
-            st.info("Reajuste de Aluguel (IGPM/IPCA)")
+            st.info("Reajuste de Aluguel")
             val_aluguel = st.number_input("Valor Aluguel", value=2000.0)
-            idx = st.number_input("Índice Acumulado (%)", value=4.5)
-            if st.button("REAJUSTAR"):
-                st.success(f"Novo Aluguel: R$ {val_aluguel * (1 + idx/100):,.2f}")
+            idx = st.number_input("Índice (%)", value=4.5)
+            if st.button("REAJUSTAR"): st.success(f"Novo Aluguel: R$ {val_aluguel * (1 + idx/100):,.2f}")
 
         with tab_causa:
-            st.info("Valor da Causa (Dano Moral + Material)")
+            st.info("Valor da Causa")
             mat = st.number_input("Dano Material", value=0.0)
             mor = st.number_input("Dano Moral", value=0.0)
-            if st.button("SOMAR CAUSA"):
-                st.success(f"Valor da Causa: R$ {mat+mor:,.2f}")
+            if st.button("SOMAR CAUSA"): st.success(f"Valor da Causa: R$ {mat+mor:,.2f}")
 
         with tab_hon:
             st.info("Calculadora de Honorários")
             base = st.number_input("Base de Cálculo", value=10000.0)
             pct = st.number_input("% Honorários", value=20.0)
-            if st.button("CALCULAR HONORÁRIOS"):
-                st.success(f"Honorários: R$ {base * (pct/100):,.2f}")
+            if st.button("CALCULAR HONORÁRIOS"): st.success(f"Honorários: R$ {base * (pct/100):,.2f}")
 
     elif area_calc == "Família":
-        st.markdown("#### 👨‍👩‍👧‍👦 Pensão Alimentícia (Trinômio)")
+        st.markdown("#### 👨‍👩‍👧‍👦 Pensão Alimentícia")
         
         tab_fix, tab_rev = st.tabs(["Fixação", "Revisão"])
         with tab_fix:
@@ -692,8 +684,7 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
             gastos = st.number_input("Gastos Totais da Criança", value=1000.0)
             
             if st.button("CALCULAR SUGESTÃO"):
-                sugestao_renda = renda * 0.30 # Teto jurisprudencial comum
-                por_filho = sugestao_renda / filhos if filhos > 0 else 0
+                sugestao_renda = renda * 0.30 
                 st.metric("Teto Sugerido (30% Renda)", f"R$ {sugestao_renda:,.2f}")
                 st.info(f"Isso cobriria {(sugestao_renda/gastos)*100:.1f}% dos gastos informados.")
 
@@ -714,14 +705,14 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
             st.success(f"Total Execução Fiscal: R$ {total:,.2f}")
 
     elif area_calc == "Criminal":
-        st.markdown("#### ⚖️ Dosimetria e Pena")
+        st.markdown("#### ⚖️ Dosimetria Penal")
         
         tab_dos, tab_exec = st.tabs(["Dosimetria", "Execução"])
         with tab_dos:
             c1, c2 = st.columns(2)
             min_p = c1.number_input("Pena Mínima (Anos)", value=5.0)
             max_p = c2.number_input("Pena Máxima (Anos)", value=15.0)
-            circ = st.slider("Circunstâncias Judiciais Desfavoráveis (Fase 1)", 0, 8, 1)
+            circ = st.slider("Circunstâncias Judiciais Desfavoráveis", 0, 8, 1)
             
             if st.button("CALCULAR PENA BASE"):
                 fator = (max_p - min_p) / 8
@@ -771,5 +762,6 @@ elif menu_opcao == "📂 Cofre Digital":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v15.1 | DARK NETWORK EDITION (SAFE)</center>", unsafe_allow_html=True)
+
 
 
