@@ -701,26 +701,107 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
                 tempo = pena_tot * pct
                 st.info(f"Tempo para progressão: {tempo:.2f} anos")
 
-# --- SIMULADOR DE AUDIÊNCIA ---
+# --- SIMULADOR DE AUDIÊNCIA (WAR ROOM PRO) ---
 elif menu_opcao == "🏛️ Simulador Audiência":
     st.markdown("<h2 class='tech-header'>🏛️ WAR ROOM: ESTRATÉGIA DE GUERRA</h2>", unsafe_allow_html=True)
+    st.caption("Análise preditiva de riscos e formulação de perguntas estratégicas.")
+
+    # 1. Upload dos Autos (Fundamental para eficiência)
     with st.container(border=True):
+        st.subheader("📂 1. Análise dos Autos")
+        uploaded_files = st.file_uploader("Arraste as principais peças do processo (Inicial, Contestação, Depoimentos anteriores)", type="pdf", accept_multiple_files=True)
+        
+        texto_autos = ""
+        if uploaded_files:
+            with st.spinner("Processando provas documentais..."):
+                for pdf in uploaded_files:
+                    texto_autos += extrair_texto_pdf(pdf) + "\n\n"
+            st.success(f"✅ {len(uploaded_files)} arquivos processados. A IA usará essas informações.")
+
+    # 2. Configuração Tática
+    with st.container(border=True):
+        st.subheader("⚔️ 2. Configuração Tática")
         c1, c2, c3 = st.columns(3)
-        tipo_aud = c1.selectbox("Tipo de Audiência", ["AIJ", "Conciliação", "Custódia"])
-        polo = c2.selectbox("Polo", ["Autor", "Réu"])
-        area_aud = c3.selectbox("Área", ["Trabalhista", "Cível"])
+        tipo_aud = c1.selectbox("Tipo de Audiência", ["Instrução e Julgamento (AIJ)", "Conciliação", "Justificação", "Audiência de Custódia", "Sessão do Júri"])
+        polo = c2.selectbox("Estamos pelo:", ["Autor/Reclamante", "Réu/Reclamado", "Assistente de Acusação"])
+        area_aud = c3.selectbox("Área do Direito", ["Trabalhista", "Cível", "Família", "Criminal"])
 
-    c_e1, c_e2 = st.columns(2)
-    fatos = c_e1.text_area("Fatos", height=150)
-    objetivo = c_e2.text_area("Objetivo Chave", height=150)
+        # Profiling (Inteligência Humana)
+        with st.expander("🕵️ Profiling & Inteligência (Juiz e Adverso)"):
+            cp1, cp2 = st.columns(2)
+            perfil_juiz = cp1.text_area("Perfil do Juiz", height=70, placeholder="Ex: Formalista, impaciente com atrasos, costuma indeferir perguntas repetitivas...")
+            perfil_adv = cp2.text_area("Perfil Advogado Parte Contrária", height=70, placeholder="Ex: Agressivo, costuma interromper, técnico, conciliador...")
 
-    if st.button("GERAR DOSSIÊ", use_container_width=True):
-        if fatos:
-            with st.spinner("Gerando Dossiê..."):
-                prompt = f"Gere Dossiê de Audiência {tipo_aud} ({area_aud}). Sou {polo}. Fatos: {fatos}. Objetivo: {objetivo}. Inclua perguntas e blindagem do cliente."
+    # 3. Narrativa e Estratégia
+    col_e1, col_e2 = st.columns(2)
+    
+    with col_e1:
+        st.markdown("##### 🔍 Fatos & Pontos Controvertidos")
+        fatos_resumo = st.text_area("Resumo dos Fatos (Se não estiver no PDF)", height=200, placeholder="Descreva brevemente o conflito se não carregou PDF, ou adicione detalhes que não estão nos autos.")
+        
+    with col_e2:
+        st.markdown("##### 🎯 Objetivos & Testemunhas")
+        objetivo_chave = st.text_area("Objetivo de Ouro (O que precisamos provar?)", height=100, placeholder="Ex: Provar que havia subordinação direta; Provar que o dano moral não existiu...")
+        rol_testemunhas = st.text_area("O que nossas testemunhas sabem?", height=70, placeholder="Testemunha 1 viu o acidente; Testemunha 2 trabalhava no mesmo setor...")
+
+    st.write("---")
+
+    if st.button("GERAR DOSSIÊ DE GUERRA (IA 2.5)", use_container_width=True):
+        # Validação mínima
+        has_content = texto_autos or fatos_resumo
+        if has_content and objetivo_chave:
+            with st.spinner("A IA está analisando contradições, formulando perguntas e blindando o cliente..."):
+                
+                # Prompt Avançado "War Room"
+                prompt = f"""
+                ATUE COMO UM ADVOGADO SÊNIOR EXPERT EM ESTRATÉGIA PROCESSUAL E PSICOLOGIA FORENSE.
+                
+                Gere um DOSSIÊ ESTRATÉGICO PARA AUDIÊNCIA DE {tipo_aud} ({area_aud}).
+                
+                DADOS DO CASO:
+                - Polo: {polo}
+                - Objetivo Principal: {objetivo_chave}
+                - Perfil do Juiz: {perfil_juiz}
+                - Perfil Adverso: {perfil_adv}
+                - Informações das Testemunhas: {rol_testemunhas}
+                
+                CONTEXTO DOS AUTOS (PDF):
+                {texto_autos[:15000]} 
+                
+                CONTEXTO ADICIONAL:
+                {fatos_resumo}
+                
+                SAÍDA ESPERADA (ESTRUTURA RIGOROSA EM MARKDOWN):
+                
+                # 🛡️ 1. BLINDAGEM DO CLIENTE (BRIEFING)
+                * **O que falar:** Pontos chave para reforçar no depoimento pessoal.
+                * **O que JAMAIS falar:** Frases que podem gerar confissão.
+                * **Comportamento:** Como agir diante do perfil deste Juiz/Advogado.
+                * **Vacinas:** Respostas preparadas para as prováveis "cascas de banana" da outra parte.
+
+                # ⚔️ 2. ROTEIRO DE INTERROGATÓRIO (PARTE CONTRÁRIA)
+                * **Perguntas de Aquecimento:** Para ganhar confiança.
+                * **Perguntas Armadilha (Fechadas):** 3 a 5 perguntas de "Sim/Não" desenhadas para forçar contradição com a tese deles.
+                * **Técnica de Descrédito:** Se houver brecha, como impugnar a credibilidade da testemunha deles.
+
+                # 🎯 3. ROTEIRO DE OITIVA (NOSSAS TESTEMUNHAS)
+                * **Perguntas Abertas:** Para permitir que narrem o fato {objetivo_chave}.
+                * **Reabilitação:** O que perguntar se a testemunha ficar nervosa ou esquecer detalhes.
+
+                # 🔥 4. ALEGAÇÕES FINAIS ORAIS (MEMORIAIS)
+                * Esqueleto de 3 tópicos fortíssimos para encerrar a audiência caso o juiz peça debates orais.
+                """
+                
                 res = tentar_gerar_conteudo(prompt)
+                
+                # Exibe e Salva
                 st.markdown(res)
-                st.download_button("Baixar Dossiê", gerar_word(res), "Dossie.docx", use_container_width=True)
+                salvar_documento_memoria(f"Dossiê WarRoom - {tipo_aud}", polo, res)
+                
+                # Botão Download
+                st.download_button("📥 Baixar Dossiê Estratégico (.docx)", gerar_word(res), f"Dossie_Audiencia_{date.today()}.docx", use_container_width=True)
+        else:
+            st.warning("⚠️ Para uma estratégia eficiente, carregue o PDF dos autos ou preencha o Resumo dos Fatos e o Objetivo Chave.")
 
 # --- COFRE ---
 elif menu_opcao == "📂 Cofre Digital":
@@ -734,3 +815,4 @@ elif menu_opcao == "📂 Cofre Digital":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v15.5 | DARK NETWORK EDITION (SAFE)</center>", unsafe_allow_html=True)
+
