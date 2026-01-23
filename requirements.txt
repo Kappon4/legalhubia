@@ -7,3 +7,5 @@ python-docx
 duckduckgo-search
 plotly
 requests
+reportlab
+
