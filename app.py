@@ -14,84 +14,73 @@ import os
 # 1. CONFIGURAÇÃO VISUAL
 # ==========================================================
 st.set_page_config(
-    page_title="LegalHub Elite v10.0", 
+    page_title="LegalHub Elite v14.5 (Nord)", 
     page_icon="⚖️", 
     layout="wide",
     initial_sidebar_state="collapsed" 
 )
 
 # ==========================================================
-# 2. AUTOMAÇÃO DE ACESSO (SECRETS)
+# 2. AUTOMAÇÃO DE ACESSO (MODO LOCAL)
 # ==========================================================
 try:
     API_KEY_FINAL = st.secrets["GOOGLE_API_KEY"]
-except Exception:
-    st.error("⚠️ ERRO CRÍTICO: Chave de API não configurada. Configure no Secrets do Streamlit Cloud.")
+except FileNotFoundError:
+    st.error("⚠️ ARQUIVO DE SENHA NÃO ENCONTRADO!")
+    st.markdown("Crie a pasta `.streamlit` e o arquivo `secrets.toml` com a chave `GOOGLE_API_KEY`.")
+    st.stop()
+except Exception as e:
+    st.error(f"⚠️ Erro de configuração: {e}")
     st.stop()
 
 # ==========================================================
-# 3. IA DEDICADA: GEMINI 2.5 (ULTRA MODERN)
+# 3. IA DEDICADA: GEMINI 2.5 (CORE)
 # ==========================================================
 def tentar_gerar_conteudo(prompt, ignored_param=None):
     if not API_KEY_FINAL: return "⚠️ Chave Inválida"
     
     genai.configure(api_key=API_KEY_FINAL)
 
-    # --- LISTA DE MODELOS 2.5+ (Conforme solicitado) ---
-    # O código vai tentar um por um.
+    # Lista de Modelos 2.5+
     modelos_elite = [
-        "gemini-2.5-flash",          # Versão Estável Rápida
-        "gemini-2.5-pro",            # Versão Estável Potente
-        "gemini-2.5-flash-exp",      # Experimental Rápida
-        "gemini-2.5-pro-exp",        # Experimental Potente
-        "gemini-ultra-2.5"           # Caso disponível na sua chave
+        "gemini-2.5-flash",          
+        "gemini-2.5-pro",            
+        "gemini-2.5-flash-exp",      
+        "gemini-2.5-pro-exp",        
+        "gemini-2.0-flash", 
+        "gemini-2.0-pro-exp-02-05"
     ]
 
     log_erros = []
 
     for modelo in modelos_elite:
         tentativas = 0
-        max_tentativas = 3  # Insiste 3x no mesmo modelo antes de trocar
+        max_tentativas = 3
         
         while tentativas < max_tentativas:
             try:
-                # Tenta instanciar o modelo específico
                 model_instance = genai.GenerativeModel(modelo)
                 response = model_instance.generate_content(prompt)
-                return response.text # SUCESSO! Retorna o texto.
+                return response.text
             
             except Exception as e:
                 erro_msg = str(e)
-                
-                # Tratamento de Erro de Cota (429)
                 if "429" in erro_msg or "quota" in erro_msg.lower():
-                    tempo_espera = (tentativas + 1) * 5
-                    log_erros.append(f"⏳ {modelo}: Cota cheia. Aguardando {tempo_espera}s...")
-                    time.sleep(tempo_espera) # Espera o Google liberar
+                    tempo = (tentativas + 1) * 5
+                    log_erros.append(f"⏳ {modelo}: Cota cheia. Aguardando {tempo}s...")
+                    time.sleep(tempo)
                     tentativas += 1
                     continue
-                
-                # Tratamento de Modelo Inexistente (404)
-                elif "404" in erro_msg or "not found" in erro_msg.lower():
-                    log_erros.append(f"🚫 {modelo}: Não disponível para esta chave/lib.")
-                    break # Pula para o próximo modelo da lista
-                
+                elif "404" in erro_msg:
+                    log_erros.append(f"🚫 {modelo}: Não encontrado (Lib/Chave).")
+                    break 
                 else:
                     log_erros.append(f"⚠️ {modelo}: {erro_msg[:40]}...")
-                    break # Outro erro, troca de modelo
+                    break 
 
-    # Se saiu do loop, nenhum funcionou
-    return f"""❌ FALHA GERAL (MODO 2.5).
-    
-    Diagnóstico:
-    O sistema tentou usar apenas modelos da linha 2.5, mas sua chave ou biblioteca não conseguiu conectar.
-    
-    Log Técnico:
-    {chr(10).join(log_erros)}
-    
-    Solução:
-    1. Atualize sua lib: `pip install -U google-generativeai`
-    2. Verifique se sua chave tem acesso ao 'Gemini 2.5' no Google AI Studio.
+    return f"""❌ FALHA GERAL.
+    Log Técnico: {'; '.join(log_erros)}
+    Solução: Verifique cota ou atualize 'google-generativeai'.
     """
 
 # ==========================================================
@@ -131,9 +120,6 @@ def buscar_contexto_juridico(tema, area):
     except: pass
     return "\n\n[NENHUMA JURISPRUDÊNCIA ESPECÍFICA ENCONTRADA]"
 
-# ==========================================================
-# 5. CÁLCULO TRABALHISTA
-# ==========================================================
 def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_fgts, ferias_vencidas, aviso_tipo, grau_insalubridade, tem_periculosidade):
     formato = "%Y-%m-%d"
     d1 = datetime.strptime(str(admissao), formato)
@@ -178,27 +164,21 @@ def calcular_rescisao_completa(admissao, demissao, salario_base, motivo, saldo_f
     
     return verbas
 
-Aqui está o código CSS atualizado para aplicar a paleta que você escolheu (estilo "Nord/Sálvia"), focada em conforto visual para longas horas de trabalho.
-
-Substitua a função local_css() inteira (por volta da linha 200 no seu código atual) por esta versão:
-
-Python
-
 # ==========================================================
-# 6. CSS VISUAL (PALETA CONFORTÁVEL - NORD/SÁLVIA)
+# 5. CSS VISUAL (PALETA NORD/SÁLVIA - CORRIGIDA)
 # ==========================================================
 def local_css():
     st.markdown(f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;500;700&family=Inter:wght@300;400;600&display=swap');
         
-        /* --- DEFINIÇÃO DA PALETA (Baseada no Nord & Sálvia) --- */
+        /* --- DEFINIÇÃO DA PALETA NORD (Descanso Visual) --- */
         :root {{
-            --bg-dark: #2E3440;       /* Nord Polar Night (Fundo Principal - Conforto) */
-            --bg-card: #3B4252;       /* Nord Polar Night Lighter (Cards) */
-            --text-main: #ECEFF4;     /* Nord Snow Storm (Texto Leitura - não é branco puro) */
-            --highlight: #8FBC8F;     /* Verde Sálvia (Destaques e Botões) */
-            --accent: #88C0D0;        /* Nord Frost (Detalhes secundários) */
+            --bg-dark: #2E3440;       /* Nord Polar Night (Fundo) */
+            --bg-card: #3B4252;       /* Nord Lighter (Cards) */
+            --text-main: #ECEFF4;     /* Nord Snow Storm (Texto Suave) */
+            --highlight: #8FBC8F;     /* Verde Sálvia (Destaques) */
+            --accent: #88C0D0;        /* Nord Frost (Secundário) */
         }}
 
         /* Aplicação Geral */
@@ -225,7 +205,7 @@ def local_css():
 
         /* Subtítulo do Logo */
         .header-logo p {{
-            color: var(--highlight) !important; 
+            color: var(--highlight) !important;
         }}
 
         /* Botões (Estilo Sálvia Fosco) */
@@ -237,12 +217,12 @@ def local_css():
             font-family: 'Rajdhani', sans-serif;
             letter-spacing: 1px;
             transition: 0.3s;
-            border-radius: 8px; 
+            border-radius: 8px;
         }}
 
         .stButton>button:hover {{
             background: var(--highlight);
-            color: #2E3440; 
+            color: #2E3440;
             border: 1px solid var(--highlight);
             box-shadow: 0 0 10px rgba(143, 188, 143, 0.3);
         }}
@@ -252,20 +232,27 @@ def local_css():
             background-color: var(--bg-card);
             border-radius: 10px;
             padding: 10px;
+            border: 1px solid #4C566A;
         }}
         
         /* Inputs e Caixas de Texto (Fundo Confortável) */
         .stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div>div {{
-            background-color: #434C5E; 
+            background-color: #434C5E;
             color: #ECEFF4;
             border: 1px solid #4C566A;
+        }}
+        
+        /* Ajuste para Datas */
+        input[type="date"] {{
+            background-color: #434C5E;
+            color: #ECEFF4;
         }}
     </style>
     """, unsafe_allow_html=True)
 local_css()
 
 # ==========================================================
-# 7. NAVEGAÇÃO
+# 6. MEMÓRIA & NAVEGAÇÃO
 # ==========================================================
 if "meus_docs" not in st.session_state:
     st.session_state.meus_docs = []
@@ -284,18 +271,17 @@ if "navegacao_override" not in st.session_state: st.session_state.navegacao_over
 
 col_logo, col_menu = st.columns([1, 4])
 with col_logo: 
-    # CABEÇALHO ATUALIZADO COM SUBTÍTULO
+    # CABEÇALHO ATUALIZADO (COR SÁLVIA)
     st.markdown("""
     <div class='header-logo'>
         <h1 class='tech-header' style='margin-bottom: 0px;'>LEGALHUB</h1>
-        <p style='color: #00F3FF; font-family: "Rajdhani"; font-size: 0.9rem; letter-spacing: 1px; margin-top: -5px;'>
+        <p style='color: #8FBC8F; font-family: "Rajdhani"; font-size: 0.9rem; letter-spacing: 1px; margin-top: -5px;'>
             MAIOR EFICIÊNCIA EM MENOS TEMPO
         </p>
     </div>
     """, unsafe_allow_html=True)
-    
+
 with col_menu:
-    # Atualizei a chave "Redator IA" para "Petições Inteligentes" e o valor correspondente
     mapa_nav = {
         "Dashboard": "📊 Dashboard", 
         "Petições Inteligentes": "✍️ Petições Inteligentes", 
@@ -316,12 +302,12 @@ with col_menu:
 st.markdown("---")
 
 # ==========================================================
-# 8. CONTEÚDO DAS TELAS
+# 7. CONTEÚDO DAS TELAS
 # ==========================================================
 
-# --- DASHBOARD (NOVO GRID DE 6 CARDS) ---
+# --- DASHBOARD (CLEAN DESIGN + COR SÁLVIA) ---
 if menu_opcao == "📊 Dashboard":
-    st.markdown(f"<h2 class='tech-header'>VISÃO GERAL <span style='font-weight:300; font-size: 1.5rem; color:#64748b;'>| PAINEL DE CONTROLE</span></h2>", unsafe_allow_html=True)
+    st.markdown(f"<h2 class='tech-header'>VISÃO GERAL <span style='font-weight:300; font-size: 1.5rem; color:#8FBC8F;'>| PAINEL DE CONTROLE</span></h2>", unsafe_allow_html=True)
     
     st.write("")
     st.markdown("### 🚀 O QUE A INTELIGÊNCIA ARTIFICIAL PODE FAZER POR VOCÊ?")
@@ -334,19 +320,16 @@ if menu_opcao == "📊 Dashboard":
         with st.container(border=True):
             st.markdown("#### ✍️ Petições Inteligentes")
             st.caption("Geração de peças processuais complexas (Iniciais, Contestação, Recursos) baseadas nos fatos e na melhor fundamentação jurídica.")
-            # Botão removido aqui
 
     with c2:
         with st.container(border=True):
             st.markdown("#### 🏛️ Preparação Audiência")
             st.caption("Simulador estratégico que cria perguntas para interrogatório, prevê teses da parte contrária e aponta riscos do caso.")
-            # Botão removido aqui
 
     with c3:
         with st.container(border=True):
             st.markdown("#### 📜 Fábrica de Contratos")
             st.caption("Elaboração automática de contratos, procurações e documentos extrajudiciais personalizados com cláusulas de segurança.")
-            # Botão removido aqui
 
     # --- LINHA 2 ---
     st.write("")
@@ -356,23 +339,20 @@ if menu_opcao == "📊 Dashboard":
         with st.container(border=True):
             st.markdown("#### 🧮 Cálculos Jurídicos")
             st.caption("Calculadoras precisas para Rescisão Trabalhista, Atualização Cível (TJ), Pensão Alimentícia e Dosimetria Penal.")
-            # Botão removido aqui
 
     with c5:
         with st.container(border=True):
             st.markdown("#### 🧠 Análise de Autos (PDF)")
             st.caption("O sistema lê seus arquivos PDF (Processos, Sentenças) e extrai automaticamente os fatos relevantes para usar nas peças.")
-            # Info box removida aqui
 
     with c6:
         with st.container(border=True):
             st.markdown("#### ⚖️ Jurisprudência Real")
             st.caption("Conexão direta com a base de dados dos Tribunais Superiores para encontrar julgados que fundamentam sua tese.")
-            # Info box removida aqui
 
 # --- PETIÇÕES INTELIGENTES ---
-elif menu_opcao == "✍️ Redator Jurídico":
-    st.markdown("<h2 class='tech-header'>✍️ PETIÇÕES INTELIGENTES </h2>", unsafe_allow_html=True)
+elif menu_opcao == "✍️ Petições Inteligentes":
+    st.markdown("<h2 class='tech-header'>✍️ PETIÇÕES INTELIGENTES (IA 2.5)</h2>", unsafe_allow_html=True)
     area = st.selectbox("Área", ["Cível", "Trabalhista", "Criminal", "Tributário", "Previdenciário"])
     
     pecas = []
@@ -403,16 +383,14 @@ elif menu_opcao == "✍️ Redator Jurídico":
             texto_do_pdf = extrair_texto_pdf(uploaded_file)
             st.success(f"✅ Documento anexado à memória da IA! ({len(texto_do_pdf)} caracteres identificados)")
 
-    # CAIXA DE TEXTO LIMPA (PARA INSTRUÇÕES EXTRAS)
+    # CAIXA DE TEXTO LIMPA
     fatos_manuais = st.text_area("Fatos / Observações Adicionais", height=150, placeholder="Digite os fatos aqui OU deixe em branco se já carregou o PDF com a narrativa completa...")
     
     busca_real = st.checkbox("🔍 Buscar Jurisprudência Real (STF/STJ/TST)", value=True)
     
-    if st.button("GERAR PEÇA", use_container_width=True):
-        # Combina o que está oculto (PDF) com o que você digitou
+    if st.button("GERAR PEÇA (MODO 2.5)", use_container_width=True):
         fatos_completos = f"CONTEÚDO DOS ANEXOS (PDF):\n{texto_do_pdf}\n\nOBSERVAÇÕES/FATOS DIGITADOS:\n{fatos_manuais}".strip()
 
-        # Validação: Precisa ter pelo menos um dos dois (PDF ou Texto) + Nome do Cliente
         if (texto_do_pdf or fatos_manuais) and cli:
             with st.spinner("Pesquisando e Redigindo com Gemini 2.5..."):
                 ctx = ""
@@ -425,7 +403,7 @@ elif menu_opcao == "✍️ Redator Jurídico":
                     salvar_documento_memoria(tipo, cli, res)
                     st.download_button("Baixar DOCX", gerar_word(res), f"{tipo}.docx")
         else:
-            st.warning("⚠️ Atenção: Para gerar a peça, você precisa informar o **Cliente** e fornecer os fatos (seja via **PDF** ou **Digitado**).")
+            st.warning("⚠️ Atenção: Informe o **Cliente** e forneça os fatos (PDF ou Digitado).")
 
 # --- CONTRATOS ---
 elif menu_opcao == "📜 Contratos":
@@ -458,9 +436,9 @@ elif menu_opcao == "📜 Contratos":
         val = c_val.number_input("Valor Honorários (R$)", step=100.0, format="%.2f")
         forma_pag = c_forma.text_input("Forma de Pagamento (Ex: À vista / 3x no cartão)")
 
-    if st.button("GERAR CONTRATO (MODO 2.0)", use_container_width=True):
+    if st.button("GERAR CONTRATO (MODO 2.5)", use_container_width=True):
         if nome and cpf and obj:
-            with st.spinner("Redigindo com Gemini 2.0..."):
+            with st.spinner("Redigindo com Gemini 2.5..."):
                 qualificacao = f"{nome}, {nacionalidade}, {est_civil}, {prof}, portador do RG nº {rg} e CPF nº {cpf}, residente e domiciliado em {end}, CEP {cep}, e-mail {email}"
                 
                 prompt = f"""
@@ -819,13 +797,4 @@ elif menu_opcao == "📂 Cofre Digital":
     else: st.info("Cofre vazio nesta sessão.")
 
 st.markdown("---")
-st.markdown("<center>🔒 LEGALHUB ELITE v10.0 | GEMINI 2.0 EXCLUSIVE</center>", unsafe_allow_html=True)
-
-
-
-
-
-
-
-
-
+st.markdown("<center>🔒 LEGALHUB ELITE v14.5 | NORD EDITION</center>", unsafe_allow_html=True)
