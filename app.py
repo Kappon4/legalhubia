@@ -405,10 +405,10 @@ elif menu_opcao == "✍️ Petições Inteligentes":
         else:
             st.warning("⚠️ Atenção: Informe o **Cliente** e forneça os fatos (PDF ou Digitado).")
 
-# --- CONTRATOS ---
+# --- CONTRATOS (GERAÇÃO SEPARADA) ---
 elif menu_opcao == "📜 Contratos":
     st.header("📜 Fábrica de Contratos & Procurações")
-    st.info("Gera automaticamente o Contrato de Honorários + Procuração Ad Judicia.")
+    st.info("O sistema gera o Contrato e a Procuração separadamente para você baixar.")
     
     with st.container(border=True):
         st.subheader("👤 Dados do Contratante (Cliente)")
@@ -438,18 +438,16 @@ elif menu_opcao == "📜 Contratos":
         
         st.markdown("---")
         st.markdown("##### 📄 Papel Timbrado (Opcional)")
-        uploaded_timbrado = st.file_uploader("Carregue seu papel timbrado (PDF) para gerar o documento final nele.", type="pdf")
+        uploaded_timbrado = st.file_uploader("Carregue seu papel timbrado (PDF) para aplicar nos documentos.", type="pdf")
 
-    if st.button("GERAR CONTRATO + PROCURAÇÃO", use_container_width=True):
+    if st.button("GERAR DOCUMENTOS", use_container_width=True):
         if nome and cpf and obj:
-            with st.spinner("Redigindo documentos com Gemini 2.5..."):
+            with st.spinner("Redigindo Contrato e Procuração..."):
                 qualificacao = f"{nome}, {nacionalidade}, {est_civil}, {prof}, portador do RG nº {rg} e CPF nº {cpf}, residente e domiciliado em {end}, CEP {cep}, e-mail {email}"
                 
-                # Prompt instruindo a IA a não usar formatação Markdown complexa (negrito/títulos)
-                # pois isso dificulta a conversão para PDF simples no timbrado.
+                # O SEGREDO: Pedimos para a IA colocar um SEPARADOR específico entre os textos
                 prompt = f"""
-                Atue como advogado. Redija dois documentos formais em sequência.
-                IMPORTANTE: Não use negrito (**texto**), use CAIXA ALTA para títulos. Não use formatação markdown complexa.
+                Atue como advogado. Redija dois documentos formais.
                 
                 DOCUMENTO 1: CONTRATO DE HONORÁRIOS ADVOCATÍCIOS
                 CONTRATANTE: {qualificacao}.
@@ -458,9 +456,7 @@ elif menu_opcao == "📜 Contratos":
                 VALOR: R$ {val} ({forma_pag}).
                 CLÁUSULAS: Padrão da OAB, foro da comarca do cliente.
                 
-                --------------------------------------------------
-                (QUEBRA DE PÁGINA)
-                --------------------------------------------------
+                IMPORTANTE: Ao final do contrato, pule uma linha e escreva EXATAMENTE: "###SEPARADOR###"
                 
                 DOCUMENTO 2: PROCURAÇÃO AD JUDICIA
                 OUTORGANTE: {qualificacao}.
@@ -470,30 +466,56 @@ elif menu_opcao == "📜 Contratos":
                 
                 res = tentar_gerar_conteudo(prompt)
                 
-                # Salva na memória
-                salvar_documento_memoria("Contrato+Proc", nome, res)
-                
-                # Exibe prévia do texto
-                with st.expander("👁️ Ver Prévia do Texto"):
-                    st.write(res)
+                # Lógica de Separação
+                try:
+                    partes = res.split("###SEPARADOR###")
+                    texto_contrato = partes[0].strip()
+                    texto_procuracao = partes[1].strip() if len(partes) > 1 else "Erro ao gerar procuração."
+                except:
+                    texto_contrato = res
+                    texto_procuracao = "Erro na separação automática. Verifique o texto completo."
 
-                c_down1, c_down2 = st.columns(2)
+                # Salva na memória (como um item combinado para registro)
+                salvar_documento_memoria("Kit Contratação", nome, res)
                 
-                # Opção 1: Baixar DOCX (Padrão)
-                with c_down1:
-                    st.download_button("📥 Baixar Editável (.docx)", gerar_word(res), f"Contrato_{nome}.docx", use_container_width=True)
+                # --- ÁREA DE DOWNLOAD (DIVIDIDA EM DUAS COLUNAS) ---
+                st.success("✅ Documentos Gerados com Sucesso! Baixe individualmente abaixo:")
                 
-                # Opção 2: Baixar PDF no Timbrado (Se houver upload)
-                with c_down2:
+                col_down_con, col_down_proc = st.columns(2)
+                
+                # COLUNA 1: CONTRATO
+                with col_down_con:
+                    st.markdown("### 📄 Contrato")
+                    with st.expander("Ver Texto do Contrato"):
+                        st.write(texto_contrato)
+                    
+                    # DOCX
+                    st.download_button("📥 Baixar Contrato (.docx)", gerar_word(texto_contrato), f"Contrato_{nome}.docx", use_container_width=True)
+                    
+                    # PDF Timbrado
                     if uploaded_timbrado is not None:
-                        with st.spinner("Fundindo texto com Papel Timbrado..."):
-                            pdf_final = gerar_pdf_com_timbrado(res, uploaded_timbrado)
-                            if pdf_final:
-                                st.download_button("📄 Baixar PDF no Timbrado", pdf_final, f"Contrato_Timbrado_{nome}.pdf", mime="application/pdf", use_container_width=True)
-                            else:
-                                st.error("Erro ao gerar PDF. Verifique se o timbrado é válido.")
-                    else:
-                        st.info("Carregue um PDF Timbrado acima para habilitar esta opção.")
+                        # Precisamos rebobinar o arquivo para ler de novo para o segundo doc
+                        uploaded_timbrado.seek(0) 
+                        pdf_con = gerar_pdf_com_timbrado(texto_contrato, uploaded_timbrado)
+                        if pdf_con:
+                            st.download_button("📄 Baixar Contrato (PDF Timbrado)", pdf_con, f"Contrato_{nome}.pdf", mime="application/pdf", use_container_width=True)
+
+                # COLUNA 2: PROCURAÇÃO
+                with col_down_proc:
+                    st.markdown("### ⚖️ Procuração")
+                    with st.expander("Ver Texto da Procuração"):
+                        st.write(texto_procuracao)
+                    
+                    # DOCX
+                    st.download_button("📥 Baixar Procuração (.docx)", gerar_word(texto_procuracao), f"Procuracao_{nome}.docx", use_container_width=True)
+                    
+                    # PDF Timbrado
+                    if uploaded_timbrado is not None:
+                        uploaded_timbrado.seek(0) # Reset para ler de novo
+                        pdf_proc = gerar_pdf_com_timbrado(texto_procuracao, uploaded_timbrado)
+                        if pdf_proc:
+                            st.download_button("📄 Baixar Procuração (PDF Timbrado)", pdf_proc, f"Procuracao_{nome}.pdf", mime="application/pdf", use_container_width=True)
+
         else:
             st.warning("Preencha pelo menos Nome, CPF e Objeto para gerar.")
 
@@ -829,6 +851,7 @@ elif menu_opcao == "📂 Cofre Digital":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v14.5 | NORD EDITION</center>", unsafe_allow_html=True)
+
 
 
 
