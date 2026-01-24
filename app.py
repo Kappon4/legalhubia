@@ -655,7 +655,6 @@ elif menu_opcao == "💼 Gestão de Escritório":
     st.markdown("<h2 class='tech-header'>💼 GESTÃO JURÍDICA INTEGRADA</h2>", unsafe_allow_html=True)
     
     # 1. VERIFICAÇÃO AUTOMÁTICA (SIMULAÇÃO DE "ROBÔ")
-    # Só roda se passou 1 hora desde a última verificação
     now = datetime.now()
     if 'last_check' not in st.session_state:
         st.session_state['last_check'] = now - timedelta(hours=2) # Força rodar na 1ª vez
@@ -665,14 +664,11 @@ elif menu_opcao == "💼 Gestão de Escritório":
     if diff > 60:
         with st.status("🔄 Sincronizando automaticamente com Tribunais...", expanded=True) as status:
             time.sleep(1) # Simula conexão
-            
-            # Simula encontrar novidade em um processo aleatório
             if len(st.session_state.casos_db) > 0:
                 idx_rand = random.randint(0, len(st.session_state.casos_db)-1)
                 st.session_state.casos_db.at[idx_rand, "Última Mov."] = f"{now.strftime('%d/%m')} - Nova movimentação detectada"
-            
             st.session_state['last_check'] = now
-            salvar_dados(st.session_state.casos_db) # Salva no CSV
+            salvar_dados(st.session_state.casos_db)
             status.update(label="Sincronização Automática Concluída!", state="complete", expanded=False)
             st.toast("Base de dados atualizada automaticamente.")
 
@@ -717,17 +713,23 @@ elif menu_opcao == "💼 Gestão de Escritório":
         
         if st.button("Forçar Verificação Manual Agora"):
             st.session_state['last_check'] = now - timedelta(hours=2) # Reseta timer
-            st.rerun() # Recarrega para rodar a lógica automática acima
+            st.rerun()
 
         # Mostra processos com movimentação recente
         for index, row in st.session_state.casos_db.iterrows():
-            if "Nova movimentação" in str(row["Última Mov."]) or "Concluso" in str(row["Última Mov."]):
+            # Safe get for columns to avoid KeyErrors on old CSVs
+            ult_mov = row.get("Última Mov.", "-")
+            tribunal = row.get("Tribunal", "-")
+            cliente = row.get("Cliente", "Desconhecido")
+            proc = row.get("Processo", "")
+
+            if "Nova movimentação" in str(ult_mov) or "Concluso" in str(ult_mov):
                 with st.container(border=True):
                     c_ico, c_det = st.columns([0.5, 4])
                     with c_ico: st.markdown("## 🔔")
                     with c_det:
-                        st.markdown(f"**{row['Cliente']}** ({row['Processo']})")
-                        st.caption(f"Status: {row['Última Mov.']} | Tribunal: {row['Tribunal']}")
+                        st.markdown(f"**{cliente}** ({proc})")
+                        st.caption(f"Status: {ult_mov} | Tribunal: {tribunal}")
 
     # --- TAB 3: INTIMAÇÕES ---
     with tab3:
@@ -762,3 +764,4 @@ elif menu_opcao == "💼 Gestão de Escritório":
 
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v16.5 | ERP JURÍDICO INTEGRADO</center>", unsafe_allow_html=True)
+
