@@ -755,99 +755,172 @@ elif menu_opcao == "🏛️ Simulador Audiência":
         else:
             st.warning("⚠️ Preencha os fatos e o objetivo.")
 
-# --- NOVA ABA: GESTÃO DE ESCRITÓRIO (ERP COMPLETO) ---
+# --- NOVA ABA: GESTÃO DE ESCRITÓRIO (VINCULAÇÃO E AUTOMATIZAÇÃO) ---
 elif menu_opcao == "💼 Gestão de Escritório":
     st.markdown("<h2 class='tech-header'>💼 GESTÃO JURÍDICA INTEGRADA</h2>", unsafe_allow_html=True)
     
-    # Abas baseadas na imagem solicitada
+    # Inicializa dados de exemplo se estiver vazio (banco de dados simulado)
+    if "casos_db" not in st.session_state:
+        st.session_state.casos_db = pd.DataFrame([
+            {"ID": 1, "Cliente": "Maria Silva", "Processo": "1002345-88.2024.8.26.0100", "Tribunal": "TJSP", "Status": "Ativo", "Última Mov.": "20/01 - Concluso"},
+            {"ID": 2, "Cliente": "Construtora X", "Processo": "0054321-11.2023.5.02.0000", "Tribunal": "TRT-2", "Status": "Execução", "Última Mov.": "15/01 - Penhora"},
+            {"ID": 3, "Cliente": "João Souza", "Processo": "", "Tribunal": "-", "Status": "Consultivo", "Última Mov.": "-"}
+        ])
+
+    # Abas Funcionais
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        "🗂️ Gestão de Casos", 
-        "⚖️ Movimentações", 
-        "📩 Intimações", 
+        "🗂️ Cadastro & Vínculo", 
+        "📡 Radar de Movimentações", 
+        "⚖️ Intimações (DJE)", 
         "📅 Agenda", 
         "📂 Documentos", 
         "💰 Financeiro"
     ])
 
+    # --- TAB 1: CADASTRO E VINCULAÇÃO ---
     with tab1:
-        st.markdown("### Painel de Processos Ativos")
-        # Tabela editável conectada ao session_state
-        st.session_state.casos_db = st.data_editor(
+        st.markdown("### 🗂️ Carteira de Processos")
+        st.caption("Cadastre o cliente e **vincule o número do processo** para ativar o monitoramento automático.")
+        
+        # Editor de Dados (CRUD)
+        edited_df = st.data_editor(
             st.session_state.casos_db, 
             num_rows="dynamic", 
             use_container_width=True,
             column_config={
-                "Valor": st.column_config.NumberColumn("Valor da Causa", format="R$ %.2f")
-            }
+                "Processo": st.column_config.TextColumn("Nº Processo (CNJ)", help="Digite o número para vincular ao robô", validate="^[0-9.-]+$"),
+                "Status": st.column_config.SelectboxColumn("Fase", options=["Ativo", "Suspenso", "Arquivado", "Execução", "Consultivo"]),
+                "Tribunal": st.column_config.SelectboxColumn("Tribunal", options=["TJSP", "TJRJ", "TRT-2", "TRF-3", "STJ", "-"])
+            },
+            key="editor_casos"
         )
-        st.caption("*Edite a tabela acima para adicionar ou remover processos.")
-
-    with tab2:
-        st.markdown("### Rastreador de Movimentações (Simulado)")
-        c_proc, c_btn = st.columns([3, 1])
-        with c_proc: proc_num = st.text_input("Número do Processo (CNJ)", placeholder="0000000-00.0000.0.00.0000")
-        with c_btn: 
-            st.write("")
-            st.write("")
-            buscar = st.button("Buscar Agora")
+        # Atualiza o estado com as edições
+        st.session_state.casos_db = edited_df
         
-        if buscar:
-            st.info("Conectando aos tribunais...")
-            time.sleep(1.5)
-            st.success("✅ 3 Novas movimentações encontradas hoje!")
-            st.markdown("""
-            * **23/01/2026 - 14:30:** Concluso para Despacho.
-            * **20/01/2026 - 10:00:** Juntada de Petição de Contrarrazões.
-            * **15/01/2026 - 18:00:** Publicação de Intimação (DJE).
-            """)
+        st.info("💡 **Dica:** Ao inserir um número de processo válido, o sistema iniciará a varredura de movimentações na próxima sincronização.")
 
+    # --- TAB 2: RADAR DE MOVIMENTAÇÕES (AUTOMÁTICO) ---
+    with tab2:
+        c_tit, c_btn = st.columns([3, 1])
+        with c_tit: 
+            st.markdown("### 📡 Radar de Movimentações")
+            st.caption("O sistema varre os tribunais vinculados aos processos acima.")
+        with c_btn:
+            # Botão de Simulação de Crawling
+            btn_sync = st.button("🔄 Sincronizar Agora")
+        
+        if btn_sync:
+            with st.status("Conectando aos Tribunais (DataJud/PJe)...", expanded=True) as status:
+                time.sleep(1)
+                st.write("🔍 Varrendo TJSP...")
+                time.sleep(0.5)
+                st.write("🔍 Varrendo TRT-2...")
+                time.sleep(0.5)
+                st.write("✅ Atualizando base de dados local...")
+                status.update(label="Sincronização Concluída!", state="complete", expanded=False)
+            
+            # Alerta de novidades (Simulado)
+            st.success("🔔 2 Novas movimentações detectadas!")
+            
+            # Card de Movimentação 1
+            with st.container(border=True):
+                col_ico, col_info = st.columns([0.5, 4])
+                with col_ico: st.markdown("## 📜")
+                with col_info:
+                    st.markdown("**Processo: 1002345-88.2024.8.26.0100 (Maria Silva)**")
+                    st.markdown("<span style='color:#00F3FF'>**Juntada de Petição de Contrarrazões**</span>", unsafe_allow_html=True)
+                    st.caption("Hoje às 14:30 | Origem: TJSP | Tipo: Movimentação Processual")
+                    
+            # Card de Movimentação 2
+            with st.container(border=True):
+                col_ico, col_info = st.columns([0.5, 4])
+                with col_ico: st.markdown("## 🔨")
+                with col_info:
+                    st.markdown("**Processo: 0054321-11.2023.5.02.0000 (Construtora X)**")
+                    st.markdown("<span style='color:#FF0055'>**Expedição de Mandado de Penhora**</span>", unsafe_allow_html=True)
+                    st.caption("Ontem às 18:00 | Origem: TRT-2 | Tipo: Decisão Interlocutória")
+
+        else:
+            st.info("Clique em 'Sincronizar Agora' para buscar atualizações nos tribunais.")
+            # Histórico estático
+            st.markdown("---")
+            st.markdown("#### Histórico Recente")
+            st.text("• 20/01 - Proc. Maria Silva: Concluso para Despacho.")
+            st.text("• 15/01 - Proc. Construtora X: Certidão de Publicação expedida.")
+
+    # --- TAB 3: INTIMAÇÕES (DJE) ---
     with tab3:
-        st.markdown("### Intimações Eletrônicas")
-        col_alert1, col_alert2 = st.columns(2)
-        with col_alert1:
-            st.error("🚨 **URGENTE: Prazo Fatal (Amanhã)**")
-            st.markdown("**Proc. 1002233-44.2024:** Réplica à Contestação.")
-            st.button("Ver Autos", key="btn_int1")
-        with col_alert2:
-            st.warning("⚠️ **Vence em 5 dias**")
-            st.markdown("**Proc. 005566-77.2025:** Alegações Finais.")
-            st.button("Ver Autos", key="btn_int2")
+        st.markdown("### ⚖️ Leitor de Diários Oficiais (DJE)")
+        st.caption("Intimações capturadas automaticamente pelo nome do advogado ou número do processo.")
+        
+        # Filtros
+        col_f1, col_f2 = st.columns(2)
+        tipo_int = col_f1.multiselect("Filtrar por Tipo", ["Despacho", "Sentença", "Acórdão", "Ato Ordinatório"], default=["Despacho", "Sentença"])
+        data_int = col_f2.date_input("Data de Publicação", date.today())
+        
+        st.markdown("---")
+        
+        # Simulação de Intimação Vinculada
+        with st.expander("🚨 URGENTE: Publicação em Nome de MARIA SILVA (TJSP)", expanded=True):
+            st.markdown("""
+            **Processo:** 1002345-88.2024.8.26.0100  
+            **Vara:** 3ª Vara Cível do Foro Central  
+            **Disponibilização:** 24/01/2026  
+            
+            **Teor do Ato:** *Vistos. Fls. 234: Manifeste-se o autor sobre a contestação e documentos apresentados, no prazo de 15 (quinze) dias úteis. Intime-se.*
+            """)
+            c_act1, c_act2, c_act3 = st.columns(3)
+            if c_act1.button("✅ Ciente", key="ci1"): st.toast("Marcado como lido")
+            if c_act2.button("📅 Agendar Prazo", key="ag1"): st.toast("Enviado para Agenda (15 dias)")
+            if c_act3.button("🤖 Gerar Réplica (IA)", key="ia1"): st.toast("Redirecionando para IA...")
 
+        with st.expander("ℹ️ Publicação TRT-2 (Construtora X)"):
+            st.markdown("""
+            **Processo:** 0054321-11.2023.5.02.0000  
+            **Vara:** 10ª Vara do Trabalho de SP  
+            
+            **Teor do Ato:** *Tomar ciência da homologação dos cálculos de liquidação. Prazo comum de 8 dias.*
+            """)
+            c_b1, c_b2 = st.columns(2)
+            c_b1.button("Agendar Prazo (8 dias)", key="ag2")
+
+    # --- TAB 4: AGENDA (Mantida simples para não quebrar) ---
     with tab4:
-        st.markdown("### Agenda e Reuniões")
-        col_cal, col_list = st.columns([1, 2])
-        with col_cal:
-            st.date_input("Selecione a data", date.today())
-        with col_list:
-            st.markdown("#### Compromissos do Dia")
-            st.checkbox("09:00 - Café com Dr. Roberto (Parceria)")
-            st.checkbox("14:00 - Audiência Trabalhista (Link Zoom)")
-            st.checkbox("16:30 - Reunião com Cliente João Silva (Presencial)")
+        st.markdown("### 📅 Agenda de Prazos e Audiências")
+        c_cal, c_list = st.columns([1, 2])
+        with c_cal:
+            st.date_input("Calendário", date.today())
+        with c_list:
+            st.markdown("#### Prazos Automáticos (Vindos das Intimações)")
+            st.error("25/01 - Réplica (Maria Silva) - **Vence Amanhã**")
+            st.warning("30/01 - Impugnação aos Cálculos (Construtora X)")
+            st.info("05/02 - Audiência de Instrução (João Souza)")
 
+    # --- TAB 5: DOCUMENTOS ---
     with tab5:
-        st.markdown("### Cofre de Documentos (Gerados pela IA)")
-        st.caption("Aqui ficam salvos todos os contratos e petições que você gerou nesta sessão.")
+        st.markdown("### 📂 Gestão Eletrônica de Documentos (GED)")
         if len(st.session_state.meus_docs) > 0:
             for i, doc in enumerate(st.session_state.meus_docs):
-                with st.expander(f"📄 {doc['data']} - {doc['tipo']} ({doc['cliente']})"):
-                    st.write(doc['conteudo'][:300] + "...")
-                    st.download_button("Baixar DOCX", gerar_word(doc['conteudo']), f"Doc_{i}.docx", key=f"doc_dl_{i}")
+                with st.expander(f"{doc['tipo']} - {doc['cliente']} ({doc['data']})"):
+                    st.write(doc['conteudo'][:200] + "...")
+                    st.download_button("Baixar", gerar_word(doc['conteudo']), f"Doc_{i}.docx", key=f"d{i}")
         else:
-            st.info("Nenhum documento gerado ainda.")
+            st.info("Nenhum documento gerado nesta sessão.")
 
+    # --- TAB 6: FINANCEIRO ---
     with tab6:
-        st.markdown("### Controle Financeiro")
+        st.markdown("### 💰 Controle de Honorários")
         col_f1, col_f2, col_f3 = st.columns(3)
-        col_f1.metric("Faturamento Mês", "R$ 45.200,00", "+12%")
-        col_f2.metric("Despesas Operacionais", "R$ 8.450,00", "-5%")
-        col_f3.metric("Lucro Líquido", "R$ 36.750,00", "+15%")
+        col_f1.metric("Receita Estimada", "R$ 65.000,00", "Processos Ativos")
+        col_f2.metric("Recebido Mês", "R$ 12.500,00")
+        col_f3.metric("A Receber", "R$ 52.500,00", "Pendente")
         
-        st.markdown("#### Fluxo de Caixa (Semestral)")
+        st.markdown("#### Honorários por Fase Processual")
         chart_data = pd.DataFrame({
-            "Mês": ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun"],
-            "Receita": [30000, 42000, 35000, 45200, 48000, 51000]
+            "Fase": ["Inicial", "Instrução", "Sentença", "Recurso", "Execução"],
+            "Valor": [15000, 20000, 10000, 12000, 8000]
         })
-        st.bar_chart(chart_data, x="Mês", y="Receita", color="#00F3FF")
-
+        st.bar_chart(chart_data, x="Fase", y="Valor", color="#00F3FF")
 st.markdown("---")
 st.markdown("<center>🔒 LEGALHUB ELITE v16.0 | ERP JURÍDICO INTEGRADO</center>", unsafe_allow_html=True)
+
