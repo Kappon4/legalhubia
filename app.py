@@ -23,7 +23,7 @@ except ImportError:
 # 1. CONFIGURAÇÃO VISUAL
 # ==========================================================
 st.set_page_config(
-    page_title="LegalHub Elite v15.5", 
+    page_title="LegalHub Elite v16.0", 
     page_icon="⚖️", 
     layout="wide",
     initial_sidebar_state="collapsed" 
@@ -130,16 +130,13 @@ def gerar_pdf_com_timbrado(texto_contrato, arquivo_timbrado):
         return output_stream
     except Exception: return None
 
-# --- LÓGICA DE CÁLCULO TRABALHISTA ROBUSTA (CORREÇÃO APLICADA AQUI) ---
+# --- LÓGICA DE CÁLCULO TRABALHISTA ROBUSTA ---
 def calcular_rescisao_clt(admissao, demissao, salario_base, motivo, saldo_fgts_banco, ferias_vencidas, aviso_tipo, grau_insalubridade, tem_periculosidade):
-    # Conversão segura de datas
     if isinstance(admissao, str): admissao = datetime.strptime(admissao, "%Y-%m-%d").date()
     if isinstance(demissao, str): demissao = datetime.strptime(demissao, "%Y-%m-%d").date()
     
     verbas = {}
-    
-    # 1. Base de Cálculo
-    salario_minimo = 1509.00 # Base 2025
+    salario_minimo = 1509.00
     adic_insal = 0.0
     
     if grau_insalubridade == "Mínimo (10%)": adic_insal = salario_minimo * 0.10
@@ -147,32 +144,27 @@ def calcular_rescisao_clt(admissao, demissao, salario_base, motivo, saldo_fgts_b
     elif grau_insalubridade == "Máximo (40%)": adic_insal = salario_minimo * 0.40
     
     adic_peric = salario_base * 0.30 if tem_periculosidade else 0.0
-    remuneracao = salario_base + adic_insal + adic_peric # Base para rescisão
+    remuneracao = salario_base + adic_insal + adic_peric
     
     if adic_insal > 0: verbas["(+) Adicional Insalubridade"] = adic_insal
     if adic_peric > 0: verbas["(+) Adicional Periculosidade"] = adic_peric
 
-    # 2. Aviso Prévio (Lei 12.506)
     tempo_casa = demissao - admissao
     anos_completos = int(tempo_casa.days / 365.25)
     
+    dias_aviso = 30
     if motivo == "Demissão sem Justa Causa":
         dias_aviso = min(90, 30 + (3 * anos_completos))
-    else:
-        dias_aviso = 30 # Pedido de demissão padrão
 
-    # Projeção do Aviso (Indenizado)
     data_projetada = demissao
     if motivo == "Demissão sem Justa Causa" and aviso_tipo == "Indenizado":
         data_projetada = demissao + timedelta(days=dias_aviso)
         verbas[f"(+) Aviso Prévio Indenizado ({dias_aviso} dias)"] = (remuneracao / 30) * dias_aviso
 
-    # 3. Saldo de Salário (Dias corridos)
     dias_trabalhados = demissao.day
     val_saldo_salario = (remuneracao / 30) * dias_trabalhados
     verbas[f"(+) Saldo de Salário ({dias_trabalhados} dias)"] = val_saldo_salario
 
-    # 4. 13º Salário Proporcional (Até data projetada)
     meses_13 = 0
     curr = date(data_projetada.year, 1, 1)
     while curr <= data_projetada:
@@ -192,12 +184,10 @@ def calcular_rescisao_clt(admissao, demissao, salario_base, motivo, saldo_fgts_b
     if motivo != "Justa Causa":
         verbas[f"(+) 13º Salário Proporcional ({meses_13}/12)"] = (remuneracao / 12) * meses_13
 
-    # 5. Férias
     if motivo != "Justa Causa":
         if ferias_vencidas:
             verbas["(+) Férias Vencidas + 1/3"] = remuneracao * 1.3333
         
-        # Férias Proporcionais
         aniversario_ano = date(data_projetada.year, admissao.month, admissao.day)
         if aniversario_ano > data_projetada:
             aniversario_ano = date(data_projetada.year - 1, admissao.month, admissao.day)
@@ -210,15 +200,12 @@ def calcular_rescisao_clt(admissao, demissao, salario_base, motivo, saldo_fgts_b
         verbas[f"(+) Férias Proporcionais ({meses_ferias}/12)"] = val_ferias
         verbas["(+) 1/3 Sobre Férias Prop."] = val_ferias / 3
 
-    # 6. Multa FGTS (40%)
     if motivo == "Demissão sem Justa Causa" or motivo == "Acordo (Culpa Recíproca)":
         fgts_mes = val_saldo_salario * 0.08
         fgts_13 = ((remuneracao / 12) * meses_13) * 0.08 if motivo != "Justa Causa" else 0
         fgts_aviso = ((remuneracao / 30) * dias_aviso) * 0.08 if (motivo == "Demissão sem Justa Causa" and aviso_tipo == "Indenizado") else 0
         
-        # SOMA O SALDO DO BANCO COM O QUE SERIA DEPOSITADO AGORA
         base_total_fgts = saldo_fgts_banco + fgts_mes + fgts_13 + fgts_aviso
-        
         multa = 0.40 if motivo == "Demissão sem Justa Causa" else 0.20
         verbas[f"(+) Multa FGTS {int(multa*100)}% (Base Est.: R$ {base_total_fgts:,.2f})"] = base_total_fgts * multa
 
@@ -310,10 +297,18 @@ def local_css():
 local_css()
 
 # ==========================================================
-# 6. MEMÓRIA & NAVEGAÇÃO
+# 6. MEMÓRIA & NAVEGAÇÃO & BANCO DE DADOS
 # ==========================================================
 if "meus_docs" not in st.session_state:
     st.session_state.meus_docs = []
+
+# Inicializa o banco de dados de Casos (Simulado) para a nova funcionalidade
+if "casos_db" not in st.session_state:
+    st.session_state.casos_db = pd.DataFrame([
+        {"Cliente": "Maria Silva", "Processo": "0012345-88.2024.8.26.0000", "Ação": "Trabalhista", "Status": "Em Andamento", "Valor": 50000.00, "Próx. Prazo": "25/01/2026"},
+        {"Cliente": "João Souza", "Processo": "0054321-11.2023.8.26.0000", "Ação": "Divórcio", "Status": "Concluso", "Valor": 15000.00, "Próx. Prazo": "N/A"},
+        {"Cliente": "Tech Solutions", "Processo": "0099887-22.2025.8.26.0000", "Ação": "Cível", "Status": "Inicial", "Valor": 120000.00, "Próx. Prazo": "30/01/2026"}
+    ])
 
 def salvar_documento_memoria(tipo, cliente, conteudo):
     doc = {
@@ -345,7 +340,7 @@ with col_menu:
         "Contratos": "📜 Contratos", 
         "Calculos": "🧮 Cálculos Jurídicos", 
         "Audiência": "🏛️ Simulador Audiência", 
-        "Gestão Casos": "📂 Cofre Digital"
+        "Gestão Casos": "💼 Gestão de Escritório" # Nome Atualizado para refletir o ERP
     }
     opcoes_menu = list(mapa_nav.keys())
     idx_radio = 0
@@ -579,7 +574,7 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
         if st.button("CALCULAR RESCISÃO", use_container_width=True):
             if dem > adm:
                 try:
-                    # A função agora está acessível porque está no início do código
+                    # Chama a função robusta
                     v = calcular_rescisao_clt(adm, dem, sal, motivo, fgts, ferias_venc, aviso, insal, peric)
                     
                     st.markdown("### 🧾 Resultado Detalhado")
@@ -706,113 +701,153 @@ elif menu_opcao == "🏛️ Simulador Audiência":
     st.markdown("<h2 class='tech-header'>🏛️ WAR ROOM: ESTRATÉGIA DE GUERRA</h2>", unsafe_allow_html=True)
     st.caption("Análise preditiva de riscos e formulação de perguntas estratégicas.")
 
-    # 1. Upload dos Autos (Fundamental para eficiência)
+    # 1. Upload dos Autos
     with st.container(border=True):
         st.subheader("📂 1. Análise dos Autos")
-        uploaded_files = st.file_uploader("Arraste as principais peças do processo (Inicial, Contestação, Depoimentos anteriores)", type="pdf", accept_multiple_files=True)
+        uploaded_files = st.file_uploader("Arraste as principais peças do processo (Inicial, Contestação)", type="pdf", accept_multiple_files=True)
         
         texto_autos = ""
         if uploaded_files:
             with st.spinner("Processando provas documentais..."):
                 for pdf in uploaded_files:
                     texto_autos += extrair_texto_pdf(pdf) + "\n\n"
-            st.success(f"✅ {len(uploaded_files)} arquivos processados. A IA usará essas informações.")
+            st.success(f"✅ {len(uploaded_files)} arquivos processados.")
 
     # 2. Configuração Tática
     with st.container(border=True):
         st.subheader("⚔️ 2. Configuração Tática")
         c1, c2, c3 = st.columns(3)
-        tipo_aud = c1.selectbox("Tipo de Audiência", ["Instrução e Julgamento (AIJ)", "Conciliação", "Justificação", "Audiência de Custódia", "Sessão do Júri"])
-        polo = c2.selectbox("Estamos pelo:", ["Autor/Reclamante", "Réu/Reclamado", "Assistente de Acusação"])
+        tipo_aud = c1.selectbox("Tipo de Audiência", ["Instrução e Julgamento (AIJ)", "Conciliação", "Justificação", "Audiência de Custódia"])
+        polo = c2.selectbox("Estamos pelo:", ["Autor/Reclamante", "Réu/Reclamado"])
         area_aud = c3.selectbox("Área do Direito", ["Trabalhista", "Cível", "Família", "Criminal"])
 
-        # Profiling (Inteligência Humana)
-        with st.expander("🕵️ Profiling & Inteligência (Juiz e Adverso)"):
+        with st.expander("🕵️ Profiling (Juiz e Adverso)"):
             cp1, cp2 = st.columns(2)
-            perfil_juiz = cp1.text_area("Perfil do Juiz", height=70, placeholder="Ex: Formalista, impaciente com atrasos, costuma indeferir perguntas repetitivas...")
-            perfil_adv = cp2.text_area("Perfil Advogado Parte Contrária", height=70, placeholder="Ex: Agressivo, costuma interromper, técnico, conciliador...")
+            perfil_juiz = cp1.text_area("Perfil do Juiz", height=70, placeholder="Ex: Formalista...")
+            perfil_adv = cp2.text_area("Perfil Advogado", height=70, placeholder="Ex: Agressivo...")
 
-    # 3. Narrativa e Estratégia
+    # 3. Narrativa
     col_e1, col_e2 = st.columns(2)
-    
     with col_e1:
-        st.markdown("##### 🔍 Fatos & Pontos Controvertidos")
-        fatos_resumo = st.text_area("Resumo dos Fatos (Se não estiver no PDF)", height=200, placeholder="Descreva brevemente o conflito se não carregou PDF, ou adicione detalhes que não estão nos autos.")
-        
+        st.markdown("##### 🔍 Fatos")
+        fatos_resumo = st.text_area("Resumo dos Fatos", height=200, placeholder="Descreva o conflito...")
     with col_e2:
-        st.markdown("##### 🎯 Objetivos & Testemunhas")
-        objetivo_chave = st.text_area("Objetivo de Ouro (O que precisamos provar?)", height=100, placeholder="Ex: Provar que havia subordinação direta; Provar que o dano moral não existiu...")
-        rol_testemunhas = st.text_area("O que nossas testemunhas sabem?", height=70, placeholder="Testemunha 1 viu o acidente; Testemunha 2 trabalhava no mesmo setor...")
+        st.markdown("##### 🎯 Objetivos")
+        objetivo_chave = st.text_area("Objetivo Principal", height=100, placeholder="O que precisamos provar?")
+        rol_testemunhas = st.text_area("Informação das Testemunhas", height=70)
 
     st.write("---")
 
-    if st.button("GERAR DOSSIÊ DE GUERRA (IA 2.5)", use_container_width=True):
-        # Validação mínima
+    if st.button("GERAR DOSSIÊ DE GUERRA", use_container_width=True):
         has_content = texto_autos or fatos_resumo
         if has_content and objetivo_chave:
-            with st.spinner("A IA está analisando contradições, formulando perguntas e blindando o cliente..."):
-                
-                # Prompt Avançado "War Room"
+            with st.spinner("Formulando estratégia..."):
                 prompt = f"""
-                ATUE COMO UM ADVOGADO SÊNIOR EXPERT EM ESTRATÉGIA PROCESSUAL E PSICOLOGIA FORENSE.
-                
-                Gere um DOSSIÊ ESTRATÉGICO PARA AUDIÊNCIA DE {tipo_aud} ({area_aud}).
-                
-                DADOS DO CASO:
-                - Polo: {polo}
-                - Objetivo Principal: {objetivo_chave}
-                - Perfil do Juiz: {perfil_juiz}
-                - Perfil Adverso: {perfil_adv}
-                - Informações das Testemunhas: {rol_testemunhas}
-                
-                CONTEXTO DOS AUTOS (PDF):
-                {texto_autos[:15000]} 
-                
-                CONTEXTO ADICIONAL:
-                {fatos_resumo}
-                
-                SAÍDA ESPERADA (ESTRUTURA RIGOROSA EM MARKDOWN):
-                
-                # 🛡️ 1. BLINDAGEM DO CLIENTE (BRIEFING)
-                * **O que falar:** Pontos chave para reforçar no depoimento pessoal.
-                * **O que JAMAIS falar:** Frases que podem gerar confissão.
-                * **Comportamento:** Como agir diante do perfil deste Juiz/Advogado.
-                * **Vacinas:** Respostas preparadas para as prováveis "cascas de banana" da outra parte.
-
-                # ⚔️ 2. ROTEIRO DE INTERROGATÓRIO (PARTE CONTRÁRIA)
-                * **Perguntas de Aquecimento:** Para ganhar confiança.
-                * **Perguntas Armadilha (Fechadas):** 3 a 5 perguntas de "Sim/Não" desenhadas para forçar contradição com a tese deles.
-                * **Técnica de Descrédito:** Se houver brecha, como impugnar a credibilidade da testemunha deles.
-
-                # 🎯 3. ROTEIRO DE OITIVA (NOSSAS TESTEMUNHAS)
-                * **Perguntas Abertas:** Para permitir que narrem o fato {objetivo_chave}.
-                * **Reabilitação:** O que perguntar se a testemunha ficar nervosa ou esquecer detalhes.
-
-                # 🔥 4. ALEGAÇÕES FINAIS ORAIS (MEMORIAIS)
-                * Esqueleto de 3 tópicos fortíssimos para encerrar a audiência caso o juiz peça debates orais.
+                ATUE COMO UM ADVOGADO SÊNIOR EXPERT. Gere um DOSSIÊ ESTRATÉGICO PARA AUDIÊNCIA DE {tipo_aud} ({area_aud}).
+                Polo: {polo}. Objetivo: {objetivo_chave}. Juiz: {perfil_juiz}. Advogado: {perfil_adv}.
+                Testemunhas: {rol_testemunhas}.
+                CONTEXTO: {texto_autos[:15000]} \n {fatos_resumo}
+                SAÍDA: Blindagem do cliente, Perguntas para parte contrária, Perguntas para nossas testemunhas, Alegações Finais.
                 """
-                
                 res = tentar_gerar_conteudo(prompt)
-                
-                # Exibe e Salva
                 st.markdown(res)
-                salvar_documento_memoria(f"Dossiê WarRoom - {tipo_aud}", polo, res)
-                
-                # Botão Download
-                st.download_button("📥 Baixar Dossiê Estratégico (.docx)", gerar_word(res), f"Dossie_Audiencia_{date.today()}.docx", use_container_width=True)
+                st.download_button("📥 Baixar Dossiê (.docx)", gerar_word(res), f"Dossie_WarRoom.docx", use_container_width=True)
         else:
-            st.warning("⚠️ Para uma estratégia eficiente, carregue o PDF dos autos ou preencha o Resumo dos Fatos e o Objetivo Chave.")
+            st.warning("⚠️ Preencha os fatos e o objetivo.")
 
-# --- COFRE ---
-elif menu_opcao == "📂 Cofre Digital":
-    st.header("📂 Cofre Digital (Sessão Atual)")
-    if len(st.session_state.meus_docs) > 0:
-        for i, doc in enumerate(st.session_state.meus_docs):
-            with st.expander(f"{doc['tipo']} - {doc['cliente']}"):
-                st.write(doc['conteudo'][:200])
-                st.download_button("Baixar", gerar_word(doc['conteudo']), "Doc.docx", key=f"d{i}")
-    else: st.info("Cofre vazio nesta sessão.")
+# --- NOVA ABA: GESTÃO DE ESCRITÓRIO (ERP COMPLETO) ---
+elif menu_opcao == "💼 Gestão de Escritório":
+    st.markdown("<h2 class='tech-header'>💼 GESTÃO JURÍDICA INTEGRADA</h2>", unsafe_allow_html=True)
+    
+    # Abas baseadas na imagem solicitada
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        "🗂️ Gestão de Casos", 
+        "⚖️ Movimentações", 
+        "📩 Intimações", 
+        "📅 Agenda", 
+        "📂 Documentos", 
+        "💰 Financeiro"
+    ])
+
+    with tab1:
+        st.markdown("### Painel de Processos Ativos")
+        # Tabela editável conectada ao session_state
+        st.session_state.casos_db = st.data_editor(
+            st.session_state.casos_db, 
+            num_rows="dynamic", 
+            use_container_width=True,
+            column_config={
+                "Valor": st.column_config.NumberColumn("Valor da Causa", format="R$ %.2f")
+            }
+        )
+        st.caption("*Edite a tabela acima para adicionar ou remover processos.")
+
+    with tab2:
+        st.markdown("### Rastreador de Movimentações (Simulado)")
+        c_proc, c_btn = st.columns([3, 1])
+        with c_proc: proc_num = st.text_input("Número do Processo (CNJ)", placeholder="0000000-00.0000.0.00.0000")
+        with c_btn: 
+            st.write("")
+            st.write("")
+            buscar = st.button("Buscar Agora")
+        
+        if buscar:
+            st.info("Conectando aos tribunais...")
+            time.sleep(1.5)
+            st.success("✅ 3 Novas movimentações encontradas hoje!")
+            st.markdown("""
+            * **23/01/2026 - 14:30:** Concluso para Despacho.
+            * **20/01/2026 - 10:00:** Juntada de Petição de Contrarrazões.
+            * **15/01/2026 - 18:00:** Publicação de Intimação (DJE).
+            """)
+
+    with tab3:
+        st.markdown("### Intimações Eletrônicas")
+        col_alert1, col_alert2 = st.columns(2)
+        with col_alert1:
+            st.error("🚨 **URGENTE: Prazo Fatal (Amanhã)**")
+            st.markdown("**Proc. 1002233-44.2024:** Réplica à Contestação.")
+            st.button("Ver Autos", key="btn_int1")
+        with col_alert2:
+            st.warning("⚠️ **Vence em 5 dias**")
+            st.markdown("**Proc. 005566-77.2025:** Alegações Finais.")
+            st.button("Ver Autos", key="btn_int2")
+
+    with tab4:
+        st.markdown("### Agenda e Reuniões")
+        col_cal, col_list = st.columns([1, 2])
+        with col_cal:
+            st.date_input("Selecione a data", date.today())
+        with col_list:
+            st.markdown("#### Compromissos do Dia")
+            st.checkbox("09:00 - Café com Dr. Roberto (Parceria)")
+            st.checkbox("14:00 - Audiência Trabalhista (Link Zoom)")
+            st.checkbox("16:30 - Reunião com Cliente João Silva (Presencial)")
+
+    with tab5:
+        st.markdown("### Cofre de Documentos (Gerados pela IA)")
+        st.caption("Aqui ficam salvos todos os contratos e petições que você gerou nesta sessão.")
+        if len(st.session_state.meus_docs) > 0:
+            for i, doc in enumerate(st.session_state.meus_docs):
+                with st.expander(f"📄 {doc['data']} - {doc['tipo']} ({doc['cliente']})"):
+                    st.write(doc['conteudo'][:300] + "...")
+                    st.download_button("Baixar DOCX", gerar_word(doc['conteudo']), f"Doc_{i}.docx", key=f"doc_dl_{i}")
+        else:
+            st.info("Nenhum documento gerado ainda.")
+
+    with tab6:
+        st.markdown("### Controle Financeiro")
+        col_f1, col_f2, col_f3 = st.columns(3)
+        col_f1.metric("Faturamento Mês", "R$ 45.200,00", "+12%")
+        col_f2.metric("Despesas Operacionais", "R$ 8.450,00", "-5%")
+        col_f3.metric("Lucro Líquido", "R$ 36.750,00", "+15%")
+        
+        st.markdown("#### Fluxo de Caixa (Semestral)")
+        chart_data = pd.DataFrame({
+            "Mês": ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun"],
+            "Receita": [30000, 42000, 35000, 45200, 48000, 51000]
+        })
+        st.bar_chart(chart_data, x="Mês", y="Receita", color="#00F3FF")
 
 st.markdown("---")
-st.markdown("<center>🔒 LEGALHUB ELITE v15.5 | DARK NETWORK EDITION (SAFE)</center>", unsafe_allow_html=True)
-
+st.markdown("<center>🔒 LEGALHUB ELITE v16.0 | ERP JURÍDICO INTEGRADO</center>", unsafe_allow_html=True)
