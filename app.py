@@ -24,7 +24,7 @@ except ImportError:
 # 1. CONFIGURAÇÃO VISUAL
 # ==========================================================
 st.set_page_config(
-    page_title="LegalHub Elite v17.0 (Investigator)", 
+    page_title="LegalHub Elite v17.1", 
     page_icon="⚖️", 
     layout="wide",
     initial_sidebar_state="collapsed" 
@@ -223,7 +223,7 @@ def calcular_rescisao_clt(admissao, demissao, salario_base, motivo, saldo_fgts_b
     return verbas
 
 # ==========================================================
-# 5. CSS VISUAL (DARK NETWORK EDITION)
+# 5. CSS VISUAL (DARK NETWORK EDITION) - CORRIGIDO
 # ==========================================================
 def local_css():
     st.markdown(f"""
@@ -304,10 +304,10 @@ def local_css():
             border: 1px solid #334155;
         }}
         
-        /* Progress Bar Investigator */
-        .stProgress > div > div > div > div {
+        /* CORREÇÃO AQUI: Chaves duplas para o f-string */
+        .stProgress > div > div > div > div {{
             background-color: #00F3FF;
-        }
+        }}
     </style>
     """, unsafe_allow_html=True)
 local_css()
@@ -347,7 +347,7 @@ with col_logo:
 with col_menu:
     mapa_nav = {
         "Dashboard": "📊 Dashboard", 
-        "Investigador": "🕵️ Investigador Jurídico", # NOVA ABA AQUI
+        "Investigador": "🕵️ Investigador Jurídico",
         "Petições Inteligentes": "✍️ Petições Inteligentes", 
         "Contratos": "📜 Contratos", 
         "Calculos": "🧮 Cálculos Jurídicos", 
@@ -465,8 +465,6 @@ elif menu_opcao == "🕵️ Investigador Jurídico":
                 t_fato, t_prova, t_tese, t_acao = st.tabs(["🕵️ Fatos & Lacunas", "🔍 Caça às Provas", "🧪 Teses & Chances", "🗺️ Plano de Ação"])
                 
                 # Processamento simples para "fatiar" a resposta da IA (Simulado visualmente, o texto vem inteiro)
-                # Na prática, mostramos o texto completo formatado, mas aqui vamos organizar se possível
-                
                 with t_fato:
                     st.markdown("### Reconstrução do Caso")
                     st.write(res) # A IA já vai formatar em tópicos
@@ -683,37 +681,6 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
                 total = val_corr + val_juros + val_multa
                 st.success(f"Total Atualizado: R$ {total:,.2f}")
 
-        with tab_banco:
-            st.info("Simulação Price vs Gauss")
-            b1, b2 = st.columns(2)
-            valor_fin = b1.number_input("Valor Financiado", value=50000.0)
-            taxa = b2.number_input("Taxa Mensal (%)", value=1.5)
-            prazo = st.number_input("Parcelas", value=60)
-            if st.button("SIMULAR REVISIONAL"):
-                i = taxa/100
-                price = valor_fin * (i * (1+i)**prazo) / ((1+i)**prazo - 1)
-                gauss = (valor_fin * ((prazo * i) + 1)) / prazo
-                st.metric("Parcela Banco (Price)", f"R$ {price:.2f}")
-                st.metric("Parcela Justa (Gauss)", f"R$ {gauss:.2f}", delta=f"Economia: R$ {price-gauss:.2f}")
-
-        with tab_imob:
-            st.info("Reajuste de Aluguel")
-            val_aluguel = st.number_input("Valor Aluguel", value=2000.0)
-            idx = st.number_input("Índice (%)", value=4.5)
-            if st.button("REAJUSTAR"): st.success(f"Novo Aluguel: R$ {val_aluguel * (1 + idx/100):,.2f}")
-
-        with tab_causa:
-            st.info("Valor da Causa")
-            mat = st.number_input("Dano Material", value=0.0)
-            mor = st.number_input("Dano Moral", value=0.0)
-            if st.button("SOMAR CAUSA"): st.success(f"Valor da Causa: R$ {mat+mor:,.2f}")
-
-        with tab_hon:
-            st.info("Calculadora de Honorários")
-            base = st.number_input("Base de Cálculo", value=10000.0)
-            pct = st.number_input("% Honorários", value=20.0)
-            if st.button("CALCULAR HONORÁRIOS"): st.success(f"Honorários: R$ {base * (pct/100):,.2f}")
-
     elif area_calc == "Família":
         st.markdown("#### 👨‍👩‍👧‍👦 Pensão Alimentícia")
         tab_fix, tab_rev = st.tabs(["Fixação", "Revisão"])
@@ -905,4 +872,4 @@ elif menu_opcao == "💼 Gestão de Escritório":
         col_f2.metric("A Receber", "R$ 12.500,00", "Pendente")
 
 st.markdown("---")
-st.markdown("<center>🔒 LEGALHUB ELITE v17.0 | INVESTIGATOR EDITION</center>", unsafe_allow_html=True)
+st.markdown("<center>🔒 LEGALHUB ELITE v17.1 | DARK NETWORK EDITION</center>", unsafe_allow_html=True)
