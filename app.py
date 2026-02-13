@@ -9,7 +9,7 @@ import time
 import pandas as pd
 import base64
 import os
-import random # Importante para a simulação do robô
+import random 
 
 # --- IMPORTAÇÕES SEGURAS PARA GERAÇÃO DE PDF ---
 try:
@@ -24,7 +24,7 @@ except ImportError:
 # 1. CONFIGURAÇÃO VISUAL
 # ==========================================================
 st.set_page_config(
-    page_title="LegalHub Elite v16.5", 
+    page_title="LegalHub Elite v16.7", 
     page_icon="⚖️", 
     layout="wide",
     initial_sidebar_state="collapsed" 
@@ -64,26 +64,27 @@ def tentar_gerar_conteudo(prompt, ignored_param=None):
     return f"❌ FALHA GERAL. Detalhes: {'; '.join(log_erros)}"
 
 # ==========================================================
-# 4. FUNÇÕES UTILITÁRIAS & BANCO DE DADOS (NOVA FUNÇÃO)
+# 4. FUNÇÕES UTILITÁRIAS & BANCO DE DADOS
 # ==========================================================
 DB_FILE = "processos_db.csv"
 
 def carregar_dados():
-    """Carrega os dados do arquivo CSV se existir, senão cria um padrão."""
+    """Carrega os dados e corrige colunas faltantes automaticamente."""
+    cols_padrao = ["Cliente", "Processo", "Tribunal", "Status", "Última Mov.", "Ultima_Verificacao"]
     if os.path.exists(DB_FILE):
         try:
-            return pd.read_csv(DB_FILE)
-        except:
-            pass
-    # Dados padrão iniciais se não houver arquivo
+            df = pd.read_csv(DB_FILE)
+            for col in cols_padrao:
+                if col not in df.columns: df[col] = "-"
+            return df
+        except: pass
     return pd.DataFrame([
-        {"Cliente": "Maria Silva", "Processo": "1002345-88.2024.8.26.0100", "Tribunal": "TJSP", "Status": "Ativo", "Última Mov.": "20/01 - Concluso"},
-        {"Cliente": "Construtora X", "Processo": "0054321-11.2023.5.02.0000", "Tribunal": "TRT-2", "Status": "Execução", "Última Mov.": "15/01 - Penhora"},
-        {"Cliente": "João Souza", "Processo": "", "Tribunal": "-", "Status": "Consultivo", "Última Mov.": "-"}
+        {"Cliente": "Maria Silva", "Processo": "1002345-88.2024.8.26.0100", "Tribunal": "TJSP", "Status": "Ativo", "Última Mov.": "20/01 - Concluso", "Ultima_Verificacao": "2024-01-20 10:00"},
+        {"Cliente": "Construtora X", "Processo": "0054321-11.2023.5.02.0000", "Tribunal": "TRT-2", "Status": "Execução", "Última Mov.": "15/01 - Penhora", "Ultima_Verificacao": "2024-01-20 10:00"},
+        {"Cliente": "João Souza", "Processo": "", "Tribunal": "-", "Status": "Consultivo", "Última Mov.": "-", "Ultima_Verificacao": "-"}
     ])
 
 def salvar_dados(df):
-    """Salva o DataFrame no arquivo CSV (Persistência)."""
     df.to_csv(DB_FILE, index=False)
 
 def get_base64_of_bin_file(bin_file):
@@ -151,7 +152,7 @@ def gerar_pdf_com_timbrado(texto_contrato, arquivo_timbrado):
         return output_stream
     except Exception: return None
 
-# --- LÓGICA DE CÁLCULO TRABALHISTA ROBUSTA ---
+# --- LÓGICA DE CÁLCULO TRABALHISTA ---
 def calcular_rescisao_clt(admissao, demissao, salario_base, motivo, saldo_fgts_banco, ferias_vencidas, aviso_tipo, grau_insalubridade, tem_periculosidade):
     if isinstance(admissao, str): admissao = datetime.strptime(admissao, "%Y-%m-%d").date()
     if isinstance(demissao, str): demissao = datetime.strptime(demissao, "%Y-%m-%d").date()
@@ -159,11 +160,9 @@ def calcular_rescisao_clt(admissao, demissao, salario_base, motivo, saldo_fgts_b
     verbas = {}
     salario_minimo = 1509.00
     adic_insal = 0.0
-    
     if grau_insalubridade == "Mínimo (10%)": adic_insal = salario_minimo * 0.10
     elif grau_insalubridade == "Médio (20%)": adic_insal = salario_minimo * 0.20
     elif grau_insalubridade == "Máximo (40%)": adic_insal = salario_minimo * 0.40
-    
     adic_peric = salario_base * 0.30 if tem_periculosidade else 0.0
     remuneracao = salario_base + adic_insal + adic_peric
     
@@ -172,7 +171,6 @@ def calcular_rescisao_clt(admissao, demissao, salario_base, motivo, saldo_fgts_b
 
     tempo_casa = demissao - admissao
     anos_completos = int(tempo_casa.days / 365.25)
-    
     dias_aviso = 30
     if motivo == "Demissão sem Justa Causa":
         dias_aviso = min(90, 30 + (3 * anos_completos))
@@ -197,25 +195,18 @@ def calcular_rescisao_clt(admissao, demissao, salario_base, motivo, saldo_fgts_b
             elif curr.month > admissao.month: months_to_add = 1
             elif curr.month == admissao.month and admissao.day <= 15: months_to_add = 1
             else: months_to_add = 0
-        
         if months_to_add: meses_13 += 1
         if curr.month == 12: break
         curr = curr.replace(month=curr.month+1)
     
-    if motivo != "Justa Causa":
-        verbas[f"(+) 13º Salário Proporcional ({meses_13}/12)"] = (remuneracao / 12) * meses_13
+    if motivo != "Justa Causa": verbas[f"(+) 13º Salário Proporcional ({meses_13}/12)"] = (remuneracao / 12) * meses_13
 
     if motivo != "Justa Causa":
-        if ferias_vencidas:
-            verbas["(+) Férias Vencidas + 1/3"] = remuneracao * 1.3333
-        
+        if ferias_vencidas: verbas["(+) Férias Vencidas + 1/3"] = remuneracao * 1.3333
         aniversario_ano = date(data_projetada.year, admissao.month, admissao.day)
-        if aniversario_ano > data_projetada:
-            aniversario_ano = date(data_projetada.year - 1, admissao.month, admissao.day)
-            
+        if aniversario_ano > data_projetada: aniversario_ano = date(data_projetada.year - 1, admissao.month, admissao.day)
         delta_ferias = (data_projetada.year - aniversario_ano.year) * 12 + (data_projetada.month - aniversario_ano.month)
         if data_projetada.day >= 15: delta_ferias += 1
-        
         meses_ferias = min(12, delta_ferias)
         val_ferias = (remuneracao / 12) * meses_ferias
         verbas[f"(+) Férias Proporcionais ({meses_ferias}/12)"] = val_ferias
@@ -225,7 +216,6 @@ def calcular_rescisao_clt(admissao, demissao, salario_base, motivo, saldo_fgts_b
         fgts_mes = val_saldo_salario * 0.08
         fgts_13 = ((remuneracao / 12) * meses_13) * 0.08 if motivo != "Justa Causa" else 0
         fgts_aviso = ((remuneracao / 30) * dias_aviso) * 0.08 if (motivo == "Demissão sem Justa Causa" and aviso_tipo == "Indenizado") else 0
-        
         base_total_fgts = saldo_fgts_banco + fgts_mes + fgts_13 + fgts_aviso
         multa = 0.40 if motivo == "Demissão sem Justa Causa" else 0.20
         verbas[f"(+) Multa FGTS {int(multa*100)}% (Base Est.: R$ {base_total_fgts:,.2f})"] = base_total_fgts * multa
@@ -318,12 +308,11 @@ def local_css():
 local_css()
 
 # ==========================================================
-# 6. MEMÓRIA & GESTÃO DE ESTADO (NOVA LÓGICA DE CARREGAMENTO)
+# 6. MEMÓRIA & GESTÃO DE ESTADO
 # ==========================================================
 if "meus_docs" not in st.session_state:
     st.session_state.meus_docs = []
 
-# Carrega os processos salvos ao iniciar (Usando a nova função 'carregar_dados')
 if "casos_db" not in st.session_state:
     st.session_state.casos_db = carregar_dados()
 
@@ -410,14 +399,15 @@ if menu_opcao == "📊 Dashboard":
             st.markdown("#### ⚖️ Jurisprudência Real")
             st.caption("Conexão direta com a base de dados dos Tribunais Superiores para encontrar julgados que fundamentam sua tese.")
 
-# --- PETIÇÕES INTELIGENTES ---
+# --- PETIÇÕES INTELIGENTES (ATUALIZADO: MÚLTIPLOS PDFS & NOTIFICAÇÃO EXTRAJUDICIAL) ---
 elif menu_opcao == "✍️ Petições Inteligentes":
     st.markdown("<h2 class='tech-header'>✍️ PETIÇÕES INTELIGENTES (IA 2.5)</h2>", unsafe_allow_html=True)
     area = st.selectbox("Área", ["Cível", "Trabalhista", "Criminal", "Tributário", "Previdenciário"])
     
     pecas = []
     if area == "Cível": 
-        pecas = ["Petição Inicial", "Contestação", "Réplica", "Reconvenção", "Ação Rescisória", "Mandado de Segurança", "Ação Civil Pública", "Embargos à Execução", "Embargos de Terceiro", "Exceção de Incompetência", "Impugnação ao Valor da Causa", "Pedido de Tutela", "Impugnação ao Cumprimento", "Apelação", "Agravo de Instrumento", "Embargos de Declaração", "Recurso Especial", "Recurso Extraordinário"]
+        # ATUALIZAÇÃO 2: Adicionado Notificação Extrajudicial
+        pecas = ["Petição Inicial", "Contestação", "Réplica", "Reconvenção", "Notificação Extrajudicial", "Ação Rescisória", "Mandado de Segurança", "Ação Civil Pública", "Embargos à Execução", "Embargos de Terceiro", "Exceção de Incompetência", "Impugnação ao Valor da Causa", "Pedido de Tutela", "Impugnação ao Cumprimento", "Apelação", "Agravo de Instrumento", "Embargos de Declaração", "Recurso Especial", "Recurso Extraordinário"]
     elif area == "Trabalhista": 
         pecas = ["Reclamação Trabalhista", "Contestação", "Reconvenção", "Exceção de Incompetência", "Impugnação ao Valor", "Recurso Ordinário", "Recurso de Revista", "Embargos (TST)", "Agravo de Instrumento", "Agravo de Petição", "Embargos à Execução", "Consignação em Pagamento"]
     elif area == "Criminal": 
@@ -434,12 +424,17 @@ elif menu_opcao == "✍️ Petições Inteligentes":
     
     st.write("---")
     
-    uploaded_file = st.file_uploader("📂 Carregar PDF (Opcional - O conteúdo será lido pela IA)", type="pdf")
+    # ATUALIZAÇÃO 1: Múltiplos PDFs
+    uploaded_files = st.file_uploader("📂 Carregar PDFs (Autos, Provas, Documentos)", type="pdf", accept_multiple_files=True)
     texto_do_pdf = ""
-    if uploaded_file is not None:
+    
+    if uploaded_files:
         with st.spinner("Anexando conteúdo aos autos..."):
-            texto_do_pdf = extrair_texto_pdf(uploaded_file)
-            st.success(f"✅ Documento anexado à memória da IA! ({len(texto_do_pdf)} caracteres identificados)")
+            for pdf_file in uploaded_files:
+                texto_extraido = extrair_texto_pdf(pdf_file)
+                texto_do_pdf += f"\n--- CONTEÚDO DO ARQUIVO: {pdf_file.name} ---\n{texto_extraido}\n"
+            
+            st.success(f"✅ {len(uploaded_files)} arquivos processados e anexados à memória da IA!")
 
     fatos_manuais = st.text_area("Fatos / Observações Adicionais", height=150, placeholder="Digite os fatos aqui OU deixe em branco se já carregou o PDF com a narrativa completa...")
     
@@ -533,8 +528,9 @@ elif menu_opcao == "📜 Contratos":
                 with col_down_con:
                     with st.container(border=True):
                         st.markdown("### 📄 1. Contrato")
+                        st.caption("Contrato de Honorários completo.")
                         with st.expander("👁️ Ver Texto"): st.write(texto_contrato)
-                        st.download_button("📥 Baixar DOCX", gerar_word(texto_contrato), f"Contrato_{nome}.docx", use_container_width=True)
+                        st.download_button("📥 Baixar Contrato (.docx)", gerar_word(texto_contrato), f"Contrato_{nome}.docx", use_container_width=True)
                         if uploaded_timbrado:
                             if HAS_REPORTLAB:
                                 uploaded_timbrado.seek(0)
@@ -545,6 +541,7 @@ elif menu_opcao == "📜 Contratos":
                 with col_down_proc:
                     with st.container(border=True):
                         st.markdown("### ⚖️ 2. Procuração")
+                        st.caption("Procuração Ad Judicia pronta.")
                         with st.expander("👁️ Ver Texto"): st.write(texto_procuracao)
                         st.download_button("📥 Baixar Procuração (.docx)", gerar_word(texto_procuracao), f"Procuracao_{nome}.docx", use_container_width=True)
                         if uploaded_timbrado:
@@ -608,21 +605,88 @@ elif menu_opcao == "🧮 Cálculos Jurídicos":
                 total = val_corr + val_juros + val_multa
                 st.success(f"Total Atualizado: R$ {total:,.2f}")
 
-    # (Mantendo os outros cálculos resumidos)
+        with tab_banco:
+            st.info("Simulação Price vs Gauss")
+            b1, b2 = st.columns(2)
+            valor_fin = b1.number_input("Valor Financiado", value=50000.0)
+            taxa = b2.number_input("Taxa Mensal (%)", value=1.5)
+            prazo = st.number_input("Parcelas", value=60)
+            if st.button("SIMULAR REVISIONAL"):
+                i = taxa/100
+                price = valor_fin * (i * (1+i)**prazo) / ((1+i)**prazo - 1)
+                gauss = (valor_fin * ((prazo * i) + 1)) / prazo
+                st.metric("Parcela Banco (Price)", f"R$ {price:.2f}")
+                st.metric("Parcela Justa (Gauss)", f"R$ {gauss:.2f}", delta=f"Economia: R$ {price-gauss:.2f}")
+
+        with tab_imob:
+            st.info("Reajuste de Aluguel")
+            val_aluguel = st.number_input("Valor Aluguel", value=2000.0)
+            idx = st.number_input("Índice (%)", value=4.5)
+            if st.button("REAJUSTAR"): st.success(f"Novo Aluguel: R$ {val_aluguel * (1 + idx/100):,.2f}")
+
+        with tab_causa:
+            st.info("Valor da Causa")
+            mat = st.number_input("Dano Material", value=0.0)
+            mor = st.number_input("Dano Moral", value=0.0)
+            if st.button("SOMAR CAUSA"): st.success(f"Valor da Causa: R$ {mat+mor:,.2f}")
+
+        with tab_hon:
+            st.info("Calculadora de Honorários")
+            base = st.number_input("Base de Cálculo", value=10000.0)
+            pct = st.number_input("% Honorários", value=20.0)
+            if st.button("CALCULAR HONORÁRIOS"): st.success(f"Honorários: R$ {base * (pct/100):,.2f}")
+
     elif area_calc == "Família":
         st.markdown("#### 👨‍👩‍👧‍👦 Pensão Alimentícia")
-        renda = st.number_input("Renda Alimentante", 3000.0)
-        if st.button("CALCULAR PENSÃO"): st.success(f"Valor Sugerido (30%): R$ {renda*0.30:.2f}")
+        tab_fix, tab_rev = st.tabs(["Fixação", "Revisão"])
+        with tab_fix:
+            c1, c2 = st.columns(2)
+            renda = c1.number_input("Renda Líquida Alimentante", value=3000.0)
+            filhos = c2.number_input("Número de Filhos", value=1)
+            
+            if st.button("CALCULAR SUGESTÃO"):
+                sugestao_renda = renda * 0.30 
+                st.metric("Teto Sugerido (30% Renda)", f"R$ {sugestao_renda:,.2f}")
+
+        with tab_rev:
+            val_atual = st.number_input("Valor Atual", value=500.0)
+            idx_rev = st.number_input("Índice Reajuste (%)", value=5.0)
+            if st.button("ATUALIZAR PENSÃO"):
+                st.success(f"Nova Pensão: R$ {val_atual * (1 + idx_rev/100):,.2f}")
 
     elif area_calc == "Tributária":
         st.markdown("#### 🏛️ Cálculos Tributários")
-        val = st.number_input("Principal", 1000.0)
-        if st.button("CALCULAR DÉBITO"): st.success(f"Débito com Juros: R$ {val*1.2:.2f}")
+        val_prin = st.number_input("Valor Principal", value=5000.0)
+        selic = st.number_input("Selic Acumulada (%)", value=15.0)
+        multa = st.number_input("Multa de Mora (%)", value=20.0)
+        
+        if st.button("CALCULAR DÉBITO FISCAL"):
+            total = val_prin * (1 + selic/100) * (1 + multa/100)
+            st.success(f"Total Execução Fiscal: R$ {total:,.2f}")
 
     elif area_calc == "Criminal":
         st.markdown("#### ⚖️ Dosimetria Penal")
-        min_p = st.number_input("Pena Mínima", 5)
-        if st.button("CALCULAR PENA"): st.success(f"Pena Base Estimada: {min_p} anos + agravantes")
+        tab_dos, tab_exec = st.tabs(["Dosimetria", "Execução"])
+        with tab_dos:
+            c1, c2 = st.columns(2)
+            min_p = c1.number_input("Pena Mínima (Anos)", value=5.0)
+            max_p = c2.number_input("Pena Máxima (Anos)", value=15.0)
+            circ = st.slider("Circunstâncias Judiciais Desfavoráveis", 0, 8, 1)
+            
+            if st.button("CALCULAR PENA BASE"):
+                fator = (max_p - min_p) / 8
+                pena_base = min_p + (fator * circ)
+                st.success(f"Pena Base: {pena_base:.2f} anos")
+        
+        with tab_exec:
+            pena_tot = st.number_input("Pena Total (Anos)", value=8.0)
+            tipo_crime = st.selectbox("Tipo", ["Comum (16%)", "Violento (25%)", "Hediondo (40%)"])
+            if st.button("CALCULAR PROGRESSÃO"):
+                pct = 0.16
+                if "25%" in tipo_crime: pct = 0.25
+                elif "40%" in tipo_crime: pct = 0.40
+                tempo = pena_tot * pct
+                st.info(f"Tempo para progressão: {tempo:.2f} anos")
 
 # --- SIMULADOR DE AUDIÊNCIA ---
 elif menu_opcao == "🏛️ Simulador Audiência":
@@ -763,5 +827,4 @@ elif menu_opcao == "💼 Gestão de Escritório":
         col_f2.metric("A Receber", "R$ 12.500,00", "Pendente")
 
 st.markdown("---")
-st.markdown("<center>🔒 LEGALHUB ELITE v16.5 | ERP JURÍDICO INTEGRADO</center>", unsafe_allow_html=True)
-
+st.markdown("<center>🔒 LEGALHUB ELITE v16.7 | ERP JURÍDICO INTEGRADO</center>", unsafe_allow_html=True)
